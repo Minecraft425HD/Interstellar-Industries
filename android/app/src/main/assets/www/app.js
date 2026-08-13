@@ -4,15 +4,23 @@ const defs = {
     crystalMine:{name:'Kristallmine', base:{metal:48, crystal:24, deut:0}, powerUse:l=>10*l, prod:l=>20*l*Math.pow(1.1,l)},
     deutSynth:{name:'Deuterium-Synthesizer', base:{metal:225, crystal:75, deut:0}, powerUse:l=>20*l, prod:l=>10*l*Math.pow(1.1,l)},
     solarPlant:{name:'Solarkraftwerk', base:{metal:75, crystal:30, deut:0}, power:l=>40*l*Math.pow(1.05,l)},
+    fusionReactor:{name:'Fusionskraftwerk', base:{metal:900, crystal:360, deut:180}, power:l=>30*l*Math.pow(1.05,l), deutUse:l=>Math.floor(10*l*Math.pow(1.1,l)), requires:{deutSynth:5, energyTech:3}},
     robotFactory:{name:'Roboterfabrik', base:{metal:400, crystal:120, deut:200}},
     shipyard:{name:'Raumschiffwerft', base:{metal:400, crystal:200, deut:100}, requires:{robotFactory:2}},
+    spaceDock:{name:'Raumstation', base:{metal:20000, crystal:40000, deut:0}, requires:{shipyard:3}},
     researchLab:{name:'Forschungslabor', base:{metal:200, crystal:400, deut:200}},
     metalStorage:{name:'Metallspeicher', base:{metal:1000, crystal:0, deut:0}},
     crystalStorage:{name:'Kristallspeicher', base:{metal:1000, crystal:500, deut:0}},
     deutTank:{name:'Deuteriumtank', base:{metal:1000, crystal:1000, deut:0}},
-    missileLauncher:{name:'Raketenwerfer', base:{metal:2000, crystal:0, deut:0}, isDefense:true, attack:80, hull:2000, requires:{shipyard:1}},
-    lightLaser:{name:'Leichtes Laser-Geschütz', base:{metal:1500, crystal:500, deut:0}, isDefense:true, attack:100, hull:2000, requires:{shipyard:2, energyTech:1}},
-    heavyLaser:{name:'Schweres Laser-Geschütz', base:{metal:6000, crystal:2000, deut:0}, isDefense:true, attack:250, hull:8000, requires:{shipyard:4, energyTech:3}},
+    missileLauncher:{name:'Raketenwerfer', base:{metal:2000, crystal:0, deut:0}, isDefense:true, attack:80, shield:20, hull:2000, requires:{shipyard:1}},
+    lightLaser:{name:'Leichtes Laser-Geschütz', base:{metal:1500, crystal:500, deut:0}, isDefense:true, attack:100, shield:25, hull:2000, requires:{shipyard:2, energyTech:1}},
+    heavyLaser:{name:'Schweres Laser-Geschütz', base:{metal:6000, crystal:2000, deut:0}, isDefense:true, attack:250, shield:100, hull:8000, requires:{shipyard:4, energyTech:3}},
+    gaussCannon:{name:'Gauß-Kanone', base:{metal:20000, crystal:15000, deut:2000}, isDefense:true, attack:1100, shield:200, hull:35000, requires:{shipyard:6, weaponsTech:3, shieldingTech:1, energyTech:6}},
+    ionCannon:{name:'Ionenkanone', base:{metal:5000, crystal:3000, deut:0}, isDefense:true, attack:150, shield:500, hull:8000, requires:{shipyard:4, ionTech:4}},
+    plasmaTurret:{name:'Plasmawerfer', base:{metal:50000, crystal:50000, deut:30000}, isDefense:true, attack:3000, shield:300, hull:100000, requires:{shipyard:8, plasmaTech:7}},
+    smallShield:{name:'Kleine Schildkuppel', base:{metal:10000, crystal:10000, deut:0}, isDefense:true, unique:true, attack:1, shield:2000, hull:20000, requires:{shieldingTech:2}},
+    largeShield:{name:'Große Schildkuppel', base:{metal:50000, crystal:50000, deut:0}, isDefense:true, unique:true, attack:1, shield:10000, hull:100000, requires:{shipyard:6, shieldingTech:6}},
+    interplanetaryMissile:{name:'Interplanetare Rakete', base:{metal:12500, crystal:2500, deut:0}, isDefense:true, attack:12000, shield:0, hull:1, requires:{missileSilo:4}},
     naniteFactory:{name:'Nanitenfabrik', base:{metal:1000000, crystal:500000, deut:100000}, requires:{robotFactory:10, computerTech:10}, facility:true},
     terraformer:{name:'Terraformer', base:{metal:0, crystal:50000, deut:100000}, requires:{naniteFactory:1, energyTech:12}, facility:true},
     allianceDepot:{name:'Allianzdepot', base:{metal:20000, crystal:40000, deut:0}, requires:{shipyard:3}, facility:true},
@@ -36,6 +44,8 @@ const defs = {
     ionTech:{name:'Iontechnik', base:{metal:1000, crystal:300, deut:100}, requires:{researchLab:4, laserTech:5, energyTech:4}},
     plasmaTech:{name:'Plasmatechnik', base:{metal:2000, crystal:4000, deut:1000}, requires:{researchLab:4, energyTech:8, laserTech:10, ionTech:5}},
     gravitonTech:{name:'Gravitationstechnik', base:{metal:0, crystal:0, deut:0}, requires:{researchLab:12}},
+    astrophysics:{name:'Astrophysik', base:{metal:4000, crystal:8000, deut:4000}, requires:{researchLab:3, espionageTech:4, impulseDrive:3}},
+    intergalacticNetwork:{name:'Intergalaktisches Forschungsnetzwerk', base:{metal:240000, crystal:400000, deut:160000}, requires:{researchLab:10, computerTech:8}},
   },
   ships: {
     smallCargo:{name:'Kleiner Transporter', cost:{metal:2000, crystal:2000, deut:0}, cargo:5000, speed:1, fuel:12, attack:5, shield:10, hull:4000, role:'cargo', requires:{shipyard:2}},
@@ -49,6 +59,8 @@ const defs = {
     battlecruiser:{name:'Großer Kreuzer', cost:{metal:30000, crystal:40000, deut:15000}, cargo:750, speed:0.9, fuel:250, attack:700, shield:400, hull:70000, role:'combat', requires:{shipyard:8, hyperspaceTech:5, laserTech:12}},
     bomber:{name:'Bomber', cost:{metal:50000, crystal:25000, deut:15000}, cargo:500, speed:0.6, fuel:65, attack:1000, shield:500, hull:75000, role:'combat', requires:{shipyard:8, plasmaTech:5, impulseDrive:6}},
     destroyer:{name:'Zerstörer', cost:{metal:60000, crystal:50000, deut:15000}, cargo:2000, speed:0.7, fuel:100, attack:2000, shield:500, hull:110000, role:'combat', requires:{shipyard:9, hyperspaceTech:5, hyperspaceDrive:6}},
+    reaper:{name:'Reaper', cost:{metal:85000, crystal:55000, deut:20000}, cargo:10000, speed:0.6, fuel:80, attack:2800, shield:700, hull:140000, role:'combat', requires:{shipyard:10, spaceDock:1, hyperspaceTech:6, hyperspaceDrive:7}},
+    pathfinder:{name:'Pfadfinder', cost:{metal:8000, crystal:15000, deut:8000}, cargo:10000, speed:1.6, fuel:20, attack:200, shield:100, hull:23000, role:'combat', requires:{shipyard:5, spaceDock:1, hyperspaceDrive:2, hyperspaceTech:3}},
     deathstar:{name:'Todesstern', cost:{metal:5000000, crystal:4000000, deut:1000000}, cargo:1000000, speed:0.4, fuel:1, attack:200000, shield:50000, hull:9000000, role:'combat', requires:{shipyard:12, hyperspaceTech:6, gravitonTech:1}},
     solarSatellite:{name:'Solarsatellit', cost:{metal:0, crystal:2000, deut:500}, cargo:0, speed:0, fuel:0, attack:1, shield:1, hull:2000, role:'power', requires:{}},
     recycler:{name:'Recycler', cost:{metal:10000, crystal:6000, deut:2000}, cargo:20000, speed:0.7, fuel:30, attack:1, shield:10, hull:16000, role:'recycler', requires:{shipyard:4, combustion:6}},
@@ -68,18 +80,19 @@ const state = {
   ],
   fleets: [],
   reports: [],
-  messages: ['Willkommen: Vollständiges OGame-Feature-Set aktiv (Monde, Allianz, Offiziere, Expeditionen, Lebensformen-Basis).'],
+  messages: ['Willkommen: Vollständiges OGame-Feature-Set aktiv (Monde, Allianz, Offiziere, Expeditionen, Lebensformen-Basis, Kampfsimulation, Rangliste, Händler).'],
   debrisFields: {},
   moons: [],
   activeMoonIndex: null,
-  alliance: {name:'Freie Sternenflotte', tag:'FSF', members:['Du','Kryon Def.','Vesper Union'], rank:'Krieger', points:87000, depot:{metal:0, crystal:0, deut:0}},
-  officers: {commander:false, admiral:false, engineer:false, geologist:false, technocrat:false},
+  alliance: {name:'Freie Sternenflotte', tag:'FSF', members:['Du','Kryon Def.','Vesper Union'], points:20000, depot:{metal:0, crystal:0, deut:0}},
+  officerExpiry: {},
   darkMatter: 4200,
   expeditions: [],
   lifeform: {active:'humans', points:0, buildings:{}, research:{}},
   marketRate: { metal:1, crystal:1.5, deut:3 },
   logs: ['Neue Galaxie initialisiert.'],
-  galaxySystem: 145
+  galaxySystem: 145,
+  fleetPrefill: null
 };
 
 function seedGalaxy(system){
@@ -91,7 +104,10 @@ function seedGalaxy(system){
     const r = rnd(pos+system);
     if(r < 0.35){
       const level = Math.max(3, Math.floor(r*30));
-      slots.push({pos, type:'npc', name:'Kolonie '+String.fromCharCode(65+pos), level, metal:800*level, crystal:500*level, deut:200*level, defense: 20*level, fleet: {lightFighter: Math.floor(level*1.5)}});
+      const defenseShips = { missileLauncher: level*4, lightLaser: Math.floor(level*1.5) };
+      const fleet = { lightFighter: Math.floor(level*1.5) };
+      if(level>10) fleet.cruiser = Math.floor(level/4);
+      slots.push({pos, type:'npc', name:'Kolonie '+String.fromCharCode(65+pos), level, metal:800*level, crystal:500*level, deut:200*level, defenseShips, fleet});
     } else {
       slots.push({pos, type:'empty'});
     }
@@ -109,25 +125,94 @@ function meetsRequirements(p, req){ if(!req) return true; for(const [k,v] of Obj
 function requirementText(req){ if(!req) return ''; return Object.entries(req).map(([k,v])=>{ const nm = defs.buildings[k]?defs.buildings[k].name:(defs.research[k]?defs.research[k].name:k); return nm+' Stufe '+v; }).join(', '); }
 function debrisKey(coord){ return coord[1]+':'+coord[2]; }
 function addDebris(coord, metal, crystal){ const key=debrisKey(coord); const cur = state.debrisFields[key] || {coord, metal:0, crystal:0}; cur.metal += metal; cur.crystal += crystal; state.debrisFields[key]=cur; }
-function officerBonus(){ return state.officers.geologist ? 1.10 : 1.0; }
-function fleetSpeedBonus(){ return state.officers.admiral ? 1.1 : 1.0; }
-function engineerBonus(){ return state.officers.engineer ? 1.10 : 1.0; }
-function commanderDiscount(){ return state.officers.commander ? 0.95 : 1.0; }
-function technocratSpeed(){ return state.officers.technocrat ? 0.85 : 1.0; }
+function officerActive(key){ return !!(state.officerExpiry[key] && state.officerExpiry[key] > Date.now()); }
+function officerTimeLeft(key){ return officerActive(key) ? state.officerExpiry[key]-Date.now() : 0; }
+function formatDuration(ms){ const totalMin=Math.max(0,Math.floor(ms/60000)); const d=Math.floor(totalMin/1440); const h=Math.floor((totalMin%1440)/60); const m=totalMin%60; if(d>0) return d+'T '+h+'Std'; if(h>0) return h+'Std '+m+'Min'; return m+'Min'; }
+function officerBonus(){ return officerActive('geologist') ? 1.10 : 1.0; }
+function fleetSpeedBonus(){ return officerActive('admiral') ? 1.1 : 1.0; }
+function engineerBonus(){ return officerActive('engineer') ? 1.10 : 1.0; }
+function commanderDiscount(){ return officerActive('commander') ? 0.95 : 1.0; }
+function technocratSpeed(){ return officerActive('technocrat') ? 0.85 : 1.0; }
+function pathfinderBonus(shipMap){ return (shipMap && shipMap.pathfinder>0) ? 1.1 : 1.0; }
+function networkSpeed(p){ const lvl=(p.research.intergalacticNetwork)||0; return Math.max(0.5, 1-0.02*lvl); }
 function buildingCost(base, level){ const c=scaledCost(base, level); const d=commanderDiscount(); return {metal:Math.floor(c.metal*d), crystal:Math.floor(c.crystal*d), deut:Math.floor(c.deut*d)}; }
+function maxColonies(p){ const lvl=(p.research.astrophysics)||0; return 1+Math.floor((lvl+1)/2); }
+function maxExpeditions(p){ const lvl=(p.research.astrophysics)||0; return 1+Math.floor(lvl/2); }
 function viewInteractionActive(){
   const el = document.activeElement;
   const view = document.getElementById('view');
   return !!(el && view && view.contains(el) && (el.tagName==='SELECT' || el.tagName==='INPUT' || el.tagName==='TEXTAREA'));
 }
-function moonChanceFromDebris(debrisTotal){ return Math.min(0.20, debrisTotal/1000000); }
+function moonChanceFromDebris(debrisTotal){ return Math.min(0.20, Math.floor(debrisTotal/50000)*0.01); }
 function maybeCreateMoon(coord, debrisTotal){ const chance = moonChanceFromDebris(debrisTotal); if(Math.random()<chance){ const exists = state.moons.find(m=>m.coord[1]===coord[1]&&m.coord[2]===coord[2]); if(!exists){ state.moons.push({coord:[...coord], size: Math.floor(2000+Math.random()*5000), buildings:{lunarBase:0, sensorPhalanx:0, jumpGate:0}, buildQueue:[], ships:{smallCargo:0,largeCargo:0,colonyShip:0,espionageProbe:0,lightFighter:0,heavyFighter:0,cruiser:0,battleship:0,battlecruiser:0,bomber:0,destroyer:0,deathstar:0,solarSatellite:0,recycler:0}}); message('Ein Mond ist bei '+coordStr(coord)+' entstanden.'); } } }
-function sendExpedition(shipsMap, durationSlot){ const p=active(); for(const [k,v] of Object.entries(shipsMap)){ if(v>p.ships[k]) return log('Zu wenige '+defs.ships[k].name); } const total=Object.values(shipsMap).reduce((a,b)=>a+b,0); if(total<1) return log('Keine Schiffe für Expedition gewählt'); for(const [k,v] of Object.entries(shipsMap)) p.ships[k]-=v; const secs = durationSlot*900; state.expeditions.push({from:state.activePlanet, ships:shipsMap, done:Date.now()+secs*1000}); log('Expedition gestartet'); }
-function resolveExpedition(exp){ const p=state.planets[exp.from]; const roll=Math.random();
-  if(roll<0.5){ const gain={metal:Math.floor(Math.random()*20000), crystal:Math.floor(Math.random()*15000), deut:Math.floor(Math.random()*8000)}; addRes(p,gain); message('Expedition erfolgreich: '+fmt(gain.metal+gain.crystal+gain.deut)+' Ressourcen gefunden.'); }
-  else if(roll<0.65){ const dm=Math.floor(Math.random()*500); state.darkMatter+=dm; message('Expedition fand '+fmt(dm)+' Dunkle Materie.'); }
-  else if(roll<0.8){ for(const [k,v] of Object.entries(exp.ships)) p.ships[k]=(p.ships[k]||0)+v; message('Expeditionsflotte kehrte unbeschadet zurück.'); return; }
-  else if(roll<0.92){ Object.keys(exp.ships).forEach(k=>exp.ships[k]=Math.floor(exp.ships[k]*0.5)); message('Expedition verlor die Hälfte der Flotte in einem Kampf.'); }
+
+function sidePower(shipMap, table){
+  let attack=0, shield=0, hull=0;
+  for(const [k,v] of Object.entries(shipMap||{})){
+    if(!v || !table[k]) continue;
+    attack += (table[k].attack||0)*v;
+    shield += (table[k].shield||0)*v;
+    hull += (table[k].hull||0)*v;
+  }
+  return {attack, shield, hull};
+}
+function extractDefense(buildings){ const result={}; for(const [k,d] of Object.entries(defs.buildings)){ if(d.isDefense && buildings[k]) result[k]=buildings[k]; } return result; }
+function simulateBattle(attackerShips, defenderShips, defenderDefenseShips){
+  const att0 = sidePower(attackerShips, defs.ships);
+  const defFleet0 = sidePower(defenderShips, defs.ships);
+  const defDef0 = sidePower(defenderDefenseShips, defs.buildings);
+  const def0 = {attack: defFleet0.attack+defDef0.attack, shield: defFleet0.shield+defDef0.shield, hull: defFleet0.hull+defDef0.hull};
+  let attHull=att0.hull, defHull=def0.hull, rounds=0;
+  const variance=()=>0.9+Math.random()*0.2;
+  while(rounds<6 && attHull>0 && defHull>0){
+    rounds++;
+    const dmgToDef = Math.max(0, att0.attack*variance() - def0.shield);
+    const dmgToAtt = Math.max(0, def0.attack*variance() - att0.shield);
+    defHull -= dmgToDef;
+    attHull -= dmgToAtt;
+  }
+  const attackerWon = defHull<=0 && attHull>0;
+  const attackerLossRatio = att0.hull>0 ? Math.min(1,Math.max(0,(att0.hull-Math.max(0,attHull))/att0.hull)) : 0;
+  const defenderLossRatio = def0.hull>0 ? Math.min(1,Math.max(0,(def0.hull-Math.max(0,defHull))/def0.hull)) : 1;
+  return { rounds, attackerWon, defenderWon: !attackerWon, attackerLossRatio, defenderLossRatio, attackerPower:att0, defenderPower:def0 };
+}
+function applyLosses(shipMap, ratio){ const res={}; for(const [k,v] of Object.entries(shipMap||{})){ res[k] = v ? Math.floor(v*(1-ratio)) : 0; } return res; }
+function diffLosses(before, after){ const res={}; for(const k of Object.keys(before||{})){ res[k]=Math.max(0,(before[k]||0)-(after[k]||0)); } return res; }
+function shipCostSum(shipMap, resource){ let sum=0; for(const [k,v] of Object.entries(shipMap||{})){ if(v && defs.ships[k]) sum += defs.ships[k].cost[resource]*v; } return sum; }
+
+function sendExpedition(shipsMap, durationSlot){
+  const p=active();
+  const maxExp = maxExpeditions(p);
+  const activeExp = state.expeditions.length;
+  if(activeExp>=maxExp) return log('Keine Expeditions-Plätze frei (max '+maxExp+', Astrophysik ausbauen)');
+  for(const [k,v] of Object.entries(shipsMap)){ if(v>(p.ships[k]||0)) return log('Zu wenige '+defs.ships[k].name); }
+  const total=Object.values(shipsMap).reduce((a,b)=>a+b,0); if(total<1) return log('Keine Schiffe für Expedition gewählt');
+  for(const [k,v] of Object.entries(shipsMap)) p.ships[k]-=v;
+  const secs = durationSlot*900;
+  state.expeditions.push({from:state.activePlanet, ships:shipsMap, done:Date.now()+secs*1000});
+  log('Expedition gestartet');
+}
+function resolveExpedition(exp){
+  const p=state.planets[exp.from]; const roll=Math.random();
+  if(roll<0.30){ const gain={metal:Math.floor(Math.random()*20000), crystal:Math.floor(Math.random()*15000), deut:Math.floor(Math.random()*8000)}; addRes(p,gain); message('Expedition erfolgreich: '+fmt(gain.metal+gain.crystal+gain.deut)+' Ressourcen gefunden.'); }
+  else if(roll<0.42){ const dm=Math.floor(100+Math.random()*500); state.darkMatter+=dm; message('Expedition fand '+fmt(dm)+' Dunkle Materie.'); }
+  else if(roll<0.55){ for(const [k,v] of Object.entries(exp.ships)) p.ships[k]=(p.ships[k]||0)+v; message('Expeditionsflotte kehrte unbeschadet zurück.'); return; }
+  else if(roll<0.62){
+    const bonusOptions=['smallCargo','lightFighter','espionageProbe'];
+    const bonusKey = bonusOptions[Math.floor(Math.random()*bonusOptions.length)];
+    p.ships[bonusKey]=(p.ships[bonusKey]||0)+1;
+    for(const [k,v] of Object.entries(exp.ships)) p.ships[k]=(p.ships[k]||0)+v;
+    message('Expedition fand ein Wrack: 1 zusätzliches Schiff geborgen ('+defs.ships[bonusKey].name+').');
+    return;
+  }
+  else if(roll<0.90){
+    const fleetSize = Object.values(exp.ships).reduce((a,b)=>a+b,0);
+    const pirateFleet = {lightFighter: Math.max(1, Math.floor(fleetSize/2))};
+    const battle = simulateBattle(exp.ships, pirateFleet, {});
+    exp.ships = applyLosses(exp.ships, battle.attackerLossRatio);
+    if(battle.attackerWon){ message('Expedition traf auf Piraten und siegte nach '+battle.rounds+' Kampfrunde(n).'); }
+    else { message('Expedition traf auf Piraten und verlor einen Teil der Flotte ('+battle.rounds+' Kampfrunde(n)).'); }
+  }
   else { message('Expeditionsflotte ist im Nichts verschwunden.'); return; }
   for(const [k,v] of Object.entries(exp.ships)) p.ships[k]=(p.ships[k]||0)+v;
 }
@@ -136,14 +221,47 @@ function enqueueMoonBuild(key){ const m=activeMoon(); if(!m) return log('Kein Mo
 function jumpGateReady(m){ return (m.buildings.jumpGate||0) >= 1; }
 function jumpGateTransfer(fromMoonIdx, toMoonIdx, cargo, ships){ const from=state.moons[fromMoonIdx]; const to=state.moons[toMoonIdx]; if(!jumpGateReady(from) || !jumpGateReady(to)) return log('Beide Monde brauchen ein Sprungtor'); for(const [k,v] of Object.entries(ships)){ if(v>(from.ships[k]||0)) return log('Zu wenige '+defs.ships[k].name+' auf dem Mond'); } for(const [k,v] of Object.entries(ships)){ from.ships[k]-=v; to.ships[k]=(to.ships[k]||0)+v; } log('Sprungtor-Transfer nach '+coordStr(to.coord)+' abgeschlossen (sofort)'); render(); }
 function depositAlliance(res){ state.alliance.depot.metal += res.metal||0; state.alliance.depot.crystal += res.crystal||0; state.alliance.depot.deut += res.deut||0; log('Ressourcen ins Allianzdepot eingezahlt'); }
+function allianceRank(points){ if(points>=2000000) return 'Elite-Kommandant'; if(points>=500000) return 'Kommandeur'; if(points>=100000) return 'Veteran'; if(points>=10000) return 'Krieger'; return 'Rekrut'; }
+function merchantBuy(resourceType, amount){
+  amount=Math.floor(Number(amount))||0;
+  if(amount<=0) return log('Ungültige Menge');
+  const rate = 5;
+  const cost = Math.ceil(amount/rate);
+  if(state.darkMatter<cost) return log('Nicht genug Dunkle Materie');
+  const p=active();
+  state.darkMatter-=cost;
+  addRes(p, {[resourceType]:amount});
+  log('Händler: '+fmt(amount)+' '+resourceType+' für '+fmt(cost)+' Dunkle Materie gekauft'); render();
+}
+function launchMissiles(targetPos, count){
+  const p=active();
+  count=Math.floor(Number(count))||0;
+  targetPos=Math.floor(Number(targetPos))||0;
+  if(count<1 || count>(p.buildings.interplanetaryMissile||0)) return log('Ungültige Raketenanzahl');
+  if(targetPos<1 || targetPos>15) return log('Ungültige Zielposition');
+  const ownIdx = state.planets.findIndex(pl=>pl.coords[1]===p.coords[1] && pl.coords[2]===targetPos);
+  if(ownIdx>=0) return log('Eigene Planeten können nicht angegriffen werden');
+  const slots = seedGalaxy(p.coords[1]); const slot = slots.find(s=>s.pos===targetPos);
+  if(!slot || slot.type!=='npc') return log('Kein gültiges Ziel auf dieser Position');
+  p.buildings.interplanetaryMissile -= count;
+  const missileAttack = count*defs.buildings.interplanetaryMissile.attack;
+  const defPower = sidePower(slot.defenseShips, defs.buildings).attack;
+  const netDamage = Math.max(0, missileAttack-defPower);
+  if(netDamage>0){ message('Raketenangriff auf '+slot.name+' bei '+coordStr([1,p.coords[1],targetPos])+': '+fmt(netDamage)+' Schaden an der Verteidigung.'); log('Raketen abgefeuert · '+fmt(netDamage)+' Schaden'); }
+  else { message('Raketenangriff auf '+slot.name+' von der Verteidigung vollständig abgefangen.'); log('Raketen abgefeuert · abgefangen'); }
+  render();
+}
 function saveGame(){
-  const data = JSON.stringify({planets:state.planets, fleets:state.fleets, reports:state.reports, messages:state.messages, debrisFields:state.debrisFields, moons:state.moons, alliance:state.alliance, officers:state.officers, darkMatter:state.darkMatter, expeditions:state.expeditions, lifeform:state.lifeform, logs:state.logs, galaxySystem:state.galaxySystem, activePlanet:state.activePlanet});
+  const data = JSON.stringify({planets:state.planets, fleets:state.fleets, reports:state.reports, messages:state.messages, debrisFields:state.debrisFields, moons:state.moons, alliance:state.alliance, officerExpiry:state.officerExpiry, darkMatter:state.darkMatter, expeditions:state.expeditions, lifeform:state.lifeform, logs:state.logs, galaxySystem:state.galaxySystem, activePlanet:state.activePlanet});
   if(window.Android && window.Android.saveGame){ window.Android.saveGame(data); log('Spielstand wird gespeichert...'); return; }
   const blob = new Blob([data], {type:'application/json'}); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'stellare-industrien-save.json'; a.click(); log('Spielstand exportiert');
 }
 function applySaveData(data){
   try {
-    state.planets = data.planets; state.fleets = data.fleets||[]; state.reports = data.reports||[]; state.messages = data.messages||[]; state.debrisFields = data.debrisFields||{}; state.moons = data.moons||[]; state.alliance = data.alliance||state.alliance; state.officers = data.officers||state.officers; state.darkMatter = data.darkMatter!=null?data.darkMatter:state.darkMatter; state.expeditions = data.expeditions||[]; state.lifeform = data.lifeform||state.lifeform; state.logs = data.logs||[]; state.galaxySystem = data.galaxySystem||145; state.activePlanet = data.activePlanet||0; state.activeMoonIndex = null; log('Spielstand geladen'); render();
+    state.planets = data.planets; state.fleets = data.fleets||[]; state.reports = data.reports||[]; state.messages = data.messages||[]; state.debrisFields = data.debrisFields||{}; state.moons = data.moons||[]; state.alliance = data.alliance||state.alliance;
+    if(data.officerExpiry){ state.officerExpiry = data.officerExpiry; }
+    else if(data.officers){ const exp={}; const dur=7*24*3600*1000; Object.entries(data.officers).forEach(([k,v])=>{ if(v) exp[k]=Date.now()+dur; }); state.officerExpiry=exp; }
+    state.darkMatter = data.darkMatter!=null?data.darkMatter:state.darkMatter; state.expeditions = data.expeditions||[]; state.lifeform = data.lifeform||state.lifeform; state.logs = data.logs||[]; state.galaxySystem = data.galaxySystem||145; state.activePlanet = data.activePlanet||0; state.activeMoonIndex = null; log('Spielstand geladen'); render();
   } catch(err){ log('Fehler beim Laden des Spielstands'); }
 }
 function loadGame(file){ const reader = new FileReader(); reader.onload = e => { try { applySaveData(JSON.parse(e.target.result)); } catch(err){ log('Fehler beim Laden des Spielstands'); } }; reader.readAsText(file); }
@@ -161,43 +279,66 @@ function scaledCost(base, level){const mult=Math.pow(1.6, level-1); return {meta
 function hasRes(p,c){return p.resources.metal>=c.metal && p.resources.crystal>=c.crystal && p.resources.deut>=c.deut}
 function spend(p,c){p.resources.metal-=c.metal; p.resources.crystal-=c.crystal; p.resources.deut-=c.deut}
 function addRes(p,c){p.resources.metal+=c.metal||0; p.resources.crystal+=c.crystal||0; p.resources.deut+=c.deut||0}
-function energyStats(p){const solar=defs.buildings.solarPlant.power(p.buildings.solarPlant); const satellites=(p.ships.solarSatellite||0)*20; const prod=(solar+satellites)*engineerBonus(); const use=defs.buildings.metalMine.powerUse(p.buildings.metalMine)+defs.buildings.crystalMine.powerUse(p.buildings.crystalMine)+defs.buildings.deutSynth.powerUse(p.buildings.deutSynth); return {prod,use,ratio: use? Math.min(1,prod/use):1};}
-function hourly(p){const e=energyStats(p).ratio; const bonus=officerBonus(); return {metal: defs.buildings.metalMine.prod(p.buildings.metalMine)*e*bonus, crystal: defs.buildings.crystalMine.prod(p.buildings.crystalMine)*e*bonus, deut: defs.buildings.deutSynth.prod(p.buildings.deutSynth)*e*bonus}}
+function fusionDeutUse(p){ return (p.buildings.fusionReactor) ? defs.buildings.fusionReactor.deutUse(p.buildings.fusionReactor) : 0; }
+function energyStats(p){const solar=defs.buildings.solarPlant.power(p.buildings.solarPlant); const fusion=defs.buildings.fusionReactor.power(p.buildings.fusionReactor||0); const satellites=(p.ships.solarSatellite||0)*20; const prod=(solar+fusion+satellites)*engineerBonus(); const use=defs.buildings.metalMine.powerUse(p.buildings.metalMine)+defs.buildings.crystalMine.powerUse(p.buildings.crystalMine)+defs.buildings.deutSynth.powerUse(p.buildings.deutSynth); return {prod,use,ratio: use? Math.min(1,prod/use):1};}
+function hourly(p){const e=energyStats(p).ratio; const bonus=officerBonus(); return {metal: defs.buildings.metalMine.prod(p.buildings.metalMine)*e*bonus, crystal: defs.buildings.crystalMine.prod(p.buildings.crystalMine)*e*bonus, deut: defs.buildings.deutSynth.prod(p.buildings.deutSynth)*e*bonus - fusionDeutUse(p)}}
 function maxStorage(p){return {metal:Math.max(5000,5000*p.buildings.metalStorage), crystal:Math.max(5000,5000*p.buildings.crystalStorage), deut:Math.max(5000,5000*p.buildings.deutTank)}}
 function capacityForShips(shipMap){let total=0; for(const [k,v] of Object.entries(shipMap)){ total += defs.ships[k].cargo*v; } return total }
 function fuelForShips(shipMap){let total=0; for(const [k,v] of Object.entries(shipMap)){ total += defs.ships[k].fuel*v; } return total }
 function fleetSpeed(shipMap){const vals=Object.entries(shipMap).filter(([,v])=>v>0).map(([k])=>defs.ships[k].speed); return vals.length?Math.min(...vals):1}
 function distanceBetween(a,b){return Math.abs(a[1]-b[1])*20 + Math.abs(a[2]-b[2]) + 5}
-function fleetDuration(fromCoord,toCoord,shipMap){const speed=fleetSpeed(shipMap)*fleetSpeedBonus(); const distance=distanceBetween(fromCoord,toCoord); return Math.max(10, Math.round((distance*3)/speed)); }
+function fleetDuration(fromCoord,toCoord,shipMap){const speed=fleetSpeed(shipMap)*fleetSpeedBonus()*pathfinderBonus(shipMap); const distance=distanceBetween(fromCoord,toCoord); return Math.max(10, Math.round((distance*3)/speed)); }
 function secsLeft(t){return Math.max(0, Math.ceil((t-Date.now())/1000))}
+function computePoints(p){
+  let total=0;
+  for(const [k,lvl] of Object.entries(p.buildings)){ const def=defs.buildings[k]; if(!def||!lvl) continue; for(let l=1;l<=lvl;l++){ const c=scaledCost(def.base,l); total+=c.metal+c.crystal+c.deut; } }
+  for(const [k,lvl] of Object.entries(p.research)){ const def=defs.research[k]; if(!def||!lvl) continue; for(let l=1;l<=lvl;l++){ const c=scaledCost(def.base,l); total+=c.metal+c.crystal+c.deut; } }
+  for(const [k,v] of Object.entries(p.ships)){ if(defs.ships[k] && v) total += (defs.ships[k].cost.metal+defs.ships[k].cost.crystal+defs.ships[k].cost.deut)*v; }
+  return total;
+}
+function totalPlayerPoints(){ return Math.floor(state.planets.reduce((s,p)=>s+computePoints(p),0)/1000); }
 
 function enqueueBuild(key){const p=active(); const def=defs.buildings[key]; if(!meetsRequirements(p, def.requires)) return log(def.name+' benötigt: '+requirementText(def.requires)); const lvl=p.buildings[key]+1; const cost=buildingCost(def.base, lvl); if(!hasRes(p,cost)) return log('Nicht genug Ressourcen für '+def.name); spend(p,cost); const secs=Math.max(8, Math.round((cost.metal+cost.crystal)/(250*(1+p.buildings.robotFactory)))); p.buildQueue.push({type:'building', key, name:def.name, done:Date.now()+secs*1000}); log(def.name+' Stufe '+lvl+' gestartet'); render(); }
-function enqueueResearch(key){const p=active(); const lvl=p.research[key]+1; const cost=scaledCost(defs.research[key].base, lvl); if(!hasRes(p,cost)) return log('Nicht genug Ressourcen für '+defs.research[key].name); spend(p,cost); const secs=Math.max(12, Math.round((cost.crystal+cost.deut)/(220*(1+p.buildings.researchLab))*technocratSpeed())); p.researchQueue.push({type:'research', key, name:defs.research[key].name, done:Date.now()+secs*1000}); log(defs.research[key].name+' Stufe '+lvl+' gestartet'); render(); }
+function enqueueResearch(key){const p=active(); const lvl=p.research[key]+1; const cost=scaledCost(defs.research[key].base, lvl); if(!hasRes(p,cost)) return log('Nicht genug Ressourcen für '+defs.research[key].name); spend(p,cost); const secs=Math.max(12, Math.round((cost.crystal+cost.deut)/(220*(1+p.buildings.researchLab))*technocratSpeed()*networkSpeed(p))); p.researchQueue.push({type:'research', key, name:defs.research[key].name, done:Date.now()+secs*1000}); log(defs.research[key].name+' Stufe '+lvl+' gestartet'); render(); }
 function enqueueShip(key){const p=active(); const def=defs.ships[key]; if(!meetsRequirements(p, def.requires)) return log(def.name+' benötigt: '+requirementText(def.requires)); const cost=def.cost; if(!hasRes(p,cost)) return log('Nicht genug Ressourcen für '+def.name); spend(p,cost); const secs=Math.max(6, Math.round((cost.metal+cost.crystal)/(300*(1+p.buildings.shipyard)))); p.shipQueue.push({type:'ship', key, name:def.name, done:Date.now()+secs*1000}); log(def.name+' in Bau'); render(); }
-function enqueueDefense(key){const p=active(); const def=defs.buildings[key]; if(!meetsRequirements(p, def.requires)) return log(def.name+' benötigt: '+requirementText(def.requires)); const count=(p.buildings[key]||0)+1; const d=commanderDiscount(); const cost={metal:Math.floor(def.base.metal*d), crystal:Math.floor(def.base.crystal*d), deut:Math.floor(def.base.deut*d)}; if(!hasRes(p,cost)) return log('Nicht genug Ressourcen für '+def.name); spend(p,cost); const secs=Math.max(5, Math.round((cost.metal+cost.crystal)/(300*(1+p.buildings.shipyard)))); p.buildQueue.push({type:'defense', key, name:def.name, done:Date.now()+secs*1000}); log(def.name+' in Bau'); render(); }
+function enqueueDefense(key){
+  const p=active(); const def=defs.buildings[key];
+  if(!meetsRequirements(p, def.requires)) return log(def.name+' benötigt: '+requirementText(def.requires));
+  const count=(p.buildings[key]||0);
+  if(def.unique && count>=1) return log(def.name+' ist bereits vorhanden (nur 1 pro Planet)');
+  if(key==='interplanetaryMissile'){ const cap=(p.buildings.missileSilo||0)*10; if(count>=cap) return log('Raketensilo-Kapazität erreicht ('+cap+')'); }
+  const d=commanderDiscount(); const cost={metal:Math.floor(def.base.metal*d), crystal:Math.floor(def.base.crystal*d), deut:Math.floor(def.base.deut*d)};
+  if(!hasRes(p,cost)) return log('Nicht genug Ressourcen für '+def.name);
+  spend(p,cost); const secs=Math.max(5, Math.round((cost.metal+cost.crystal)/(300*(1+p.buildings.shipyard))));
+  p.buildQueue.push({type:'defense', key, name:def.name, done:Date.now()+secs*1000}); log(def.name+' in Bau'); render();
+}
 
 function sendFleet(form){
   const from = state.activePlanet; const p = active();
   const mission = form.mission.value;
-  const targetVal = form.target.value; // format: system:pos or planetIndex
+  const targetVal = form.target.value; // format: system:pos
   let toCoord, toPlanetIndex=null, npcSlot=null, emptySlot=null;
   const [sys,pos] = targetVal.split(':').map(Number);
   if(!Number.isInteger(sys) || sys<1 || !Number.isInteger(pos) || pos<1 || pos>15) return log('Ungültiges Ziel: System und Position (1-15) angeben');
   toCoord = [1, sys, pos];
   const ownIdx = state.planets.findIndex(pl=>pl.coords[1]===sys && pl.coords[2]===pos);
+  if(mission==='attack' && ownIdx>=0) return log('Eigene Planeten können nicht angegriffen werden');
   if(ownIdx>=0) toPlanetIndex = ownIdx;
   else {
     const slots = seedGalaxy(sys); const slot = slots.find(s=>s.pos===pos);
     if(slot.type==='npc') npcSlot = slot; else if(slot.type==='empty') emptySlot = slot;
   }
-  const ships = {smallCargo:Number(form.smallCargo.value)||0,largeCargo:Number(form.largeCargo.value)||0,colonyShip:Number(form.colonyShip.value)||0,espionageProbe:Number(form.espionageProbe.value)||0,lightFighter:Number(form.lightFighter.value)||0,cruiser:Number(form.cruiser.value)||0,recycler:Number(form.recycler.value)||0};
+  const ships = {};
+  Object.keys(defs.ships).forEach(k=>{ if(defs.ships[k].role!=='power' && form[k]) ships[k]=Number(form[k].value)||0; });
   const totalShips = Object.values(ships).reduce((a,b)=>a+b,0);
   if(totalShips<=0) return log('Keine Schiffe ausgewählt');
-  for(const [k,v] of Object.entries(ships)){ if(v>p.ships[k]) return log('Zu wenige '+defs.ships[k].name); }
+  for(const [k,v] of Object.entries(ships)){ if(v>(p.ships[k]||0)) return log('Zu wenige '+defs.ships[k].name); }
+  const combatPower = Object.entries(ships).reduce((s,[k,v])=> s + (defs.ships[k] && defs.ships[k].role==='combat' ? v : 0), 0);
   if(mission==='colonize' && ships.colonyShip<1) return log('Kolonisierung braucht mindestens ein Kolonieschiff');
   if(mission==='colonize' && !emptySlot) return log('Zielfeld ist nicht leer');
+  if(mission==='colonize' && state.planets.length>=maxColonies(p)) return log('Maximale Kolonieanzahl erreicht (Astrophysik ausbauen, aktuell max '+maxColonies(p)+')');
   if(mission==='spy' && ships.espionageProbe<1) return log('Spionage braucht mindestens eine Sonde');
-  if(mission==='attack' && (ships.lightFighter+ships.cruiser)<1) return log('Angriff braucht Kampfschiffe');
+  if(mission==='attack' && combatPower<1) return log('Angriff braucht Kampfschiffe');
   if(mission==='harvest' && ships.recycler<1) return log('Bergung braucht mindestens einen Recycler');
   if(mission==='harvest' && !state.debrisFields[debrisKey(toCoord)]) return log('Kein Trümmerfeld auf diesem Feld');
 
@@ -224,40 +365,41 @@ function resolveArrival(f){
     f.phase='return';
   } else if(f.mission==='spy'){
     if(f.npcSlot){
-      state.reports.unshift({time:new Date().toLocaleTimeString('de-DE'), target:f.npcSlot.name, coords:coordStr(f.toCoord), resources:{metal:f.npcSlot.metal, crystal:f.npcSlot.crystal, deut:f.npcSlot.deut}, defense:f.npcSlot.defense, fleet:f.npcSlot.fleet});
+      const defPower = sidePower(f.npcSlot.defenseShips, defs.buildings).attack;
+      state.reports.unshift({time:new Date().toLocaleTimeString('de-DE'), target:f.npcSlot.name, coords:coordStr(f.toCoord), resources:{metal:f.npcSlot.metal, crystal:f.npcSlot.crystal, deut:f.npcSlot.deut}, defense:defPower, fleet:f.npcSlot.fleet});
       log('Spionagebericht über '+f.npcSlot.name+' erhalten');
     } else if(f.toPlanetIndex!=null){
       const t=state.planets[f.toPlanetIndex];
-      state.reports.unshift({time:new Date().toLocaleTimeString('de-DE'), target:t.name, coords:coordStr(t.coords), resources:{...t.resources}, defense:0, fleet:t.ships});
+      state.reports.unshift({time:new Date().toLocaleTimeString('de-DE'), target:t.name, coords:coordStr(t.coords), resources:{...t.resources}, defense:sidePower(extractDefense(t.buildings), defs.buildings).attack, fleet:t.ships});
       log('Spionagebericht über '+t.name+' erhalten');
     }
     f.phase='return';
   } else if(f.mission==='attack'){
     if(f.npcSlot){
-      const atk = Object.entries(f.ships).reduce((s,[k,v])=>s+defs.ships[k].attack*v,0);
-      const def = f.npcSlot.defense + Object.entries(f.npcSlot.fleet||{}).reduce((s,[k,v])=>s+defs.ships[k].attack*v,0);
-      const won = atk > def*1.1;
-      if(won){
+      const battle = simulateBattle(f.ships, f.npcSlot.fleet, f.npcSlot.defenseShips);
+      const survivingAttacker = applyLosses(f.ships, battle.attackerLossRatio);
+      const survivingDefenderFleet = applyLosses(f.npcSlot.fleet, battle.defenderLossRatio);
+      const lostAttacker = diffLosses(f.ships, survivingAttacker);
+      const lostDefenderFleet = diffLosses(f.npcSlot.fleet, survivingDefenderFleet);
+      const debrisMetal = Math.floor(shipCostSum(lostAttacker,'metal')*0.3 + shipCostSum(lostDefenderFleet,'metal')*0.3);
+      const debrisCrystal = Math.floor(shipCostSum(lostAttacker,'crystal')*0.3 + shipCostSum(lostDefenderFleet,'crystal')*0.3);
+      f.ships = survivingAttacker;
+      const roundsText = battle.rounds>0 ? battle.rounds+' Kampfrunde(n)' : 'kampflos (keine Verteidigung)';
+      if(debrisMetal+debrisCrystal>0){ addDebris(f.toCoord, debrisMetal, debrisCrystal); maybeCreateMoon(f.toCoord, debrisMetal+debrisCrystal); }
+      if(battle.attackerWon){
         const loot = {metal: Math.floor(f.npcSlot.metal*0.5), crystal: Math.floor(f.npcSlot.crystal*0.5), deut: Math.floor(f.npcSlot.deut*0.5)};
         const cap = capacityForShips(f.ships); const totalLoot = Math.min(cap, loot.metal+loot.crystal+loot.deut);
-        const ratio = totalLoot>0 ? totalLoot/(loot.metal+loot.crystal+loot.deut) : 0;
+        const ratio = (loot.metal+loot.crystal+loot.deut)>0 ? totalLoot/(loot.metal+loot.crystal+loot.deut) : 0;
         f.cargo = {metal:Math.floor(loot.metal*ratio), crystal:Math.floor(loot.crystal*ratio), deut:Math.floor(loot.deut*ratio)};
-        addDebris(f.toCoord, Math.floor(f.npcSlot.metal*0.08), Math.floor(f.npcSlot.crystal*0.08));
-        maybeCreateMoon(f.toCoord, Math.floor(f.npcSlot.metal*0.08)+Math.floor(f.npcSlot.crystal*0.08));
-        message('Angriffsbericht: Sieg gegen '+f.npcSlot.name+' bei '+coordStr(f.toCoord)+'. Beute '+fmt(f.cargo.metal+f.cargo.crystal+f.cargo.deut)+'. Trümmerfeld entstanden.');
+        message('Angriffsbericht: Sieg gegen '+f.npcSlot.name+' bei '+coordStr(f.toCoord)+' ('+roundsText+'). Beute '+fmt(f.cargo.metal+f.cargo.crystal+f.cargo.deut)+'. Trümmerfeld: '+fmt(debrisMetal+debrisCrystal)+'.');
         log('Angriff auf '+f.npcSlot.name+' erfolgreich · Beute '+fmt(f.cargo.metal+f.cargo.crystal+f.cargo.deut));
       } else {
-        let lostMetal=0, lostCrystal=0;
-        Object.keys(f.ships).forEach(k=>{ const lost = f.ships[k]-Math.floor(f.ships[k]*0.4); lostMetal += lost*defs.ships[k].cost.metal*0.3; lostCrystal += lost*defs.ships[k].cost.crystal*0.3; f.ships[k]=Math.floor(f.ships[k]*0.4); });
-        addDebris(f.toCoord, Math.floor(lostMetal), Math.floor(lostCrystal));
-        maybeCreateMoon(f.toCoord, Math.floor(lostMetal)+Math.floor(lostCrystal));
         f.cargo={metal:0,crystal:0,deut:0};
-        message('Angriffsbericht: Niederlage gegen '+f.npcSlot.name+' bei '+coordStr(f.toCoord)+'. Verluste erlitten.');
+        message('Angriffsbericht: Niederlage gegen '+f.npcSlot.name+' bei '+coordStr(f.toCoord)+' ('+roundsText+'). Eigene Verluste erlitten.');
         log('Angriff auf '+f.npcSlot.name+' gescheitert · Verluste erlitten');
       }
-    } else if(f.toPlanetIndex!=null){
-      log('Angriff auf eigenen Planeten wird im Prototyp nicht simuliert');
-      f.cargo={metal:0,crystal:0,deut:0};
+    } else {
+      log('Angriff nicht möglich'); f.cargo={metal:0,crystal:0,deut:0};
     }
     f.phase='return';
   } else if(f.mission==='harvest'){
@@ -287,9 +429,9 @@ function tick(){
   const now=Date.now(); const dt=(now-state.now)/1000; state.now=now; const hours=(dt*state.timeScale)/3600;
   state.planets.forEach(p=>{
     const inc=hourly(p); const cap=maxStorage(p);
-    p.resources.metal=Math.min(cap.metal,p.resources.metal+inc.metal*hours);
-    p.resources.crystal=Math.min(cap.crystal,p.resources.crystal+inc.crystal*hours);
-    p.resources.deut=Math.min(cap.deut,p.resources.deut+inc.deut*hours);
+    p.resources.metal=Math.max(0,Math.min(cap.metal,p.resources.metal+inc.metal*hours));
+    p.resources.crystal=Math.max(0,Math.min(cap.crystal,p.resources.crystal+inc.crystal*hours));
+    p.resources.deut=Math.max(0,Math.min(cap.deut,p.resources.deut+inc.deut*hours));
     while(p.buildQueue[0] && p.buildQueue[0].done<=now){ const q=p.buildQueue.shift(); p.buildings[q.key]=(p.buildings[q.key]||0)+1; log(p.name+': '+q.name+' fertig'); }
     while(p.researchQueue[0] && p.researchQueue[0].done<=now){ const q=p.researchQueue.shift(); p.research[q.key]=(p.research[q.key]||0)+1; log(p.name+': '+q.name+' fertig'); }
     while(p.shipQueue[0] && p.shipQueue[0].done<=now){ const q=p.shipQueue.shift(); p.ships[q.key]=(p.ships[q.key]||0)+1; log(p.name+': '+q.name+' fertig'); }
@@ -306,9 +448,9 @@ function tick(){
   if(!viewInteractionActive()) renderView(true);
 }
 
-const navItems = [['overview','Übersicht'],['buildings','Gebäude'],['facilities','Anlagen'],['defense','Verteidigung'],['resources','Ressourcen'],['research','Forschung'],['shipyard','Werft'],['fleet','Flotte'],['expeditions','Expeditionen'],['galaxy','Galaxie'],['moons','Monde'],['alliance','Allianz'],['officers','Offiziere'],['lifeform','Lebensform'],['market','Markt'],['reports','Berichte'],['messages','Nachrichten'],['empire','Imperium'],['settings','Einstellungen']];
+const navItems = [['overview','Übersicht'],['buildings','Gebäude'],['facilities','Anlagen'],['defense','Verteidigung'],['resources','Ressourcen'],['research','Forschung'],['shipyard','Werft'],['fleet','Flotte'],['expeditions','Expeditionen'],['galaxy','Galaxie'],['moons','Monde'],['alliance','Allianz'],['officers','Offiziere'],['lifeform','Lebensform'],['market','Markt'],['reports','Berichte'],['messages','Nachrichten'],['empire','Imperium'],['highscore','Rangliste'],['settings','Einstellungen']];
 
-function renderNav(){ $('#nav').innerHTML = navItems.map(([id,label])=>`<button class="${state.view===id?'active':''}" data-view="${id}">${label}</button>`).join(''); document.querySelectorAll('[data-view]').forEach(b=>b.onclick=()=>{state.view=b.dataset.view; render();}); }
+function renderNav(){ $('#nav').innerHTML = navItems.map(([id,label])=>`<button class="${state.view===id?'active':''}" data-view="${id}">${label}</button>`).join(''); document.querySelectorAll('[data-view]').forEach(b=>b.onclick=()=>{ if(b.dataset.view!=='fleet') state.fleetPrefill=null; state.view=b.dataset.view; render(); }); }
 function renderTop(){ const p=active(), inc=hourly(p), e=energyStats(p); $('#planetName').textContent=p.name; $('#planetCoords').textContent=coordStr(p.coords); $('#metalTop').textContent=fmt(p.resources.metal); $('#crystalTop').textContent=fmt(p.resources.crystal); $('#deutTop').textContent=fmt(p.resources.deut); $('#metalRate').textContent=fmt1(inc.metal)+'/h'; $('#crystalRate').textContent=fmt1(inc.crystal)+'/h'; $('#deutRate').textContent=fmt1(inc.deut)+'/h'; $('#energyTop').textContent=fmt(e.prod); $('#energyUse').textContent=fmt(e.use)+' genutzt'; }
 function renderSide(){
   $('#planetTabs').innerHTML = state.planets.map((p,i)=>`<button class="pill ${state.activePlanet===i?'active':''}" data-planet="${i}">${p.name}</button>`).join('');
@@ -324,7 +466,7 @@ function renderSide(){
 
 function viewOverview(){ const p=active(), e=energyStats(p), inc=hourly(p), cap=maxStorage(p); return `
   <div class="hero">
-    <div class="card"><h2>Planetenübersicht</h2><p>Vollständiger Loop: Ressourcen, Energie, Forschung, Werft, Galaxie mit Spionage/Angriff/Kolonisierung und Markt sind aktiv.</p>
+    <div class="card"><h2>Planetenübersicht</h2><p>Vollständiger Loop: Ressourcen, Energie, Forschung, Werft, Galaxie mit Spionage/Angriff/Kolonisierung, Kampfsimulation, Rangliste und Markt sind aktiv.</p>
       <div class="grid3"><div class="card"><div class="label">Speicher Metall</div><div class="value">${fmt(cap.metal)}</div></div><div class="card"><div class="label">Speicher Kristall</div><div class="value">${fmt(cap.crystal)}</div></div><div class="card"><div class="label">Speicher Deuterium</div><div class="value">${fmt(cap.deut)}</div></div></div>
     </div>
     <div class="card"><h2>Energie</h2><div class="small">Ohne genug Energie sinkt die Produktion proportional.</div><div style="height:10px"></div><div class="bar"><span style="width:${Math.min(100,(e.prod/Math.max(1,e.use))*100)}%"></span></div><div style="height:10px"></div><div class="small">Produktion ${fmt(e.prod)} · Verbrauch ${fmt(e.use)} · Faktor ${fmt1(e.ratio*100)}%</div></div>
@@ -342,29 +484,31 @@ function viewBuildings(){ const p=active(); return `<h2>Gebäude</h2><div class=
 
 function viewFacilities(){ const p=active(); const facKeys = Object.entries(defs.buildings).filter(([,d])=>d.facility && !d.moonOnly); return `<h2>Anlagen</h2><div class="list">${facKeys.map(([k,d])=>{ const lvl=(p.buildings[k]||0)+1; const c=buildingCost(d.base,lvl); const ok=meetsRequirements(p,d.requires); return `<div class="row"><div><strong>${d.name}</strong><div class="sub">Stufe ${p.buildings[k]||0}</div><div class="sub">Kosten: M ${fmt(c.metal)} · K ${fmt(c.crystal)} · D ${fmt(c.deut)}</div>${!ok?`<div class="sub warn-text">Benötigt: ${requirementText(d.requires)}</div>`:''}</div><button class="btn alt" data-build="${k}" ${ok?'':'disabled'}>Ausbauen</button></div>`; }).join('')}</div>`; }
 function viewResources(){ const p=active(), inc=hourly(p), e=energyStats(p); return `<h2>Ressourcen</h2><div class="grid2"><div class="card"><h3>Produktion pro Stunde</h3><div class="list"><div class="row"><span>Metall</span><strong>${fmt1(inc.metal)}</strong></div><div class="row"><span>Kristall</span><strong>${fmt1(inc.crystal)}</strong></div><div class="row"><span>Deuterium</span><strong>${fmt1(inc.deut)}</strong></div></div></div><div class="card"><h3>Energieeffizienz</h3><div class="bar"><span style="width:${Math.min(100,e.ratio*100)}%"></span></div><div style="height:10px"></div><div class="small">${fmt(e.prod)} verfügbar · ${fmt(e.use)} benötigt</div></div></div>`; }
-function viewResearch(){ const p=active(); return `<h2>Forschung</h2><div class="list">${Object.entries(defs.research).map(([k,d])=>{ const lvl=p.research[k]+1; const c=scaledCost(d.base,lvl); return `<div class="row"><div><strong>${d.name}</strong><div class="sub">Stufe ${p.research[k]}</div><div class="sub">Kosten: M ${fmt(c.metal)} · K ${fmt(c.crystal)} · D ${fmt(c.deut)}</div></div><button class="btn good" data-research="${k}">Forschen</button></div>`; }).join('')}</div>`; }
+function viewResearch(){ const p=active(); return `<h2>Forschung</h2><div class="small">Max. Kolonien: ${maxColonies(p)} · Max. gleichzeitige Expeditionen: ${maxExpeditions(p)} (abhängig von Astrophysik)</div><div style="height:10px"></div><div class="list">${Object.entries(defs.research).map(([k,d])=>{ const lvl=p.research[k]+1; const c=scaledCost(d.base,lvl); const ok=meetsRequirements(p,d.requires); return `<div class="row"><div><strong>${d.name}</strong><div class="sub">Stufe ${p.research[k]}</div><div class="sub">Kosten: M ${fmt(c.metal)} · K ${fmt(c.crystal)} · D ${fmt(c.deut)}</div>${!ok?`<div class="sub warn-text">Benötigt: ${requirementText(d.requires)}</div>`:''}</div><button class="btn good" data-research="${k}" ${ok?'':'disabled'}>Forschen</button></div>`; }).join('')}</div>`; }
 function viewShipyard(){ const p=active(); return `<h2>Raumschiffwerft</h2><div class="list">${Object.entries(defs.ships).map(([k,d])=>{ const ok=meetsRequirements(p,d.requires); return `<div class="row"><div><strong>${d.name}</strong><div class="sub">Vorhanden ${fmt(p.ships[k]||0)} · Angriff ${d.attack} · Ladung ${fmt(d.cargo)}</div><div class="sub">Kosten: M ${fmt(d.cost.metal)} · K ${fmt(d.cost.crystal)} · D ${fmt(d.cost.deut)}</div>${!ok?`<div class="sub warn-text">Benötigt: ${requirementText(d.requires)}</div>`:''}</div><button class="btn warn" data-ship="${k}" ${ok?'':'disabled'}>Bauen</button></div>`; }).join('')}</div>`; }
 
-function viewFleet(){ const p=active(); const shipOptions = (key)=>Array.from({length:p.ships[key]+1},(_,i)=>`<option>${i}</option>`).join('');
+function viewFleet(){
+  const p=active();
+  const pre = state.fleetPrefill;
+  const missionVal = pre ? pre.mission : 'transport';
+  const sysVal = pre ? pre.sys : p.coords[1];
+  const posVal = pre ? pre.pos : 1;
+  const missionOpt = (v,label)=>`<option value="${v}" ${missionVal===v?'selected':''}>${label}</option>`;
+  const sendableShips = Object.entries(defs.ships).filter(([,d])=>d.role!=='power');
+  const shipOptions = (key)=>Array.from({length:(p.ships[key]||0)+1},(_,i)=>`<option>${i}</option>`).join('');
   return `<h2>Flotte versenden</h2><div class="grid2">
   <div class="card"><h3>Missionsformular</h3><form class="fleet-form" id="fleetForm">
-    <label>Mission<select name="mission" id="missionSelect"><option value="transport">Transport</option><option value="spy">Spionage</option><option value="attack">Angriff</option><option value="colonize">Kolonisierung</option><option value="harvest">Trümmerfeld-Bergung</option></select></label>
-    <label>Zielsystem<input type="number" name="system" value="${p.coords[1]}"></label>
-    <label>Zielposition (1-15)<input type="number" name="position" min="1" max="15" value="1"></label>
+    <label>Mission<select name="mission" id="missionSelect">${missionOpt('transport','Transport')}${missionOpt('spy','Spionage')}${missionOpt('attack','Angriff')}${missionOpt('colonize','Kolonisierung')}${missionOpt('harvest','Trümmerfeld-Bergung')}</select></label>
+    <label>Zielsystem<input type="number" name="system" value="${sysVal}"></label>
+    <label>Zielposition (1-15)<input type="number" name="position" min="1" max="15" value="${posVal}"></label>
     <input type="hidden" name="target" id="targetField">
     <div class="grid3">
-      <label>Kl. Transporter<select name="smallCargo">${shipOptions('smallCargo')}</select></label>
-      <label>Gr. Transporter<select name="largeCargo">${shipOptions('largeCargo')}</select></label>
-      <label>Kolonieschiff<select name="colonyShip">${shipOptions('colonyShip')}</select></label>
-      <label>Sonde<select name="espionageProbe">${shipOptions('espionageProbe')}</select></label>
-      <label>Leichter Jäger<select name="lightFighter">${shipOptions('lightFighter')}</select></label>
-      <label>Kreuzer<select name="cruiser">${shipOptions('cruiser')}</select></label>
-      <label>Recycler<select name="recycler">${shipOptions('recycler')}</select></label>
+      ${sendableShips.map(([k,d])=>`<label>${d.name}<select name="${k}">${shipOptions(k)}</select></label>`).join('')}
     </div>
     <div class="grid3"><label>Metall<input type="number" min="0" name="metal" value="0"></label><label>Kristall<input type="number" min="0" name="crystal" value="0"></label><label>Deuterium<input type="number" min="0" name="deut" value="0"></label></div>
     <button class="btn" type="submit">Flotte starten</button>
   </form></div>
-  <div class="card"><h3>Hinweise</h3><div class="small">Transport bewegt Ressourcen. Spionage liefert einen Bericht. Angriff funktioniert gegen NPC-Kolonien in der Galaxie. Kolonisierung braucht ein Kolonieschiff und ein leeres Feld.</div><div style="height:10px"></div><table><tr><th>Schiff</th><th>Angriff</th><th>Ladung</th></tr>${Object.entries(defs.ships).map(([k,d])=>`<tr><td>${d.name}</td><td>${d.attack}</td><td>${fmt(d.cargo)}</td></tr>`).join('')}</table></div>
+  <div class="card"><h3>Hinweise</h3><div class="small">Transport bewegt Ressourcen. Spionage liefert einen Bericht. Angriff löst eine mehrstufige Kampfsimulation gegen NPC-Kolonien aus (bis zu 6 Runden, Schilde regenerieren pro Runde). Kolonisierung braucht ein Kolonieschiff, ein leeres Feld und freie Kolonieplätze (Astrophysik). Eigene Planeten können nicht angegriffen werden.</div><div style="height:10px"></div><table><tr><th>Schiff</th><th>Angriff</th><th>Hülle</th><th>Ladung</th></tr>${Object.entries(defs.ships).map(([k,d])=>`<tr><td>${d.name}</td><td>${d.attack}</td><td>${fmt(d.hull)}</td><td>${fmt(d.cargo)}</td></tr>`).join('')}</table></div>
   </div>`; }
 
 function viewGalaxy(){ const slots = seedGalaxy(state.galaxySystem); return `<h2>Galaxie</h2>
@@ -373,24 +517,44 @@ function viewGalaxy(){ const slots = seedGalaxy(state.galaxySystem); return `<h2
     const key = debrisKey([1,state.galaxySystem,s.pos]); const debris = state.debrisFields[key];
     const debrisRow = debris ? `<div class="sub">Trümmerfeld: M ${fmt(debris.metal)} · K ${fmt(debris.crystal)} <button class="btn alt" data-mission-target="harvest:${state.galaxySystem}:${s.pos}" style="margin-left:8px;padding:6px 10px;min-height:32px">Bergen</button></div>` : '';
     if(s.type==='own') return `<div class="slot own"><div>${s.pos}</div><div><strong>${s.planet.name}</strong><div class="sub">${coordStr(s.planet.coords)}</div>${debrisRow}</div><div><span class="badge own">Eigen</span></div><div class="sub">Metall ${fmt(s.planet.resources.metal)}</div><div></div></div>`;
-    if(s.type==='npc') return `<div class="slot"><div>${s.pos}</div><div><strong>${s.name}</strong><div class="sub">Stufe ${s.level}</div>${debrisRow}</div><div><span class="badge npc">NPC</span></div><div class="sub">Def ${fmt(s.defense)}</div><div><button class="btn danger" data-mission-target="attack:${state.galaxySystem}:${s.pos}">Angriff</button> <button class="btn alt" data-mission-target="spy:${state.galaxySystem}:${s.pos}">Spionage</button></div></div>`;
+    if(s.type==='npc'){ const defPower = sidePower(s.defenseShips, defs.buildings).attack; return `<div class="slot"><div>${s.pos}</div><div><strong>${s.name}</strong><div class="sub">Stufe ${s.level}</div>${debrisRow}</div><div><span class="badge npc">NPC</span></div><div class="sub">Def ${fmt(defPower)}</div><div><button class="btn danger" data-mission-target="attack:${state.galaxySystem}:${s.pos}">Angriff</button> <button class="btn alt" data-mission-target="spy:${state.galaxySystem}:${s.pos}">Spionage</button></div></div>`; }
     return `<div class="slot empty"><div>${s.pos}</div><div>Freies Feld${debrisRow}</div><div><span class="badge empty">Leer</span></div><div class="sub">—</div><div><button class="btn good" data-mission-target="colonize:${state.galaxySystem}:${s.pos}">Kolonisieren</button></div></div>`;
   }).join('')}</div>`; }
 
-function viewDefense(){ const p=active(); const d2=commanderDiscount(); const defenseKeys = Object.entries(defs.buildings).filter(([,d])=>d.isDefense); return `<h2>Verteidigung</h2><div class="list">${defenseKeys.map(([k,d])=>{ const count=p.buildings[k]||0; const ok=meetsRequirements(p,d.requires); const cm=Math.floor(d.base.metal*d2), cc=Math.floor(d.base.crystal*d2), cd=Math.floor(d.base.deut*d2); return `<div class="row"><div><strong>${d.name}</strong><div class="sub">Vorhanden ${fmt(count)} · Angriff ${d.attack} · Hülle ${fmt(d.hull)}</div><div class="sub">Kosten: M ${fmt(cm)} · K ${fmt(cc)} · D ${fmt(cd)}</div>${!ok?`<div class="sub warn-text">Benötigt: ${requirementText(d.requires)}</div>`:''}</div><button class="btn danger" data-defense="${k}" ${ok?'':'disabled'}>Bauen</button></div>`; }).join('')}</div>`; }
+function missileLaunchFormHtml(p){
+  return `<div class="card"><h3>Raketenangriff</h3><div class="small">Interplanetare Raketen erreichen Ziele im selben System sofort. Vorhanden: ${fmt(p.buildings.interplanetaryMissile||0)}.</div><div style="height:10px"></div><form class="fleet-form" id="missileForm"><label>Zielposition (1-15, gleiches System)<input type="number" min="1" max="15" name="position" value="1"></label><label>Anzahl Raketen<input type="number" min="1" max="${p.buildings.interplanetaryMissile||0}" name="count" value="1"></label><button class="btn danger" type="submit">Abfeuern</button></form></div>`;
+}
+function viewDefense(){
+  const p=active(); const d2=commanderDiscount();
+  const defenseKeys = Object.entries(defs.buildings).filter(([,d])=>d.isDefense);
+  const missileCap = (p.buildings.missileSilo||0)*10;
+  const rows = defenseKeys.map(([k,d])=>{
+    const count=p.buildings[k]||0; const ok=meetsRequirements(p,d.requires);
+    const uniqueBlocked = d.unique && count>=1;
+    const missileBlocked = k==='interplanetaryMissile' && count>=missileCap;
+    const disabled = !ok || uniqueBlocked || missileBlocked;
+    const cm=Math.floor(d.base.metal*d2), cc=Math.floor(d.base.crystal*d2), cd=Math.floor(d.base.deut*d2);
+    const capNote = k==='interplanetaryMissile' ? `<div class="sub">Kapazität: ${count}/${missileCap} (Raketensilo)</div>` : '';
+    return `<div class="row"><div><strong>${d.name}</strong><div class="sub">Vorhanden ${fmt(count)} · Angriff ${d.attack} · Schild ${fmt(d.shield)} · Hülle ${fmt(d.hull)}</div>${capNote}<div class="sub">Kosten: M ${fmt(cm)} · K ${fmt(cc)} · D ${fmt(cd)}</div>${!ok?`<div class="sub warn-text">Benötigt: ${requirementText(d.requires)}</div>`:''}${uniqueBlocked?'<div class="sub warn-text">Bereits vorhanden (Unikat)</div>':''}${missileBlocked?'<div class="sub warn-text">Silo-Kapazität erreicht</div>':''}</div><button class="btn danger" data-defense="${k}" ${disabled?'disabled':''}>Bauen</button></div>`;
+  }).join('');
+  const missileForm = (missileCap>=1 && (p.buildings.interplanetaryMissile||0)>0) ? missileLaunchFormHtml(p) : '';
+  return `<h2>Verteidigung</h2><div class="list">${rows}</div><div style="height:16px"></div>${missileForm}`;
+}
 
 function viewMessages(){ if(state.messages.length===0) return `<h2>Nachrichten</h2><div class="small">Keine Nachrichten.</div>`; return `<h2>Nachrichten</h2><div class="list">${state.messages.map(m=>`<div class="report">${m}</div>`).join('')}</div>`; }
 
 function viewSettings(){ const native = !!(window.Android && window.Android.saveGame); return `<h2>Einstellungen</h2><div class="grid2"><div class="card"><h3>Spielstand exportieren</h3><div class="small">Speichert den aktuellen Zustand als JSON-Datei${native?' im Downloads-Ordner':' zum Download'}.</div><div style="height:10px"></div><button class="btn" id="saveBtn">Spielstand speichern</button></div><div class="card"><h3>Spielstand laden</h3><div class="small">Lädt eine zuvor exportierte JSON-Datei.</div><div style="height:10px"></div>${native ? '<button class="btn alt" id="loadBtnNative">Datei auswählen</button>' : '<input type="file" id="loadInput" accept="application/json">'}</div></div>`; }
 
-function viewExpeditions(){ const p=active(); const shipOptions=(key)=>Array.from({length:p.ships[key]+1},(_,i)=>`<option>${i}</option>`).join('');
-  return `<h2>Expeditionen</h2><div class="grid2">
+function viewExpeditions(){ const p=active(); const shipOptions=(key)=>Array.from({length:(p.ships[key]||0)+1},(_,i)=>`<option>${i}</option>`).join('');
+  return `<h2>Expeditionen</h2><div class="small">Freie Plätze: ${state.expeditions.length}/${maxExpeditions(p)} (abhängig von Astrophysik)</div><div style="height:10px"></div><div class="grid2">
   <div class="card"><h3>Expedition starten</h3><form class="fleet-form" id="expeditionForm">
     <label>Dauer-Slot (1-3, je 15 Min)<input type="number" min="1" max="3" value="1" name="slot"></label>
     <div class="grid3">
       <label>Leichter Jäger<select name="lightFighter">${shipOptions('lightFighter')}</select></label>
       <label>Kreuzer<select name="cruiser">${shipOptions('cruiser')}</select></label>
       <label>Großer Transporter<select name="largeCargo">${shipOptions('largeCargo')}</select></label>
+      <label>Pfadfinder<select name="pathfinder">${shipOptions('pathfinder')}</select></label>
+      <label>Reaper<select name="reaper">${shipOptions('reaper')}</select></label>
     </div>
     <button class="btn good" type="submit">Expedition senden</button>
   </form></div>
@@ -423,45 +587,67 @@ function viewMoons(){
   return `<h2>Monde</h2><div class="planet-tabs">${tabs}</div><div style="height:14px"></div>${detail}`;
 }
 
-function viewAlliance(){ const a=state.alliance; return `<h2>Allianz</h2><div class="grid2">
-  <div class="card"><h3>${a.name} [${a.tag}]</h3><div class="small">Rang: ${a.rank} · Punkte: ${fmt(a.points)}</div><div style="height:10px"></div><table><tr><th>Mitglied</th></tr>${a.members.map(m=>`<tr><td>${m}</td></tr>`).join('')}</table></div>
+function viewAlliance(){
+  const a=state.alliance; const points = totalPlayerPoints()+a.points; const rank = allianceRank(points);
+  return `<h2>Allianz</h2><div class="grid2">
+  <div class="card"><h3>${a.name} [${a.tag}]</h3><div class="small">Rang: ${rank} · Allianzpunkte: ${fmt(points)}</div><div style="height:10px"></div><table><tr><th>Mitglied</th></tr>${a.members.map(m=>`<tr><td>${m}</td></tr>`).join('')}</table></div>
   <div class="card"><h3>Allianzdepot</h3><div class="grid3"><div class="card"><div class="label">Metall</div><div class="value">${fmt(a.depot.metal)}</div></div><div class="card"><div class="label">Kristall</div><div class="value">${fmt(a.depot.crystal)}</div></div><div class="card"><div class="label">Deuterium</div><div class="value">${fmt(a.depot.deut)}</div></div></div><div style="height:10px"></div><button class="btn alt" id="depositBtn">1000 von jeder Ressource einzahlen</button></div>
   </div>`; }
 
-function viewOfficers(){ const o=state.officers; const list=[['commander','Kommandant','Reduziert Baukosten für Gebäude leicht.'],['admiral','Admiral','Erhöht die Flottengeschwindigkeit.'],['engineer','Ingenieur','Erhöht die Energieeffizienz.'],['geologist','Geologe','Erhöht die Rohstoffproduktion um 10%.'],['technocrat','Technokrat','Beschleunigt die Forschung.']];
-  return `<h2>Offiziere</h2><div class="small">Dunkle Materie: ${fmt(state.darkMatter)}</div><div style="height:10px"></div><div class="list">${list.map(([k,name,desc])=>`<div class="row"><div><strong>${name}</strong><div class="sub">${desc}</div></div><button class="btn ${o[k]?'good':'alt'}" data-officer="${k}">${o[k]?'Aktiv':'Aktivieren (500 DM)'}</button></div>`).join('')}</div>`; }
+function viewOfficers(){
+  const list=[['commander','Kommandant','Reduziert Baukosten für Gebäude und Verteidigung leicht (-5%).'],['admiral','Admiral','Erhöht die Flottengeschwindigkeit (+10%).'],['engineer','Ingenieur','Erhöht die Energieproduktion (+10%).'],['geologist','Geologe','Erhöht die Rohstoffproduktion um 10%.'],['technocrat','Technokrat','Beschleunigt die Forschung (-15% Zeit).']];
+  return `<h2>Offiziere</h2><div class="small">Dunkle Materie: ${fmt(state.darkMatter)} · Offiziere gelten für 7 Tage nach Aktivierung.</div><div style="height:10px"></div><div class="list">${list.map(([k,name,desc])=>{
+    const active=officerActive(k);
+    return `<div class="row"><div><strong>${name}</strong><div class="sub">${desc}</div>${active?`<div class="sub">Noch aktiv: ${formatDuration(officerTimeLeft(k))}</div>`:''}</div><button class="btn ${active?'good':'alt'}" data-officer="${k}" ${active?'disabled':''}>${active?'Aktiv':'Aktivieren (500 DM)'}</button></div>`;
+  }).join('')}</div>`; }
 
 function viewLifeform(){ const lf=state.lifeform; const species=[['humans','Menschen'],['rocktal',"Rock'tal"],['mechas','Mechas'],['kaelesh','Kaelesh']];
   return `<h2>Lebensform</h2><div class="small">Aktive Spezies: ${species.find(s=>s[0]===lf.active)[1]}. Jede Lebensform bringt eigene Gebäude und Technologien mit eigenem Bevölkerungs- und Nahrungssystem.</div><div style="height:10px"></div><div class="grid2">${species.map(([k,name])=>`<div class="card"><h3>${name}</h3><button class="btn ${lf.active===k?'good':'alt'}" data-lifeform="${k}">${lf.active===k?'Ausgewählt':'Wählen'}</button></div>`).join('')}</div>`; }
 
-function viewMarket(){ const r=state.marketRate; return `<h2>Markt</h2><div class="market-grid"><div class="card"><div class="label">Metall</div><div class="value">${fmt1(r.metal)}</div></div><div class="card"><div class="label">Kristall</div><div class="value">${fmt1(r.crystal)}</div></div><div class="card"><div class="label">Deuterium</div><div class="value">${fmt1(r.deut)}</div></div></div><div style="height:16px"></div><div class="grid2"><div class="card"><h3>Ressourcen handeln</h3><form class="market-form" id="marketForm"><label>Abgeben<select name="give"><option value="metal">Metall</option><option value="crystal">Kristall</option><option value="deut">Deuterium</option></select></label><label>Erhalten<select name="want"><option value="crystal">Kristall</option><option value="metal">Metall</option><option value="deut">Deuterium</option></select></label><label>Menge<input type="number" min="1" value="100" name="amount"></label><button class="btn good" type="submit">Am Markt tauschen</button></form></div><div class="card"><h3>Raten</h3><div class="small">1 Metall = ${fmt1(r.metal)} Wert, 1 Kristall = ${fmt1(r.crystal)}, 1 Deuterium = ${fmt1(r.deut)}. Marktgebühr 10%.</div></div></div>`; }
+function viewMarket(){ const r=state.marketRate; return `<h2>Markt</h2><div class="market-grid"><div class="card"><div class="label">Metall</div><div class="value">${fmt1(r.metal)}</div></div><div class="card"><div class="label">Kristall</div><div class="value">${fmt1(r.crystal)}</div></div><div class="card"><div class="label">Deuterium</div><div class="value">${fmt1(r.deut)}</div></div></div><div style="height:16px"></div><div class="grid2"><div class="card"><h3>Ressourcen handeln</h3><form class="market-form" id="marketForm"><label>Abgeben<select name="give"><option value="metal">Metall</option><option value="crystal">Kristall</option><option value="deut">Deuterium</option></select></label><label>Erhalten<select name="want"><option value="crystal">Kristall</option><option value="metal">Metall</option><option value="deut">Deuterium</option></select></label><label>Menge<input type="number" min="1" value="100" name="amount"></label><button class="btn good" type="submit">Am Markt tauschen</button></form></div><div class="card"><h3>Händler (Dunkle Materie)</h3><div class="small">Tausche Dunkle Materie sofort gegen Ressourcen. Kurs: 5 Einheiten pro 1 DM.</div><div style="height:10px"></div><form class="market-form" id="merchantForm"><label>Ressource<select name="resource"><option value="metal">Metall</option><option value="crystal">Kristall</option><option value="deut">Deuterium</option></select></label><label>Menge<input type="number" min="1" value="1000" name="amount"></label><button class="btn warn" type="submit">Kaufen</button></form><div class="small" style="margin-top:8px">Dunkle Materie: ${fmt(state.darkMatter)}</div></div></div>`; }
 
 function viewReports(){ if(state.reports.length===0) return `<h2>Berichte</h2><div class="small">Noch keine Spionageberichte vorhanden.</div>`; return `<h2>Spionageberichte</h2>${state.reports.map(r=>`<div class="report"><div class="row" style="border:none;background:none;padding:0"><strong>${r.target}</strong><span class="small">${r.time}</span></div><div class="small">${r.coords}</div><div class="grid3" style="margin-top:8px"><div class="card"><div class="label">Metall</div><div class="value">${fmt(r.resources.metal)}</div></div><div class="card"><div class="label">Kristall</div><div class="value">${fmt(r.resources.crystal)}</div></div><div class="card"><div class="label">Deuterium</div><div class="value">${fmt(r.resources.deut)}</div></div></div><div class="small" style="margin-top:8px">Verteidigung: ${fmt(r.defense)} · Flotte: ${Object.entries(r.fleet||{}).map(([k,v])=>v?defs.ships[k].name+' x'+v:null).filter(Boolean).join(', ')||'unbekannt'}</div></div>`).join('')}`; }
 
-function viewEmpire(){ return `<h2>Imperium</h2><table><thead><tr><th>Planet</th><th>Koordinaten</th><th>Metall/h</th><th>Kristall/h</th><th>Deut/h</th><th>Energie</th></tr></thead><tbody>${state.planets.map(p=>{ const inc=hourly(p), e=energyStats(p); return `<tr><td>${p.name}</td><td>${coordStr(p.coords)}</td><td>${fmt1(inc.metal)}</td><td>${fmt1(inc.crystal)}</td><td>${fmt1(inc.deut)}</td><td>${fmt(e.prod)}/${fmt(e.use)}</td></tr>`; }).join('')}</tbody></table>`; }
+function viewEmpire(){ return `<h2>Imperium</h2><div class="small">Gesamtpunkte: ${fmt(totalPlayerPoints())}</div><div style="height:10px"></div><table><thead><tr><th>Planet</th><th>Koordinaten</th><th>Metall/h</th><th>Kristall/h</th><th>Deut/h</th><th>Energie</th><th>Punkte</th></tr></thead><tbody>${state.planets.map(p=>{ const inc=hourly(p), e=energyStats(p), pts=Math.floor(computePoints(p)/1000); return `<tr><td>${p.name}</td><td>${coordStr(p.coords)}</td><td>${fmt1(inc.metal)}</td><td>${fmt1(inc.crystal)}</td><td>${fmt1(inc.deut)}</td><td>${fmt(e.prod)}/${fmt(e.use)}</td><td>${fmt(pts)}</td></tr>`; }).join('')}</tbody></table>`; }
+
+function viewHighscore(){
+  const playerPoints = totalPlayerPoints();
+  const rivalNames = ['Nova Collective','Void Reavers','Ashfall Syndicate','Ember Concord','Ironclad Dominion','Solar Wardens','Drift Cartel','Umbra Legion'];
+  const factors = [3.2, 1.8, 1.3, 0.85, 0.6, 0.4, 0.25, 0.12];
+  const rivals = rivalNames.map((name,i)=>({name, points: Math.max(500, Math.floor(playerPoints*factors[i]) + (i*777)%5000)}));
+  const all = [...rivals, {name:'Du ('+active().name+' Imperium)', points: playerPoints, isPlayer:true}].sort((a,b)=>b.points-a.points);
+  return `<h2>Rangliste</h2><div class="small">Punkte basieren auf dem Ressourcenwert aller Gebäude, Forschungen und Schiffe (simulierte Rivalen zur Einordnung).</div><div style="height:10px"></div><table><thead><tr><th>Rang</th><th>Imperium</th><th>Punkte</th></tr></thead><tbody>${all.map((e,i)=>`<tr${e.isPlayer?' style="color:var(--accent2);font-weight:700"':''}><td>${i+1}</td><td>${e.name}</td><td>${fmt(e.points)}</td></tr>`).join('')}</tbody></table>`;
+}
 
 function renderView(bind=true){
-  const views={overview:viewOverview,buildings:viewBuildings,facilities:viewFacilities,defense:viewDefense,resources:viewResources,research:viewResearch,shipyard:viewShipyard,fleet:viewFleet,expeditions:viewExpeditions,galaxy:viewGalaxy,moons:viewMoons,alliance:viewAlliance,officers:viewOfficers,lifeform:viewLifeform,market:viewMarket,reports:viewReports,messages:viewMessages,empire:viewEmpire,settings:viewSettings};
+  const views={overview:viewOverview,buildings:viewBuildings,facilities:viewFacilities,defense:viewDefense,resources:viewResources,research:viewResearch,shipyard:viewShipyard,fleet:viewFleet,expeditions:viewExpeditions,galaxy:viewGalaxy,moons:viewMoons,alliance:viewAlliance,officers:viewOfficers,lifeform:viewLifeform,market:viewMarket,reports:viewReports,messages:viewMessages,empire:viewEmpire,highscore:viewHighscore,settings:viewSettings};
   $('#view').innerHTML = views[state.view]();
   if(bind){
     document.querySelectorAll('[data-build]').forEach(b=>b.onclick=()=>enqueueBuild(b.dataset.build));
     document.querySelectorAll('[data-research]').forEach(b=>b.onclick=()=>enqueueResearch(b.dataset.research));
     document.querySelectorAll('[data-ship]').forEach(b=>b.onclick=()=>enqueueShip(b.dataset.ship));
     document.querySelectorAll('[data-defense]').forEach(b=>b.onclick=()=>enqueueDefense(b.dataset.defense));
-    const ff=$('#fleetForm'); if(ff) ff.onsubmit=e=>{e.preventDefault(); const sys=Number(ff.system.value), pos=Number(ff.position.value); $('#targetField').value = sys+':'+pos; sendFleet(ff)};
+    const ff=$('#fleetForm'); if(ff){
+      ff.onsubmit=e=>{e.preventDefault(); const sys=Number(ff.system.value), pos=Number(ff.position.value); $('#targetField').value = sys+':'+pos; state.fleetPrefill=null; sendFleet(ff)};
+      ff.mission.onchange=()=>{ state.fleetPrefill=null; };
+      ff.system.onchange=()=>{ state.fleetPrefill=null; };
+      ff.position.onchange=()=>{ state.fleetPrefill=null; };
+    }
     const mf=$('#marketForm'); if(mf) mf.onsubmit=e=>{e.preventDefault(); marketTrade(mf.give.value,mf.want.value,mf.amount.value)};
-    const gj=$('#galaxyJump'); if(gj) gj.onsubmit=e=>{e.preventDefault(); state.galaxySystem=Number(gj.system.value); renderView();};
+    const merchForm=$('#merchantForm'); if(merchForm) merchForm.onsubmit=e=>{e.preventDefault(); merchantBuy(merchForm.resource.value, merchForm.amount.value)};
+    const msf=$('#missileForm'); if(msf) msf.onsubmit=e=>{e.preventDefault(); launchMissiles(msf.position.value, msf.count.value)};
+    const gj=$('#galaxyJump'); if(gj) gj.onsubmit=e=>{e.preventDefault(); state.galaxySystem=Number(gj.system.value)||state.galaxySystem; renderView();};
     document.querySelectorAll('[data-mission-target]').forEach(b=>b.onclick=()=>{
       const [mission,sys,pos]=b.dataset.missionTarget.split(':');
-      state.view='fleet'; renderView(true);
-      setTimeout(()=>{ const ff2=$('#fleetForm'); if(!ff2) return; ff2.mission.value=mission; ff2.system.value=sys; ff2.position.value=pos; },0);
+      state.fleetPrefill = {mission, sys:Number(sys), pos:Number(pos)};
+      state.view='fleet'; render();
     });
     const saveBtn=$('#saveBtn'); if(saveBtn) saveBtn.onclick=saveGame;
     const loadInput=$('#loadInput'); if(loadInput) loadInput.onchange=e=>{ if(e.target.files[0]) loadGame(e.target.files[0]); };
     const loadBtnNative=$('#loadBtnNative'); if(loadBtnNative) loadBtnNative.onclick=requestNativeLoad;
-    const ef=$('#expeditionForm'); if(ef) ef.onsubmit=e=>{e.preventDefault(); const ships={lightFighter:Number(ef.lightFighter.value)||0,cruiser:Number(ef.cruiser.value)||0,largeCargo:Number(ef.largeCargo.value)||0}; sendExpedition(ships, Number(ef.slot.value)||1); renderView();};
+    const ef=$('#expeditionForm'); if(ef) ef.onsubmit=e=>{e.preventDefault(); const ships={lightFighter:Number(ef.lightFighter.value)||0,cruiser:Number(ef.cruiser.value)||0,largeCargo:Number(ef.largeCargo.value)||0,pathfinder:Number(ef.pathfinder.value)||0,reaper:Number(ef.reaper.value)||0}; sendExpedition(ships, Number(ef.slot.value)||1); renderView();};
     const depositBtn=$('#depositBtn'); if(depositBtn) depositBtn.onclick=()=>{ const p=active(); const amt={metal:Math.min(1000,p.resources.metal), crystal:Math.min(1000,p.resources.crystal), deut:Math.min(1000,p.resources.deut)}; p.resources.metal-=amt.metal; p.resources.crystal-=amt.crystal; p.resources.deut-=amt.deut; depositAlliance(amt); render(); };
-    document.querySelectorAll('[data-officer]').forEach(b=>b.onclick=()=>{ const key=b.dataset.officer; if(state.officers[key]){ return; } if(state.darkMatter<500) return log('Nicht genug Dunkle Materie'); state.darkMatter-=500; state.officers[key]=true; log('Offizier aktiviert'); render(); });
+    document.querySelectorAll('[data-officer]').forEach(b=>b.onclick=()=>{ const key=b.dataset.officer; if(officerActive(key)){ return; } if(state.darkMatter<500) return log('Nicht genug Dunkle Materie'); state.darkMatter-=500; state.officerExpiry[key]=Date.now()+7*24*3600*1000; log('Offizier aktiviert (7 Tage)'); render(); });
     document.querySelectorAll('[data-lifeform]').forEach(b=>b.onclick=()=>{ state.lifeform.active=b.dataset.lifeform; log('Lebensform gewechselt'); render(); });
     document.querySelectorAll('[data-moon-select]').forEach(b=>b.onclick=()=>{ state.activeMoonIndex=Number(b.dataset.moonSelect); renderView(true); });
     document.querySelectorAll('[data-moon-build]').forEach(b=>b.onclick=()=>enqueueMoonBuild(b.dataset.moonBuild));
@@ -471,6 +657,6 @@ function renderView(bind=true){
 function marketTrade(giveType, wantType, amount){ const p=active(); amount=Number(amount)||0; if(giveType===wantType||amount<=0) return log('Ungültiger Handel'); if(p.resources[giveType] < amount) return log('Nicht genug '+giveType); const value = amount * state.marketRate[giveType]; const received = Math.floor(value / state.marketRate[wantType] * 0.9); p.resources[giveType]-=amount; p.resources[wantType]+=received; log('Markt: '+fmt(amount)+' '+giveType+' gegen '+fmt(received)+' '+wantType+' getauscht'); render(); }
 function ensurePlanetDefaults(p){ Object.keys(defs.buildings).forEach(k=>{ if(p.buildings[k]==null) p.buildings[k]=0; }); Object.keys(defs.research).forEach(k=>{ if(p.research[k]==null) p.research[k]=0; }); Object.keys(defs.ships).forEach(k=>{ if(p.ships[k]==null) p.ships[k]=0; }); if(!p.buildQueue) p.buildQueue=[]; if(!p.researchQueue) p.researchQueue=[]; if(!p.shipQueue) p.shipQueue=[]; }
 function ensureMoonDefaults(m){ ['lunarBase','sensorPhalanx','jumpGate'].forEach(k=>{ if(m.buildings[k]==null) m.buildings[k]=0; }); Object.keys(defs.ships).forEach(k=>{ if(m.ships[k]==null) m.ships[k]=0; }); if(!m.buildQueue) m.buildQueue=[]; }
-function ensureAllDefaults(){ state.planets.forEach(ensurePlanetDefaults); state.moons.forEach(ensureMoonDefaults); }
+function ensureAllDefaults(){ state.planets.forEach(ensurePlanetDefaults); state.moons.forEach(ensureMoonDefaults); if(!state.officerExpiry) state.officerExpiry={}; }
 function render(){ ensureAllDefaults(); if(state.activeMoonIndex===null && state.moons.length>0) state.activeMoonIndex=0; renderNav(); renderTop(); renderSide(); renderView(); }
 ensureAllDefaults(); render(); setInterval(tick,1000); setInterval(()=>{ if(!viewInteractionActive()) render(); },5000);
