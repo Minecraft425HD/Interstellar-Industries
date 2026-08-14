@@ -91,15 +91,19 @@ const state = {
   lifeform: {active:'humans', points:0, buildings:{}, research:{}},
   marketRate: { metal:1, crystal:1.5, deut:3 },
   logs: ['Neue Galaxie initialisiert.'],
+  galaxyIndex: 1,
   galaxySystem: 145,
   fleetPrefill: null
 };
 
-function seedGalaxy(system){
-  const rnd = (seed)=>{ let x=Math.sin(seed*999+system*13)*10000; return x-Math.floor(x); };
+const UNIVERSE = { galaxies: 9, systems: 499, positions: 15 };
+function validCoord(galaxy, system, pos){ return Number.isInteger(galaxy) && galaxy>=1 && galaxy<=UNIVERSE.galaxies && Number.isInteger(system) && system>=1 && system<=UNIVERSE.systems && Number.isInteger(pos) && pos>=1 && pos<=UNIVERSE.positions; }
+
+function seedGalaxy(galaxy, system){
+  const rnd = (seed)=>{ let x=Math.sin(seed*999+system*13+galaxy*104729)*10000; return x-Math.floor(x); };
   const slots = [];
-  for(let pos=1; pos<=15; pos++){
-    const owned = state.planets.find(p=>p.coords[1]===system && p.coords[2]===pos);
+  for(let pos=1; pos<=UNIVERSE.positions; pos++){
+    const owned = state.planets.find(p=>p.coords[0]===galaxy && p.coords[1]===system && p.coords[2]===pos);
     if(owned){ slots.push({pos, type:'own', planet:owned}); continue; }
     const r = rnd(pos+system);
     if(r < 0.35){
@@ -123,7 +127,7 @@ function log(msg){state.logs.unshift(new Date().toLocaleTimeString('de-DE')+' ·
 function message(msg){state.messages.unshift(new Date().toLocaleTimeString('de-DE')+' · '+msg); state.messages=state.messages.slice(0,20);}
 function meetsRequirements(p, req){ if(!req) return true; for(const [k,v] of Object.entries(req)){ const have = p.buildings[k]!=null ? p.buildings[k] : (p.research[k]!=null ? p.research[k] : 0); if(have<v) return false; } return true; }
 function requirementText(req){ if(!req) return ''; return Object.entries(req).map(([k,v])=>{ const nm = defs.buildings[k]?defs.buildings[k].name:(defs.research[k]?defs.research[k].name:k); return nm+' Stufe '+v; }).join(', '); }
-function debrisKey(coord){ return coord[1]+':'+coord[2]; }
+function debrisKey(coord){ return coord[0]+':'+coord[1]+':'+coord[2]; }
 function addDebris(coord, metal, crystal){ const key=debrisKey(coord); const cur = state.debrisFields[key] || {coord, metal:0, crystal:0}; cur.metal += metal; cur.crystal += crystal; state.debrisFields[key]=cur; }
 function officerActive(key){ return !!(state.officerExpiry[key] && state.officerExpiry[key] > Date.now()); }
 function officerTimeLeft(key){ return officerActive(key) ? state.officerExpiry[key]-Date.now() : 0; }
@@ -144,7 +148,7 @@ function viewInteractionActive(){
   return !!(el && view && view.contains(el) && (el.tagName==='SELECT' || el.tagName==='INPUT' || el.tagName==='TEXTAREA'));
 }
 function moonChanceFromDebris(debrisTotal){ return Math.min(0.20, Math.floor(debrisTotal/50000)*0.01); }
-function maybeCreateMoon(coord, debrisTotal){ const chance = moonChanceFromDebris(debrisTotal); if(Math.random()<chance){ const exists = state.moons.find(m=>m.coord[1]===coord[1]&&m.coord[2]===coord[2]); if(!exists){ state.moons.push({coord:[...coord], size: Math.floor(2000+Math.random()*5000), buildings:{lunarBase:0, sensorPhalanx:0, jumpGate:0}, buildQueue:[], ships:{smallCargo:0,largeCargo:0,colonyShip:0,espionageProbe:0,lightFighter:0,heavyFighter:0,cruiser:0,battleship:0,battlecruiser:0,bomber:0,destroyer:0,deathstar:0,solarSatellite:0,recycler:0}}); message('Ein Mond ist bei '+coordStr(coord)+' entstanden.'); } } }
+function maybeCreateMoon(coord, debrisTotal){ const chance = moonChanceFromDebris(debrisTotal); if(Math.random()<chance){ const exists = state.moons.find(m=>m.coord[0]===coord[0]&&m.coord[1]===coord[1]&&m.coord[2]===coord[2]); if(!exists){ state.moons.push({coord:[...coord], size: Math.floor(2000+Math.random()*5000), buildings:{lunarBase:0, sensorPhalanx:0, jumpGate:0}, buildQueue:[], ships:{smallCargo:0,largeCargo:0,colonyShip:0,espionageProbe:0,lightFighter:0,heavyFighter:0,cruiser:0,battleship:0,battlecruiser:0,bomber:0,destroyer:0,deathstar:0,solarSatellite:0,recycler:0}}); message('Ein Mond ist bei '+coordStr(coord)+' entstanden.'); } } }
 
 function sidePower(shipMap, table){
   let attack=0, shield=0, hull=0;
@@ -238,21 +242,21 @@ function launchMissiles(targetPos, count){
   count=Math.floor(Number(count))||0;
   targetPos=Math.floor(Number(targetPos))||0;
   if(count<1 || count>(p.buildings.interplanetaryMissile||0)) return log('Ungültige Raketenanzahl');
-  if(targetPos<1 || targetPos>15) return log('Ungültige Zielposition');
-  const ownIdx = state.planets.findIndex(pl=>pl.coords[1]===p.coords[1] && pl.coords[2]===targetPos);
+  if(targetPos<1 || targetPos>UNIVERSE.positions) return log('Ungültige Zielposition');
+  const ownIdx = state.planets.findIndex(pl=>pl.coords[0]===p.coords[0] && pl.coords[1]===p.coords[1] && pl.coords[2]===targetPos);
   if(ownIdx>=0) return log('Eigene Planeten können nicht angegriffen werden');
-  const slots = seedGalaxy(p.coords[1]); const slot = slots.find(s=>s.pos===targetPos);
+  const slots = seedGalaxy(p.coords[0], p.coords[1]); const slot = slots.find(s=>s.pos===targetPos);
   if(!slot || slot.type!=='npc') return log('Kein gültiges Ziel auf dieser Position');
   p.buildings.interplanetaryMissile -= count;
   const missileAttack = count*defs.buildings.interplanetaryMissile.attack;
   const defPower = sidePower(slot.defenseShips, defs.buildings).attack;
   const netDamage = Math.max(0, missileAttack-defPower);
-  if(netDamage>0){ message('Raketenangriff auf '+slot.name+' bei '+coordStr([1,p.coords[1],targetPos])+': '+fmt(netDamage)+' Schaden an der Verteidigung.'); log('Raketen abgefeuert · '+fmt(netDamage)+' Schaden'); }
+  if(netDamage>0){ message('Raketenangriff auf '+slot.name+' bei '+coordStr([p.coords[0],p.coords[1],targetPos])+': '+fmt(netDamage)+' Schaden an der Verteidigung.'); log('Raketen abgefeuert · '+fmt(netDamage)+' Schaden'); }
   else { message('Raketenangriff auf '+slot.name+' von der Verteidigung vollständig abgefangen.'); log('Raketen abgefeuert · abgefangen'); }
   render();
 }
 function saveGame(){
-  const data = JSON.stringify({planets:state.planets, fleets:state.fleets, reports:state.reports, messages:state.messages, debrisFields:state.debrisFields, moons:state.moons, alliance:state.alliance, officerExpiry:state.officerExpiry, darkMatter:state.darkMatter, expeditions:state.expeditions, lifeform:state.lifeform, logs:state.logs, galaxySystem:state.galaxySystem, activePlanet:state.activePlanet});
+  const data = JSON.stringify({planets:state.planets, fleets:state.fleets, reports:state.reports, messages:state.messages, debrisFields:state.debrisFields, moons:state.moons, alliance:state.alliance, officerExpiry:state.officerExpiry, darkMatter:state.darkMatter, expeditions:state.expeditions, lifeform:state.lifeform, logs:state.logs, galaxyIndex:state.galaxyIndex, galaxySystem:state.galaxySystem, activePlanet:state.activePlanet});
   if(window.Android && window.Android.saveGame){ window.Android.saveGame(data); log('Spielstand wird gespeichert...'); return; }
   const blob = new Blob([data], {type:'application/json'}); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'stellare-industrien-save.json'; a.click(); log('Spielstand exportiert');
 }
@@ -261,7 +265,7 @@ function applySaveData(data){
     state.planets = data.planets; state.fleets = data.fleets||[]; state.reports = data.reports||[]; state.messages = data.messages||[]; state.debrisFields = data.debrisFields||{}; state.moons = data.moons||[]; state.alliance = data.alliance||state.alliance;
     if(data.officerExpiry){ state.officerExpiry = data.officerExpiry; }
     else if(data.officers){ const exp={}; const dur=7*24*3600*1000; Object.entries(data.officers).forEach(([k,v])=>{ if(v) exp[k]=Date.now()+dur; }); state.officerExpiry=exp; }
-    state.darkMatter = data.darkMatter!=null?data.darkMatter:state.darkMatter; state.expeditions = data.expeditions||[]; state.lifeform = data.lifeform||state.lifeform; state.logs = data.logs||[]; state.galaxySystem = data.galaxySystem||145; state.activePlanet = data.activePlanet||0; state.activeMoonIndex = null; log('Spielstand geladen'); render();
+    state.darkMatter = data.darkMatter!=null?data.darkMatter:state.darkMatter; state.expeditions = data.expeditions||[]; state.lifeform = data.lifeform||state.lifeform; state.logs = data.logs||[]; state.galaxyIndex = data.galaxyIndex||1; state.galaxySystem = data.galaxySystem||145; state.activePlanet = data.activePlanet||0; state.activeMoonIndex = null; log('Spielstand geladen'); render();
   } catch(err){ log('Fehler beim Laden des Spielstands'); }
 }
 function loadGame(file){ const reader = new FileReader(); reader.onload = e => { try { applySaveData(JSON.parse(e.target.result)); } catch(err){ log('Fehler beim Laden des Spielstands'); } }; reader.readAsText(file); }
@@ -286,7 +290,7 @@ function maxStorage(p){return {metal:Math.max(5000,5000*p.buildings.metalStorage
 function capacityForShips(shipMap){let total=0; for(const [k,v] of Object.entries(shipMap)){ total += defs.ships[k].cargo*v; } return total }
 function fuelForShips(shipMap){let total=0; for(const [k,v] of Object.entries(shipMap)){ total += defs.ships[k].fuel*v; } return total }
 function fleetSpeed(shipMap){const vals=Object.entries(shipMap).filter(([,v])=>v>0).map(([k])=>defs.ships[k].speed); return vals.length?Math.min(...vals):1}
-function distanceBetween(a,b){return Math.abs(a[1]-b[1])*20 + Math.abs(a[2]-b[2]) + 5}
+function distanceBetween(a,b){return Math.abs(a[0]-b[0])*15000 + Math.abs(a[1]-b[1])*20 + Math.abs(a[2]-b[2]) + 5}
 function fleetDuration(fromCoord,toCoord,shipMap){const speed=fleetSpeed(shipMap)*fleetSpeedBonus()*pathfinderBonus(shipMap); const distance=distanceBetween(fromCoord,toCoord); return Math.max(10, Math.round((distance*3)/speed)); }
 function secsLeft(t){return Math.max(0, Math.ceil((t-Date.now())/1000))}
 function computePoints(p){
@@ -316,16 +320,16 @@ function enqueueDefense(key){
 function sendFleet(form){
   const from = state.activePlanet; const p = active();
   const mission = form.mission.value;
-  const targetVal = form.target.value; // format: system:pos
+  const targetVal = form.target.value; // format: galaxy:system:pos
   let toCoord, toPlanetIndex=null, npcSlot=null, emptySlot=null;
-  const [sys,pos] = targetVal.split(':').map(Number);
-  if(!Number.isInteger(sys) || sys<1 || !Number.isInteger(pos) || pos<1 || pos>15) return log('Ungültiges Ziel: System und Position (1-15) angeben');
-  toCoord = [1, sys, pos];
-  const ownIdx = state.planets.findIndex(pl=>pl.coords[1]===sys && pl.coords[2]===pos);
+  const [gal,sys,pos] = targetVal.split(':').map(Number);
+  if(!validCoord(gal,sys,pos)) return log('Ungültiges Ziel: Galaxie (1-'+UNIVERSE.galaxies+'), System (1-'+UNIVERSE.systems+') und Position (1-'+UNIVERSE.positions+') angeben');
+  toCoord = [gal, sys, pos];
+  const ownIdx = state.planets.findIndex(pl=>pl.coords[0]===gal && pl.coords[1]===sys && pl.coords[2]===pos);
   if(mission==='attack' && ownIdx>=0) return log('Eigene Planeten können nicht angegriffen werden');
   if(ownIdx>=0) toPlanetIndex = ownIdx;
   else {
-    const slots = seedGalaxy(sys); const slot = slots.find(s=>s.pos===pos);
+    const slots = seedGalaxy(gal, sys); const slot = slots.find(s=>s.pos===pos);
     if(slot.type==='npc') npcSlot = slot; else if(slot.type==='empty') emptySlot = slot;
   }
   const ships = {};
@@ -491,6 +495,7 @@ function viewFleet(){
   const p=active();
   const pre = state.fleetPrefill;
   const missionVal = pre ? pre.mission : 'transport';
+  const galVal = pre ? pre.gal : p.coords[0];
   const sysVal = pre ? pre.sys : p.coords[1];
   const posVal = pre ? pre.pos : 1;
   const missionOpt = (v,label)=>`<option value="${v}" ${missionVal===v?'selected':''}>${label}</option>`;
@@ -499,8 +504,9 @@ function viewFleet(){
   return `<h2>Flotte versenden</h2><div class="grid2">
   <div class="card"><h3>Missionsformular</h3><form class="fleet-form" id="fleetForm">
     <label>Mission<select name="mission" id="missionSelect">${missionOpt('transport','Transport')}${missionOpt('spy','Spionage')}${missionOpt('attack','Angriff')}${missionOpt('colonize','Kolonisierung')}${missionOpt('harvest','Trümmerfeld-Bergung')}</select></label>
-    <label>Zielsystem<input type="number" name="system" value="${sysVal}"></label>
-    <label>Zielposition (1-15)<input type="number" name="position" min="1" max="15" value="${posVal}"></label>
+    <label>Zielgalaxie (1-${UNIVERSE.galaxies})<input type="number" name="galaxy" min="1" max="${UNIVERSE.galaxies}" value="${galVal}"></label>
+    <label>Zielsystem (1-${UNIVERSE.systems})<input type="number" name="system" min="1" max="${UNIVERSE.systems}" value="${sysVal}"></label>
+    <label>Zielposition (1-${UNIVERSE.positions})<input type="number" name="position" min="1" max="${UNIVERSE.positions}" value="${posVal}"></label>
     <input type="hidden" name="target" id="targetField">
     <div class="grid3">
       ${sendableShips.map(([k,d])=>`<label>${d.name}<select name="${k}">${shipOptions(k)}</select></label>`).join('')}
@@ -511,14 +517,22 @@ function viewFleet(){
   <div class="card"><h3>Hinweise</h3><div class="small">Transport bewegt Ressourcen. Spionage liefert einen Bericht. Angriff löst eine mehrstufige Kampfsimulation gegen NPC-Kolonien aus (bis zu 6 Runden, Schilde regenerieren pro Runde). Kolonisierung braucht ein Kolonieschiff, ein leeres Feld und freie Kolonieplätze (Astrophysik). Eigene Planeten können nicht angegriffen werden.</div><div style="height:10px"></div><table><tr><th>Schiff</th><th>Angriff</th><th>Hülle</th><th>Ladung</th></tr>${Object.entries(defs.ships).map(([k,d])=>`<tr><td>${d.name}</td><td>${d.attack}</td><td>${fmt(d.hull)}</td><td>${fmt(d.cargo)}</td></tr>`).join('')}</table></div>
   </div>`; }
 
-function viewGalaxy(){ const slots = seedGalaxy(state.galaxySystem); return `<h2>Galaxie</h2>
-  <div class="card" style="margin-bottom:12px"><form class="galaxy-form" id="galaxyJump" style="display:flex;gap:10px;align-items:end;flex-wrap:wrap"><label style="flex:1">System<input type="number" name="system" value="${state.galaxySystem}"></label><button class="btn alt" type="submit">System anzeigen</button></form></div>
+function viewGalaxy(){
+  const gal = state.galaxyIndex, sys = state.galaxySystem;
+  const slots = seedGalaxy(gal, sys);
+  return `<h2>Galaxie</h2>
+  <div class="card" style="margin-bottom:12px"><form class="galaxy-form" id="galaxyJump" style="display:flex;gap:10px;align-items:end;flex-wrap:wrap">
+    <label>Galaxie (1-${UNIVERSE.galaxies})<input type="number" name="galaxy" min="1" max="${UNIVERSE.galaxies}" value="${gal}" style="width:90px"></label>
+    <label style="flex:1">System (1-${UNIVERSE.systems})<input type="number" name="system" min="1" max="${UNIVERSE.systems}" value="${sys}"></label>
+    <button class="btn alt" type="submit">System anzeigen</button>
+  </form></div>
+  <div class="small" style="margin-bottom:10px">Aktuell: [${gal}:${sys}] · Universum: ${UNIVERSE.galaxies} Galaxien × ${UNIVERSE.systems} Systeme × ${UNIVERSE.positions} Positionen</div>
   <div class="galaxy-grid">${slots.map(s=>{
-    const key = debrisKey([1,state.galaxySystem,s.pos]); const debris = state.debrisFields[key];
-    const debrisRow = debris ? `<div class="sub">Trümmerfeld: M ${fmt(debris.metal)} · K ${fmt(debris.crystal)} <button class="btn alt" data-mission-target="harvest:${state.galaxySystem}:${s.pos}" style="margin-left:8px;padding:6px 10px;min-height:32px">Bergen</button></div>` : '';
+    const key = debrisKey([gal,sys,s.pos]); const debris = state.debrisFields[key];
+    const debrisRow = debris ? `<div class="sub">Trümmerfeld: M ${fmt(debris.metal)} · K ${fmt(debris.crystal)} <button class="btn alt" data-mission-target="harvest:${gal}:${sys}:${s.pos}" style="margin-left:8px;padding:6px 10px;min-height:32px">Bergen</button></div>` : '';
     if(s.type==='own') return `<div class="slot own"><div>${s.pos}</div><div><strong>${s.planet.name}</strong><div class="sub">${coordStr(s.planet.coords)}</div>${debrisRow}</div><div><span class="badge own">Eigen</span></div><div class="sub">Metall ${fmt(s.planet.resources.metal)}</div><div></div></div>`;
-    if(s.type==='npc'){ const defPower = sidePower(s.defenseShips, defs.buildings).attack; return `<div class="slot"><div>${s.pos}</div><div><strong>${s.name}</strong><div class="sub">Stufe ${s.level}</div>${debrisRow}</div><div><span class="badge npc">NPC</span></div><div class="sub">Def ${fmt(defPower)}</div><div><button class="btn danger" data-mission-target="attack:${state.galaxySystem}:${s.pos}">Angriff</button> <button class="btn alt" data-mission-target="spy:${state.galaxySystem}:${s.pos}">Spionage</button></div></div>`; }
-    return `<div class="slot empty"><div>${s.pos}</div><div>Freies Feld${debrisRow}</div><div><span class="badge empty">Leer</span></div><div class="sub">—</div><div><button class="btn good" data-mission-target="colonize:${state.galaxySystem}:${s.pos}">Kolonisieren</button></div></div>`;
+    if(s.type==='npc'){ const defPower = sidePower(s.defenseShips, defs.buildings).attack; return `<div class="slot"><div>${s.pos}</div><div><strong>${s.name}</strong><div class="sub">Stufe ${s.level}</div>${debrisRow}</div><div><span class="badge npc">NPC</span></div><div class="sub">Def ${fmt(defPower)}</div><div><button class="btn danger" data-mission-target="attack:${gal}:${sys}:${s.pos}">Angriff</button> <button class="btn alt" data-mission-target="spy:${gal}:${sys}:${s.pos}">Spionage</button></div></div>`; }
+    return `<div class="slot empty"><div>${s.pos}</div><div>Freies Feld${debrisRow}</div><div><span class="badge empty">Leer</span></div><div class="sub">—</div><div><button class="btn good" data-mission-target="colonize:${gal}:${sys}:${s.pos}">Kolonisieren</button></div></div>`;
   }).join('')}</div>`; }
 
 function missileLaunchFormHtml(p){
@@ -628,18 +642,24 @@ function renderView(bind=true){
     document.querySelectorAll('[data-ship]').forEach(b=>b.onclick=()=>enqueueShip(b.dataset.ship));
     document.querySelectorAll('[data-defense]').forEach(b=>b.onclick=()=>enqueueDefense(b.dataset.defense));
     const ff=$('#fleetForm'); if(ff){
-      ff.onsubmit=e=>{e.preventDefault(); const sys=Number(ff.system.value), pos=Number(ff.position.value); $('#targetField').value = sys+':'+pos; state.fleetPrefill=null; sendFleet(ff)};
+      ff.onsubmit=e=>{e.preventDefault(); const gal=Number(ff.galaxy.value), sys=Number(ff.system.value), pos=Number(ff.position.value); $('#targetField').value = gal+':'+sys+':'+pos; state.fleetPrefill=null; sendFleet(ff)};
       ff.mission.onchange=()=>{ state.fleetPrefill=null; };
+      ff.galaxy.onchange=()=>{ state.fleetPrefill=null; };
       ff.system.onchange=()=>{ state.fleetPrefill=null; };
       ff.position.onchange=()=>{ state.fleetPrefill=null; };
     }
     const mf=$('#marketForm'); if(mf) mf.onsubmit=e=>{e.preventDefault(); marketTrade(mf.give.value,mf.want.value,mf.amount.value)};
     const merchForm=$('#merchantForm'); if(merchForm) merchForm.onsubmit=e=>{e.preventDefault(); merchantBuy(merchForm.resource.value, merchForm.amount.value)};
     const msf=$('#missileForm'); if(msf) msf.onsubmit=e=>{e.preventDefault(); launchMissiles(msf.position.value, msf.count.value)};
-    const gj=$('#galaxyJump'); if(gj) gj.onsubmit=e=>{e.preventDefault(); state.galaxySystem=Number(gj.system.value)||state.galaxySystem; renderView();};
+    const gj=$('#galaxyJump'); if(gj) gj.onsubmit=e=>{e.preventDefault();
+      const g=Number(gj.galaxy.value), s=Number(gj.system.value);
+      if(Number.isInteger(g) && g>=1 && g<=UNIVERSE.galaxies) state.galaxyIndex=g;
+      if(Number.isInteger(s) && s>=1 && s<=UNIVERSE.systems) state.galaxySystem=s;
+      renderView();
+    };
     document.querySelectorAll('[data-mission-target]').forEach(b=>b.onclick=()=>{
-      const [mission,sys,pos]=b.dataset.missionTarget.split(':');
-      state.fleetPrefill = {mission, sys:Number(sys), pos:Number(pos)};
+      const [mission,gal,sys,pos]=b.dataset.missionTarget.split(':');
+      state.fleetPrefill = {mission, gal:Number(gal), sys:Number(sys), pos:Number(pos)};
       state.view='fleet'; render();
     });
     const saveBtn=$('#saveBtn'); if(saveBtn) saveBtn.onclick=saveGame;
