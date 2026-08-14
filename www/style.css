@@ -244,6 +244,20 @@ table th{
   box-shadow: inset 0 1px 0 rgba(255,255,255,.04);
 }
 
+.conn-banner{
+  position:sticky; top:0; z-index:30; text-align:center; font-size:12px; font-weight:600;
+  padding:6px 10px; letter-spacing:.02em;
+  background-image: var(--tex-diagonal), linear-gradient(90deg, #6b1c2a, #8a2536, #6b1c2a);
+  color:#ffd7dc; border-bottom:1px solid var(--danger);
+}
+.conn-banner.ok{
+  background-image: var(--tex-diagonal), linear-gradient(90deg, #1c4a2f, #256b3f, #1c4a2f);
+  color:#c9f7d9; border-bottom:1px solid var(--good);
+}
+
+body.disconnected #topbar, body.disconnected #nav, body.disconnected #sidebar{ display:none; }
+body.disconnected main#view{ padding-top:10vh; }
+
 @media (max-width: 860px){
   #layout{ flex-direction:column; }
   #sidebar{ width:auto; flex:none; border-right:none; border-bottom:1px solid var(--border); max-height:220px; }
