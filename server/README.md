@@ -28,7 +28,19 @@ Heimatkoordinaten, Dunkle Materie). Von dort aus lassen sich Spieler löschen
 Das Admin-Konto selbst hat kein eigenes Imperium und kann nicht gelöscht
 werden.
 
-## Einrichtung auf dem Raspberry Pi
+## Einrichtung & Steuerung nur über PowerShell (Raspberry Pi OS 13 „Trixie“)
+
+Wer den Server ausschließlich über PowerShell einrichten und steuern möchte
+(kein manuelles `systemctl`/`journalctl`/`apt`), findet die komplette
+Anleitung samt fertiger Skripte in [`powershell/README.md`](powershell/README.md).
+Kurzfassung:
+```bash
+cd Interstellar-Industries/server/powershell
+bash bootstrap-pwsh.sh        # einmalig: installiert PowerShell selbst
+pwsh ./stellare.ps1 install   # ab hier alles über PowerShell
+```
+
+## Einrichtung auf dem Raspberry Pi (klassisch, per bash)
 
 1. Node.js installieren (Version 18 oder neuer):
    ```
