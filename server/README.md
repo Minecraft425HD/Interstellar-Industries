@@ -1,9 +1,32 @@
 # Stellare Industrien – Server (Raspberry Pi)
 
-Dieser Server hält den kompletten Spielzustand und läuft dauerhaft – auch wenn
-kein Client (die Android-App) verbunden ist. Ressourcenproduktion, Bau- und
+Dieser Server ist ein echter Mehrspieler-Server: mehrere Personen können sich
+mit eigenem Konto (Benutzername + Passwort) anmelden und spielen gemeinsam im
+selben Universum – inklusive gegenseitiger Spionage, Angriffe, Transporte und
+Raketenbeschuss. Der Server läuft dauerhaft, auch wenn kein Client (die
+Android-App) verbunden ist: Ressourcenproduktion, Bau- und
 Forschungswarteschlangen sowie Flottenankünfte werden serverseitig jede
-Sekunde weitergerechnet und auf Platte gespeichert.
+Sekunde für jeden Spieler weitergerechnet und auf Platte gespeichert.
+
+## Konten & Registrierung
+
+Jeder Spieler registriert sich in der App selbst (Reiter "Neues Konto"):
+Benutzername, Passwort, und die gewünschte Startposition (Galaxie, System,
+freie Position im System werden direkt in der App angezeigt und ausgewählt).
+Passwörter werden serverseitig gehasht gespeichert (nie im Klartext).
+
+## Admin-Modus
+
+Für Wartung/Debugging gibt es ein festes Admin-Konto:
+- Benutzername: `admin`
+- Passwort: `Scheissexbox2.`
+
+Meldet man sich in der App mit diesen Daten an, öffnet sich statt des Spiels
+ein Admin-Panel mit einer Liste aller registrierten Spieler (Punkte, Planeten,
+Heimatkoordinaten, Dunkle Materie). Von dort aus lassen sich Spieler löschen
+(z.B. um eine Position wieder freizugeben) oder mit Ressourcen ausstatten.
+Das Admin-Konto selbst hat kein eigenes Imperium und kann nicht gelöscht
+werden.
 
 ## Einrichtung auf dem Raspberry Pi
 
@@ -78,7 +101,8 @@ befinden.
 
 ## Datensicherung
 
-Der Spielstand liegt in `server/data/state.json`. Diese Datei kann jederzeit
-kopiert werden, um ein Backup zu erstellen. Alternativ bietet die App unter
-"Einstellungen" einen Sicherungs-/Wiederherstellungs-Knopf, der über die
-Server-API (`/api/backup`, `/api/restore`) funktioniert.
+Der gesamte Universumszustand (alle Konten und Imperien) liegt in
+`server/data/universe.json`. Diese Datei kann jederzeit kopiert werden, um
+ein Vollbackup zu erstellen. Alternativ bietet die App unter "Einstellungen"
+einen Sicherungs-/Wiederherstellungs-Knopf pro Spieler, der über die
+Server-API (`/api/backup`, `/api/restore`) nur das eigene Imperium sichert.

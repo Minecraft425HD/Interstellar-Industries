@@ -89,31 +89,14 @@ const state = {
   logs: [],
   galaxyIndex: 1,
   galaxySystem: 145,
-  fleetPrefill: null
+  fleetPrefill: null,
+  username: null,
+  isAdmin: false,
+  adminMode: false
 };
 
 const UNIVERSE = { galaxies: 9, systems: 499, positions: 15 };
 function validCoord(galaxy, system, pos){ return Number.isInteger(galaxy) && galaxy>=1 && galaxy<=UNIVERSE.galaxies && Number.isInteger(system) && system>=1 && system<=UNIVERSE.systems && Number.isInteger(pos) && pos>=1 && pos<=UNIVERSE.positions; }
-
-function seedGalaxy(galaxy, system){
-  const rnd = (seed)=>{ let x=Math.sin(seed*999+system*13+galaxy*104729)*10000; return x-Math.floor(x); };
-  const slots = [];
-  for(let pos=1; pos<=UNIVERSE.positions; pos++){
-    const owned = state.planets.find(p=>p.coords[0]===galaxy && p.coords[1]===system && p.coords[2]===pos);
-    if(owned){ slots.push({pos, type:'own', planet:owned}); continue; }
-    const r = rnd(pos+system);
-    if(r < 0.35){
-      const level = Math.max(3, Math.floor(r*30));
-      const defenseShips = { missileLauncher: level*4, lightLaser: Math.floor(level*1.5) };
-      const fleet = { lightFighter: Math.floor(level*1.5) };
-      if(level>10) fleet.cruiser = Math.floor(level/4);
-      slots.push({pos, type:'npc', name:'Kolonie '+String.fromCharCode(65+pos), level, metal:800*level, crystal:500*level, deut:200*level, defenseShips, fleet});
-    } else {
-      slots.push({pos, type:'empty'});
-    }
-  }
-  return slots;
-}
 
 const $ = s => document.querySelector(s);
 const fmt = n => new Intl.NumberFormat('de-DE',{maximumFractionDigits:0}).format(Math.floor(n));
@@ -192,8 +175,14 @@ function allianceRank(points){ if(points>=2000000) return 'Elite-Kommandant'; if
 
 // ---- Server connection layer ----
 const SERVER_KEY = 'stellareIndustrienServerUrl';
+const TOKEN_KEY = 'stellareIndustrienToken';
+const USERNAME_KEY = 'stellareIndustrienUsername';
 function getServerUrl(){ return (localStorage.getItem(SERVER_KEY)||'').trim(); }
-function setServerUrl(url){ localStorage.setItem(SERVER_KEY, url); }
+function setServerUrl(url){ if(url) localStorage.setItem(SERVER_KEY, url); else localStorage.removeItem(SERVER_KEY); }
+function getToken(){ return localStorage.getItem(TOKEN_KEY)||''; }
+function setToken(t){ if(t) localStorage.setItem(TOKEN_KEY, t); else localStorage.removeItem(TOKEN_KEY); }
+function getStoredUsername(){ return localStorage.getItem(USERNAME_KEY)||''; }
+function setStoredUsername(u){ if(u) localStorage.setItem(USERNAME_KEY, u); else localStorage.removeItem(USERNAME_KEY); }
 let connectionStatus = 'disconnected'; // disconnected | connecting | connected | error
 let connectionError = '';
 let everConnected = false;
@@ -202,19 +191,38 @@ let pollTimer = null;
 async function apiFetch(path, options){
   const base = getServerUrl().replace(/\/$/,'');
   if(!base) throw new Error('Keine Serveradresse konfiguriert');
-  const res = await fetch(base+path, options);
+  options = options || {};
+  const headers = Object.assign({}, options.headers||{});
+  const token = getToken();
+  if(token) headers['Authorization'] = 'Bearer '+token;
+  let res;
+  try { res = await fetch(base+path, Object.assign({}, options, {headers})); }
+  catch(networkErr){ throw new Error('Server nicht erreichbar'); }
   let body = null;
   try { body = await res.json(); } catch(e){ /* no body */ }
+  if(res.status===401){
+    setToken(''); setStoredUsername('');
+    const err = new Error((body && body.error) || 'Sitzung abgelaufen, bitte erneut anmelden');
+    err.authRequired = true;
+    throw err;
+  }
   if(!res.ok){ throw new Error((body && body.error) || ('HTTP '+res.status)); }
   return body;
 }
 
 async function pollState(){
+  if(!getToken()) return;
   try {
     const data = await apiFetch('/api/state');
     connectionStatus = 'connected'; connectionError = '';
     applyServerState(data, {forceRender:false});
   } catch(err){
+    if(err.authRequired){
+      state.username=null; state.isAdmin=false; state.adminMode=false; everConnected=false;
+      connectionStatus='connected'; connectionError='';
+      render();
+      return;
+    }
     connectionStatus = 'error'; connectionError = err.message;
     renderConnectionBanner();
     if(!everConnected) render();
@@ -229,6 +237,7 @@ async function postAction(type, payload){
     if(data && data.ok===false && data.message) showError(data.message);
     return data;
   } catch(err){
+    if(err.authRequired){ state.username=null; everConnected=false; render(); return null; }
     connectionStatus = 'error'; connectionError = err.message;
     showError('Verbindung fehlgeschlagen: '+err.message);
     renderConnectionBanner();
@@ -238,7 +247,17 @@ async function postAction(type, payload){
 
 function applyServerState(serverState, opts){
   opts = opts || {};
-  if(!serverState || !Array.isArray(serverState.planets)) return;
+  if(!serverState) return;
+  state.username = serverState.username || state.username;
+  state.isAdmin = !!serverState.isAdmin;
+  if(serverState.planets === null){
+    state.adminMode = true;
+    everConnected = true;
+    if(opts.forceRender || !viewInteractionActive()) render();
+    return;
+  }
+  if(!Array.isArray(serverState.planets)) return;
+  state.adminMode = false;
   state.planets = serverState.planets;
   state.fleets = serverState.fleets || [];
   state.reports = serverState.reports || [];
@@ -252,12 +271,12 @@ function applyServerState(serverState, opts){
   state.lifeform = serverState.lifeform || state.lifeform;
   state.marketRate = serverState.marketRate || state.marketRate;
   state.logs = serverState.logs || [];
-  if(!everConnected && state.planets.length>0) everConnected = true;
+  everConnected = true;
   if(state.activePlanet >= state.planets.length) state.activePlanet = 0;
   if(state.activeMoonIndex!=null && state.activeMoonIndex >= state.moons.length) state.activeMoonIndex = state.moons.length ? 0 : null;
   if(opts.forceRender || !viewInteractionActive()){
     render();
-  } else if(everConnected){
+  } else {
     renderTop(); renderSide(); renderConnectionBanner();
   }
 }
@@ -274,14 +293,15 @@ function renderConnectionBanner(){
   }
 }
 
+function computePhase(){
+  if(!getServerUrl()) return 'connect';
+  if(!getToken()) return 'auth';
+  if(!everConnected) return 'loading';
+  return state.adminMode ? 'admin' : 'game';
+}
+
 function renderConnectScreen(){
-  document.body.classList.add('disconnected');
   const url = getServerUrl();
-  let statusText = 'Kein Server konfiguriert.';
-  let statusColor = 'var(--muted)';
-  if(connectionStatus==='connecting'){ statusText='Verbinde…'; }
-  else if(connectionStatus==='error'){ statusText='Fehler: '+connectionError; statusColor='var(--danger)'; }
-  else if(url){ statusText='Nicht verbunden.'; }
   const view = $('#view');
   if(!view) return;
   view.innerHTML = `<div class="card" style="max-width:440px;margin:8vh auto;">
@@ -289,9 +309,8 @@ function renderConnectScreen(){
     <div class="small" style="margin-bottom:14px">Stellare Industrien läuft als dedizierter Server, z.B. dauerhaft auf einem Raspberry Pi im Heimnetzwerk. Trage die Adresse ein, unter der er erreichbar ist.</div>
     <form id="connectForm" class="fleet-form">
       <label>Server-Adresse<input type="text" name="url" value="${url}" placeholder="http://192.168.1.50:3000"></label>
-      <button class="btn good" type="submit">Verbinden</button>
+      <button class="btn good" type="submit">Weiter</button>
     </form>
-    <div class="small" style="margin-top:12px;color:${statusColor}">${statusText}</div>
   </div>`;
   const cf = $('#connectForm');
   if(cf) cf.onsubmit = e=>{
@@ -299,10 +318,235 @@ function renderConnectScreen(){
     const u = cf.url.value.trim().replace(/\/$/,'');
     if(!u) return;
     setServerUrl(u);
-    connectionStatus='connecting'; connectionError='';
-    renderConnectScreen();
-    pollState();
+    render();
   };
+}
+
+function renderLoadingScreen(){
+  const view = $('#view');
+  if(!view) return;
+  view.innerHTML = `<div class="card" style="max-width:440px;margin:8vh auto;text-align:center">
+    <h2>Verbinde…</h2>
+    <div class="small">Lade Daten vom Server.</div>
+  </div>`;
+}
+
+// ---- Login / Registration ----
+let authMode = 'login';
+let authError = '';
+const regForm = { username:'', password:'', password2:'', planetName:'', galaxy:1, system:1, selectedPos:null };
+let regSlots = null;
+let regLoading = false;
+
+async function fetchRegSlots(){
+  regLoading = true; regSlots = null; authError='';
+  renderAuthScreen();
+  try {
+    const base = getServerUrl().replace(/\/$/,'');
+    const res = await fetch(base+'/api/galaxy?galaxy='+regForm.galaxy+'&system='+regForm.system);
+    const body = await res.json();
+    if(!res.ok) throw new Error((body && body.error) || 'Fehler beim Laden');
+    regSlots = body.slots;
+  } catch(err){
+    authError = 'Positionen konnten nicht geladen werden: '+err.message;
+  }
+  regLoading = false;
+  renderAuthScreen();
+}
+
+function logout(){
+  apiFetch('/api/logout', {method:'POST'}).catch(()=>{});
+  setToken(''); setStoredUsername('');
+  state.username=null; state.isAdmin=false; state.adminMode=false; everConnected=false;
+  render();
+}
+
+function renderAuthScreen(){
+  const view = $('#view');
+  if(!view) return;
+  const tabBtn = (mode,label)=>`<button type="button" class="pill ${authMode===mode?'active':''}" data-auth-tab="${mode}">${label}</button>`;
+  let body = '';
+  if(authMode==='login'){
+    body = `<form id="loginForm" class="fleet-form">
+      <label>Benutzername<input type="text" name="username" value="${regForm.username}" autocomplete="username"></label>
+      <label>Passwort<input type="password" name="password" autocomplete="current-password"></label>
+      <button class="btn good" type="submit">Anmelden</button>
+    </form>`;
+  } else {
+    const slotsHtml = regLoading ? '<div class="small">Lade Positionen…</div>' : (regSlots ? `<div class="galaxy-grid">${regSlots.map(s=>{
+      const selected = regForm.selectedPos===s.pos;
+      if(s.type==='empty') return `<button type="button" class="slot empty${selected?' selected':''}" data-reg-pos="${s.pos}" style="text-align:left;cursor:pointer"><div>${s.pos}</div><div>Frei</div><div><span class="badge empty">${selected?'Gewählt':'Wählbar'}</span></div></button>`;
+      if(s.type==='own') return `<div class="slot own"><div>${s.pos}</div><div>Eigener Planet</div><div><span class="badge own">Belegt</span></div></div>`;
+      if(s.type==='player') return `<div class="slot"><div>${s.pos}</div><div>${s.planetName}<div class="sub">Spieler: ${s.ownerUsername}</div></div><div><span class="badge npc">Spieler</span></div></div>`;
+      return `<div class="slot"><div>${s.pos}</div><div>${s.name}</div><div><span class="badge npc">NPC</span></div></div>`;
+    }).join('')}</div>` : '<div class="small">Galaxie und System wählen, dann "Positionen laden".</div>');
+    body = `<form id="regCoordForm" class="fleet-form" style="margin-bottom:12px">
+      <label>Galaxie (1-${UNIVERSE.galaxies})<input type="number" name="galaxy" min="1" max="${UNIVERSE.galaxies}" value="${regForm.galaxy}"></label>
+      <label>System (1-${UNIVERSE.systems})<input type="number" name="system" min="1" max="${UNIVERSE.systems}" value="${regForm.system}"></label>
+      <button class="btn alt" type="submit">Positionen laden</button>
+    </form>
+    ${slotsHtml}
+    <div style="height:14px"></div>
+    <form id="registerForm" class="fleet-form">
+      <label>Benutzername<input type="text" name="username" value="${regForm.username}" autocomplete="username"></label>
+      <label>Passwort (min. 6 Zeichen)<input type="password" name="password" autocomplete="new-password"></label>
+      <label>Passwort wiederholen<input type="password" name="password2" autocomplete="new-password"></label>
+      <label>Planetenname (optional)<input type="text" name="planetName" value="${regForm.planetName}" placeholder="Heimatwelt"></label>
+      <div class="small">Gewählte Position: ${regForm.selectedPos ? '['+regForm.galaxy+':'+regForm.system+':'+regForm.selectedPos+']' : 'keine – oben ein freies Feld anklicken'}</div>
+      <button class="btn good" type="submit" ${regForm.selectedPos?'':'disabled'}>Konto erstellen</button>
+    </form>`;
+  }
+  view.innerHTML = `<div class="card" style="max-width:${authMode==='register'?'560px':'440px'};margin:6vh auto;">
+    <h2>Anmelden</h2>
+    <div class="planet-tabs" style="margin-bottom:14px">${tabBtn('login','Anmelden')}${tabBtn('register','Neues Konto')}</div>
+    ${body}
+    ${authError?`<div class="small" style="margin-top:12px;color:var(--danger)">${authError}</div>`:''}
+    <div style="height:10px"></div>
+    <button class="btn alt" type="button" id="changeServerBtn" style="width:100%">Server ändern</button>
+    <div class="small" style="margin-top:8px">Server: ${getServerUrl()}</div>
+  </div>`;
+
+  document.querySelectorAll('[data-auth-tab]').forEach(b=>b.onclick=()=>{ authMode=b.dataset.authTab; authError=''; renderAuthScreen(); });
+  const changeBtn = $('#changeServerBtn'); if(changeBtn) changeBtn.onclick=()=>{ setServerUrl(''); render(); };
+
+  const lf = $('#loginForm');
+  if(lf) lf.onsubmit = async e=>{
+    e.preventDefault();
+    authError='';
+    const username = lf.username.value.trim(), password = lf.password.value;
+    regForm.username = username;
+    try {
+      const data = await apiFetch('/api/login', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({username,password})});
+      setToken(data.token); setStoredUsername(data.username);
+      state.username = data.username; state.isAdmin = data.isAdmin; state.adminMode = data.isAdmin;
+      everConnected = false; connectionStatus='connecting';
+      render();
+      pollState();
+    } catch(err){ authError = err.message; renderAuthScreen(); }
+  };
+
+  const rcf = $('#regCoordForm');
+  if(rcf) rcf.onsubmit = e=>{
+    e.preventDefault();
+    const g = Number(rcf.galaxy.value), s = Number(rcf.system.value);
+    if(Number.isInteger(g) && g>=1 && g<=UNIVERSE.galaxies) regForm.galaxy=g;
+    if(Number.isInteger(s) && s>=1 && s<=UNIVERSE.systems) regForm.system=s;
+    regForm.selectedPos = null;
+    fetchRegSlots();
+  };
+
+  const rf = $('#registerForm');
+  if(rf){
+    rf.username.oninput = ()=>{ regForm.username = rf.username.value; };
+    rf.planetName.oninput = ()=>{ regForm.planetName = rf.planetName.value; };
+    rf.onsubmit = async e=>{
+      e.preventDefault();
+      authError='';
+      if(!regForm.selectedPos){ authError='Bitte zuerst eine freie Position auswählen.'; renderAuthScreen(); return; }
+      const username = rf.username.value.trim(), password = rf.password.value, password2 = rf.password2.value, planetName = rf.planetName.value.trim();
+      if(password.length<6){ authError='Passwort muss mindestens 6 Zeichen haben.'; renderAuthScreen(); return; }
+      if(password!==password2){ authError='Passwörter stimmen nicht überein.'; renderAuthScreen(); return; }
+      try {
+        const data = await apiFetch('/api/register', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({username,password,galaxy:regForm.galaxy,system:regForm.system,position:regForm.selectedPos,planetName})});
+        setToken(data.token); setStoredUsername(data.username);
+        state.username = data.username; state.isAdmin=false; state.adminMode=false;
+        everConnected=false; connectionStatus='connecting';
+        render();
+        pollState();
+      } catch(err){ authError = err.message; renderAuthScreen(); }
+    };
+  }
+
+  if(authMode==='register' && regSlots){
+    document.querySelectorAll('[data-reg-pos]').forEach(b=>b.onclick=()=>{ regForm.selectedPos = Number(b.dataset.regPos); renderAuthScreen(); });
+  }
+}
+
+// ---- Admin panel ----
+let adminPlayers = null;
+let adminLoading = false;
+let adminError = '';
+let adminPendingDelete = null;
+
+async function fetchAdminPlayers(){
+  adminLoading = true; adminError='';
+  renderAdminPanel();
+  try {
+    const data = await apiFetch('/api/admin/players');
+    adminPlayers = data.players;
+  } catch(err){ adminError = err.message; }
+  adminLoading = false;
+  renderAdminPanel();
+}
+
+function renderAdminPanel(){
+  const view = $('#view');
+  if(!view) return;
+  if(adminPlayers===null && !adminLoading) fetchAdminPlayers();
+  const rows = (adminPlayers||[]).map(p=>{
+    const actions = adminPendingDelete===p.username
+      ? `<button class="btn danger" data-admin-confirm-delete="${p.username}" style="padding:6px 10px;min-height:32px">Wirklich löschen?</button> <button class="btn alt" data-admin-cancel-delete="1" style="padding:6px 10px;min-height:32px">Abbrechen</button>`
+      : `<button class="btn alt" data-admin-grant="${p.username}" style="padding:6px 10px;min-height:32px">+10k Ressourcen</button> <button class="btn danger" data-admin-delete="${p.username}" style="padding:6px 10px;min-height:32px">Löschen</button>`;
+    return `<tr>
+      <td>${p.username}</td>
+      <td>${p.homeCoords ? p.homeCoords.join(':') : '-'}</td>
+      <td>${fmt(p.points)}</td>
+      <td>${fmt(p.planets)}</td>
+      <td>${fmt(p.darkMatter)}</td>
+      <td>${p.createdAt ? new Date(p.createdAt).toLocaleDateString('de-DE') : '-'}</td>
+      <td>${actions}</td>
+    </tr>`;
+  }).join('');
+  view.innerHTML = `<div class="card" style="max-width:960px;margin:4vh auto;">
+    <h2>Admin-Modus</h2>
+    <div class="small">Angemeldet als ${state.username} · Server: ${getServerUrl()}</div>
+    <div style="height:10px"></div>
+    <button class="btn alt" id="adminRefreshBtn">Aktualisieren</button>
+    <button class="btn danger" id="adminLogoutBtn" style="margin-left:10px">Abmelden</button>
+    <div style="height:14px"></div>
+    ${adminLoading ? '<div class="small">Lade Spielerliste…</div>' : ''}
+    ${adminError ? `<div class="small" style="color:var(--danger)">${adminError}</div>` : ''}
+    ${adminPlayers && adminPlayers.length===0 ? '<div class="small">Noch keine Spieler registriert.</div>' : ''}
+    ${adminPlayers && adminPlayers.length>0 ? `<div style="overflow-x:auto"><table><thead><tr><th>Benutzername</th><th>Heimatkoordinaten</th><th>Punkte</th><th>Planeten</th><th>Dunkle Materie</th><th>Registriert</th><th>Aktionen</th></tr></thead><tbody>${rows}</tbody></table></div>` : ''}
+  </div>`;
+  const rb = $('#adminRefreshBtn'); if(rb) rb.onclick=()=>{ adminPlayers=null; adminPendingDelete=null; fetchAdminPlayers(); };
+  const lb = $('#adminLogoutBtn'); if(lb) lb.onclick=logout;
+  document.querySelectorAll('[data-admin-delete]').forEach(b=>b.onclick=()=>{ adminPendingDelete=b.dataset.adminDelete; renderAdminPanel(); });
+  document.querySelectorAll('[data-admin-cancel-delete]').forEach(b=>b.onclick=()=>{ adminPendingDelete=null; renderAdminPanel(); });
+  document.querySelectorAll('[data-admin-confirm-delete]').forEach(b=>b.onclick=async ()=>{
+    try { await apiFetch('/api/admin/deletePlayer', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({username:b.dataset.adminConfirmDelete})}); adminPendingDelete=null; adminPlayers=null; fetchAdminPlayers(); }
+    catch(err){ adminError = err.message; renderAdminPanel(); }
+  });
+  document.querySelectorAll('[data-admin-grant]').forEach(b=>b.onclick=async ()=>{
+    try { await apiFetch('/api/admin/grantResources', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({username:b.dataset.adminGrant, metal:10000, crystal:10000, deut:10000})}); adminPlayers=null; fetchAdminPlayers(); }
+    catch(err){ adminError = err.message; renderAdminPanel(); }
+  });
+}
+
+// ---- Galaxy view data (fetched from the server so real players show up) ----
+let galaxyCache = {};
+let galaxyLoadingKey = null;
+function galaxyCacheKey(g,s){ return g+':'+s; }
+async function fetchGalaxySlots(g,s){
+  const key = galaxyCacheKey(g,s);
+  galaxyLoadingKey = key;
+  try {
+    const data = await apiFetch('/api/galaxy?galaxy='+g+'&system='+s);
+    galaxyCache[key] = data.slots;
+  } catch(err){ showError('Galaxie konnte nicht geladen werden: '+err.message); }
+  if(galaxyLoadingKey===key) galaxyLoadingKey = null;
+  if(state.view==='galaxy') renderView(true);
+}
+
+// ---- Highscore data (real registered players) ----
+let highscoreCache = null;
+let highscoreLoading = false;
+async function fetchHighscore(){
+  highscoreLoading = true;
+  try { const data = await apiFetch('/api/highscore'); highscoreCache = data.list; }
+  catch(err){ showError('Rangliste konnte nicht geladen werden: '+err.message); }
+  highscoreLoading = false;
+  if(state.view==='highscore') renderView(true);
 }
 
 // ---- Action wrappers (network calls to the dedicated server) ----
@@ -381,7 +625,7 @@ function totalPlayerPoints(){ return Math.floor(state.planets.reduce((s,p)=>s+co
 
 const navItems = [['overview','Übersicht'],['buildings','Gebäude'],['facilities','Anlagen'],['defense','Verteidigung'],['resources','Ressourcen'],['research','Forschung'],['shipyard','Werft'],['fleet','Flotte'],['expeditions','Expeditionen'],['galaxy','Galaxie'],['moons','Monde'],['alliance','Allianz'],['officers','Offiziere'],['lifeform','Lebensform'],['market','Markt'],['reports','Berichte'],['messages','Nachrichten'],['empire','Imperium'],['highscore','Rangliste'],['settings','Einstellungen']];
 
-function renderNav(){ $('#nav').innerHTML = navItems.map(([id,label])=>`<button class="${state.view===id?'active':''}" data-view="${id}">${label}</button>`).join(''); document.querySelectorAll('[data-view]').forEach(b=>b.onclick=()=>{ if(b.dataset.view!=='fleet') state.fleetPrefill=null; state.view=b.dataset.view; render(); }); }
+function renderNav(){ $('#nav').innerHTML = navItems.map(([id,label])=>`<button class="${state.view===id?'active':''}" data-view="${id}">${label}</button>`).join(''); document.querySelectorAll('[data-view]').forEach(b=>b.onclick=()=>{ if(b.dataset.view!=='fleet') state.fleetPrefill=null; if(b.dataset.view==='highscore') highscoreCache=null; if(b.dataset.view==='galaxy') galaxyCache={}; state.view=b.dataset.view; render(); }); }
 function renderTop(){ const p=active(); if(!p) return; const inc=hourly(p), e=energyStats(p); $('#planetName').textContent=p.name; $('#planetCoords').innerHTML=coordLinkHtml(p.coords); $('#metalTop').textContent=fmt(p.resources.metal); $('#crystalTop').textContent=fmt(p.resources.crystal); $('#deutTop').textContent=fmt(p.resources.deut); $('#metalRate').textContent=fmt1(inc.metal)+'/h'; $('#crystalRate').textContent=fmt1(inc.crystal)+'/h'; $('#deutRate').textContent=fmt1(inc.deut)+'/h'; $('#energyTop').textContent=fmt(e.prod); $('#energyUse').textContent=fmt(e.use)+' genutzt'; }
 function renderSide(){
   $('#planetTabs').innerHTML = state.planets.map((p,i)=>`<button class="pill ${state.activePlanet===i?'active':''}" data-planet="${i}">${p.name}</button>`).join('');
@@ -444,20 +688,29 @@ function viewFleet(){
   <div class="card"><h3>Hinweise</h3><div class="small">Transport bewegt Ressourcen. Spionage liefert einen Bericht. Angriff löst eine mehrstufige Kampfsimulation gegen NPC-Kolonien aus (bis zu 6 Runden, Schilde regenerieren pro Runde). Kolonisierung braucht ein Kolonieschiff, ein leeres Feld und freie Kolonieplätze (Astrophysik). Eigene Planeten können nicht angegriffen werden.</div><div style="height:10px"></div><table><tr><th>Schiff</th><th>Angriff</th><th>Hülle</th><th>Ladung</th></tr>${Object.entries(defs.ships).map(([k,d])=>`<tr><td>${d.name}</td><td>${d.attack}</td><td>${fmt(d.hull)}</td><td>${fmt(d.cargo)}</td></tr>`).join('')}</table></div>
   </div>`; }
 
-function viewGalaxy(){
-  const gal = state.galaxyIndex, sys = state.galaxySystem;
-  const slots = seedGalaxy(gal, sys);
-  return `<h2>Galaxie</h2>
-  <div class="card" style="margin-bottom:12px"><form class="galaxy-form" id="galaxyJump" style="display:flex;gap:10px;align-items:end;flex-wrap:wrap">
+function galaxyJumpFormHtml(gal, sys){
+  return `<div class="card" style="margin-bottom:12px"><form class="galaxy-form" id="galaxyJump" style="display:flex;gap:10px;align-items:end;flex-wrap:wrap">
     <label>Galaxie (1-${UNIVERSE.galaxies})<input type="number" name="galaxy" min="1" max="${UNIVERSE.galaxies}" value="${gal}" style="width:90px"></label>
     <label style="flex:1">System (1-${UNIVERSE.systems})<input type="number" name="system" min="1" max="${UNIVERSE.systems}" value="${sys}"></label>
     <button class="btn alt" type="submit">System anzeigen</button>
-  </form></div>
+    <button class="btn" type="button" id="galaxyRefreshBtn">Aktualisieren</button>
+  </form></div>`;
+}
+function viewGalaxy(){
+  const gal = state.galaxyIndex, sys = state.galaxySystem;
+  const key = galaxyCacheKey(gal, sys);
+  const slots = galaxyCache[key];
+  if(!slots && galaxyLoadingKey!==key){ fetchGalaxySlots(gal, sys); }
+  if(!slots){
+    return `<h2>Galaxie</h2>${galaxyJumpFormHtml(gal, sys)}<div class="small">Lade Systemdaten vom Server…</div>`;
+  }
+  return `<h2>Galaxie</h2>${galaxyJumpFormHtml(gal, sys)}
   <div class="small" style="margin-bottom:10px">Aktuell: [${gal}:${sys}] · Universum: ${UNIVERSE.galaxies} Galaxien × ${UNIVERSE.systems} Systeme × ${UNIVERSE.positions} Positionen</div>
   <div class="galaxy-grid">${slots.map(s=>{
-    const key = debrisKey([gal,sys,s.pos]); const debris = state.debrisFields[key];
+    const key2 = debrisKey([gal,sys,s.pos]); const debris = state.debrisFields[key2];
     const debrisRow = debris ? `<div class="sub">Trümmerfeld: M ${fmt(debris.metal)} · K ${fmt(debris.crystal)} <button class="btn alt" data-mission-target="harvest:${gal}:${sys}:${s.pos}" style="margin-left:8px;padding:6px 10px;min-height:32px">Bergen</button></div>` : '';
     if(s.type==='own') return `<div class="slot own"><div>${s.pos}</div><div><strong>${s.planet.name}</strong><div class="sub">${coordLinkHtml(s.planet.coords)}</div>${debrisRow}</div><div><span class="badge own">Eigen</span></div><div class="sub">Metall ${fmt(s.planet.resources.metal)}</div><div></div></div>`;
+    if(s.type==='player') return `<div class="slot"><div>${s.pos}</div><div><strong>${s.planetName}</strong><div class="sub">Spieler: ${s.ownerUsername}</div>${debrisRow}</div><div><span class="badge npc">Spieler</span></div><div class="sub">—</div><div><button class="btn danger" data-mission-target="attack:${gal}:${sys}:${s.pos}">Angriff</button> <button class="btn alt" data-mission-target="spy:${gal}:${sys}:${s.pos}">Spionage</button> <button class="btn" data-mission-target="transport:${gal}:${sys}:${s.pos}">Transport</button></div></div>`;
     if(s.type==='npc'){ const defPower = sidePower(s.defenseShips, defs.buildings).attack; return `<div class="slot"><div>${s.pos}</div><div><strong>${s.name}</strong><div class="sub">Stufe ${s.level}</div>${debrisRow}</div><div><span class="badge npc">NPC</span></div><div class="sub">Def ${fmt(defPower)}</div><div><button class="btn danger" data-mission-target="attack:${gal}:${sys}:${s.pos}">Angriff</button> <button class="btn alt" data-mission-target="spy:${gal}:${sys}:${s.pos}">Spionage</button></div></div>`; }
     return `<div class="slot empty"><div>${s.pos}</div><div>Freies Feld${debrisRow}</div><div><span class="badge empty">Leer</span></div><div class="sub">—</div><div><button class="btn good" data-mission-target="colonize:${gal}:${sys}:${s.pos}">Kolonisieren</button></div></div>`;
   }).join('')}</div>`; }
@@ -490,8 +743,8 @@ function viewSettings(){
   const statusLabel = connectionStatus==='connected' ? 'Verbunden' : (connectionStatus==='error' ? 'Fehler: '+connectionError : 'Nicht verbunden');
   const statusColor = connectionStatus==='connected' ? 'var(--good)' : (connectionStatus==='error' ? 'var(--danger)' : 'var(--muted)');
   return `<h2>Einstellungen</h2><div class="grid2">
-  <div class="card"><h3>Serververbindung</h3><div class="small" style="color:${statusColor}">Status: ${statusLabel}</div><div style="height:10px"></div><form class="fleet-form" id="serverForm"><label>Server-Adresse<input type="text" name="url" value="${url}" placeholder="http://192.168.1.50:3000"></label><button class="btn good" type="submit">Verbinden / Aktualisieren</button></form></div>
-  <div class="card"><h3>Spielstand-Sicherung</h3><div class="small">Der Server speichert automatisch und dauerhaft. Diese Buttons erstellen zusätzlich eine lokale Sicherungskopie.</div><div style="height:10px"></div><button class="btn" id="saveBtn">Backup herunterladen</button><div style="height:10px"></div>${native ? '<button class="btn alt" id="loadBtnNative">Backup wiederherstellen</button>' : '<input type="file" id="loadInput" accept="application/json">'}</div>
+  <div class="card"><h3>Konto</h3><div class="small">Angemeldet als <strong>${state.username||'-'}</strong></div><div class="small" style="color:${statusColor}">Server-Status: ${statusLabel}</div><div class="small">Server: ${url}</div><div style="height:10px"></div><button class="btn danger" id="logoutBtn">Abmelden</button> <button class="btn alt" id="changeServerBtn2">Server wechseln</button></div>
+  <div class="card"><h3>Spielstand-Sicherung</h3><div class="small">Der Server speichert automatisch und dauerhaft. Diese Buttons erstellen zusätzlich eine lokale Sicherungskopie deines Imperiums.</div><div style="height:10px"></div><button class="btn" id="saveBtn">Backup herunterladen</button><div style="height:10px"></div>${native ? '<button class="btn alt" id="loadBtnNative">Backup wiederherstellen</button>' : '<input type="file" id="loadInput" accept="application/json">'}</div>
   </div>`;
 }
 
@@ -561,12 +814,11 @@ function viewReports(){ if(state.reports.length===0) return `<h2>Berichte</h2><d
 function viewEmpire(){ return `<h2>Imperium</h2><div class="small">Gesamtpunkte: ${fmt(totalPlayerPoints())}</div><div style="height:10px"></div><table><thead><tr><th>Planet</th><th>Koordinaten</th><th>Metall/h</th><th>Kristall/h</th><th>Deut/h</th><th>Energie</th><th>Punkte</th></tr></thead><tbody>${state.planets.map(p=>{ const inc=hourly(p), e=energyStats(p), pts=Math.floor(computePoints(p)/1000); return `<tr><td>${p.name}</td><td>${coordLinkHtml(p.coords)}</td><td>${fmt1(inc.metal)}</td><td>${fmt1(inc.crystal)}</td><td>${fmt1(inc.deut)}</td><td>${fmt(e.prod)}/${fmt(e.use)}</td><td>${fmt(pts)}</td></tr>`; }).join('')}</tbody></table>`; }
 
 function viewHighscore(){
-  const playerPoints = totalPlayerPoints();
-  const rivalNames = ['Nova Collective','Void Reavers','Ashfall Syndicate','Ember Concord','Ironclad Dominion','Solar Wardens','Drift Cartel','Umbra Legion'];
-  const factors = [3.2, 1.8, 1.3, 0.85, 0.6, 0.4, 0.25, 0.12];
-  const rivals = rivalNames.map((name,i)=>({name, points: Math.max(500, Math.floor(playerPoints*factors[i]) + (i*777)%5000)}));
-  const all = [...rivals, {name:'Du ('+active().name+' Imperium)', points: playerPoints, isPlayer:true}].sort((a,b)=>b.points-a.points);
-  return `<h2>Rangliste</h2><div class="small">Punkte basieren auf dem Ressourcenwert aller Gebäude, Forschungen und Schiffe (simulierte Rivalen zur Einordnung).</div><div style="height:10px"></div><table><thead><tr><th>Rang</th><th>Imperium</th><th>Punkte</th></tr></thead><tbody>${all.map((e,i)=>`<tr${e.isPlayer?' style="color:var(--accent2);font-weight:700"':''}><td>${i+1}</td><td>${e.name}</td><td>${fmt(e.points)}</td></tr>`).join('')}</tbody></table>`;
+  if(highscoreCache===null && !highscoreLoading){ fetchHighscore(); }
+  if(!highscoreCache){
+    return `<h2>Rangliste</h2><div class="small">Lade Rangliste…</div>`;
+  }
+  return `<h2>Rangliste</h2><div class="small">Echte Punkte aller registrierten Spieler auf diesem Server, basierend auf dem Ressourcenwert aller Gebäude, Forschungen und Schiffe.</div><div style="height:10px"></div><table><thead><tr><th>Rang</th><th>Spieler</th><th>Planeten</th><th>Punkte</th></tr></thead><tbody>${highscoreCache.map((e,i)=>`<tr${e.username===state.username?' style="color:var(--accent2);font-weight:700"':''}><td>${i+1}</td><td>${e.username}${e.username===state.username?' (Du)':''}</td><td>${fmt(e.planets)}</td><td>${fmt(e.points)}</td></tr>`).join('')}</tbody></table>`;
 }
 
 function renderView(bind=true){
@@ -593,6 +845,7 @@ function renderView(bind=true){
       if(Number.isInteger(s) && s>=1 && s<=UNIVERSE.systems) state.galaxySystem=s;
       renderView();
     };
+    const grb=$('#galaxyRefreshBtn'); if(grb) grb.onclick=()=>{ delete galaxyCache[galaxyCacheKey(state.galaxyIndex, state.galaxySystem)]; renderView(true); };
     document.querySelectorAll('[data-mission-target]').forEach(b=>b.onclick=()=>{
       const [mission,gal,sys,pos]=b.dataset.missionTarget.split(':');
       state.fleetPrefill = {mission, gal:Number(gal), sys:Number(sys), pos:Number(pos)};
@@ -601,7 +854,8 @@ function renderView(bind=true){
     const saveBtn=$('#saveBtn'); if(saveBtn) saveBtn.onclick=saveGame;
     const loadInput=$('#loadInput'); if(loadInput) loadInput.onchange=e=>{ if(e.target.files[0]) loadGame(e.target.files[0]); };
     const loadBtnNative=$('#loadBtnNative'); if(loadBtnNative) loadBtnNative.onclick=requestNativeLoad;
-    const serverForm=$('#serverForm'); if(serverForm) serverForm.onsubmit=e=>{e.preventDefault(); const u=serverForm.url.value.trim().replace(/\/$/,''); if(!u) return; setServerUrl(u); connectionStatus='connecting'; connectionError=''; render(); pollState();};
+    const logoutBtn=$('#logoutBtn'); if(logoutBtn) logoutBtn.onclick=logout;
+    const changeServerBtn2=$('#changeServerBtn2'); if(changeServerBtn2) changeServerBtn2.onclick=()=>{ setToken(''); setServerUrl(''); state.username=null; everConnected=false; render(); };
     const ef=$('#expeditionForm'); if(ef) ef.onsubmit=e=>{e.preventDefault(); const ships={lightFighter:Number(ef.lightFighter.value)||0,cruiser:Number(ef.cruiser.value)||0,largeCargo:Number(ef.largeCargo.value)||0,pathfinder:Number(ef.pathfinder.value)||0,reaper:Number(ef.reaper.value)||0}; sendExpedition(ships, Number(ef.slot.value)||1);};
     const depositBtn=$('#depositBtn'); if(depositBtn) depositBtn.onclick=()=>depositAlliance();
     document.querySelectorAll('[data-officer]').forEach(b=>b.onclick=()=>{ if(officerActive(b.dataset.officer)) return; postAction('activateOfficer', {key:b.dataset.officer}); });
@@ -617,10 +871,11 @@ function ensureMoonDefaults(m){ ['lunarBase','sensorPhalanx','jumpGate'].forEach
 function ensureAllDefaults(){ state.planets.forEach(ensurePlanetDefaults); state.moons.forEach(ensureMoonDefaults); if(!state.officerExpiry) state.officerExpiry={}; }
 
 function render(){
-  if(!getServerUrl() || !everConnected){
-    renderConnectScreen();
-    return;
-  }
+  const phase = computePhase();
+  if(phase==='connect'){ document.body.classList.add('disconnected'); renderConnectScreen(); return; }
+  if(phase==='auth'){ document.body.classList.add('disconnected'); renderAuthScreen(); return; }
+  if(phase==='loading'){ document.body.classList.add('disconnected'); renderLoadingScreen(); return; }
+  if(phase==='admin'){ document.body.classList.add('disconnected'); renderAdminPanel(); return; }
   document.body.classList.remove('disconnected');
   ensureAllDefaults();
   if(state.activeMoonIndex===null && state.moons.length>0) state.activeMoonIndex=0;
@@ -630,12 +885,12 @@ function render(){
 
 function initConnection(){
   render();
-  if(getServerUrl()){
+  if(getServerUrl() && getToken()){
     connectionStatus='connecting';
     pollState();
   }
   if(pollTimer) clearInterval(pollTimer);
-  pollTimer = setInterval(pollState, 1500);
+  pollTimer = setInterval(()=>{ if(getToken()) pollState(); }, 1500);
 }
 
 initConnection();

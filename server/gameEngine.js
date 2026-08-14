@@ -71,41 +71,70 @@ const defs = {
 const missionLabels = {transport:'Transport', spy:'Spionage', attack:'Angriff', colonize:'Kolonisierung', harvest:'Trümmerfeld-Bergung'};
 const UNIVERSE = { galaxies: 9, systems: 499, positions: 15 };
 
-function createInitialState(){
-  return {
-    timeScale: 20,
-    now: Date.now(),
-    planets: [
-      {name:'Terra Prime', coords:[1,145,7], owner:'player', resources:{metal:2200, crystal:1400, deut:900}, buildings:{metalMine:5, crystalMine:4, deutSynth:3, solarPlant:5, robotFactory:2, shipyard:2, researchLab:2, metalStorage:2, crystalStorage:2, deutTank:2, missileLauncher:4, lightLaser:2, heavyLaser:0}, research:{energyTech:1, combustion:1, computerTech:0, weaponsTech:0, shieldingTech:0, espionageTech:0}, ships:{smallCargo:6, largeCargo:1, colonyShip:1, espionageProbe:3, lightFighter:8, cruiser:0, recycler:0}, buildQueue:[], researchQueue:[], shipQueue:[]},
-      {name:'Nova Draconis', coords:[1,201,10], owner:'player', resources:{metal:900, crystal:550, deut:220}, buildings:{metalMine:3, crystalMine:3, deutSynth:2, solarPlant:3, robotFactory:1, shipyard:1, researchLab:1, metalStorage:1, crystalStorage:1, deutTank:1, missileLauncher:2, lightLaser:0, heavyLaser:0}, research:{energyTech:0, combustion:0, computerTech:0, weaponsTech:0, shieldingTech:0, espionageTech:0}, ships:{smallCargo:2, largeCargo:0, colonyShip:0, espionageProbe:1, lightFighter:2, cruiser:0, recycler:0}, buildQueue:[], researchQueue:[], shipQueue:[]},
-      {name:'Asterion', coords:[1,312,5], owner:'player', resources:{metal:1500, crystal:900, deut:500}, buildings:{metalMine:5, crystalMine:4, deutSynth:3, solarPlant:5, robotFactory:2, shipyard:2, researchLab:2, metalStorage:2, crystalStorage:2, deutTank:2, missileLauncher:6, lightLaser:3, heavyLaser:0}, research:{energyTech:1, combustion:1, computerTech:0, weaponsTech:1, shieldingTech:0, espionageTech:0}, ships:{smallCargo:6, largeCargo:1, colonyShip:0, espionageProbe:3, lightFighter:4, cruiser:1, recycler:0}, buildQueue:[], researchQueue:[], shipQueue:[]}
-    ],
-    fleets: [],
-    reports: [],
-    messages: ['Willkommen: Vollständiges OGame-Feature-Set aktiv (Monde, Allianz, Offiziere, Expeditionen, Lebensformen-Basis, Kampfsimulation, Rangliste, Händler).'],
-    debrisFields: {},
-    moons: [],
-    alliance: {name:'Freie Sternenflotte', tag:'FSF', members:['Du','Kryon Def.','Vesper Union'], points:20000, depot:{metal:0, crystal:0, deut:0}},
-    officerExpiry: {},
-    darkMatter: 4200,
-    expeditions: [],
-    lifeform: {active:'humans', points:0, buildings:{}, research:{}},
-    marketRate: { metal:1, crystal:1.5, deut:3 },
-    logs: ['Neue Galaxie initialisiert.'],
-  };
-}
+// ---- Universe / accounts ----
+
+function createUniverse(){ return { accounts: {}, players: {} }; }
 
 function coordStr(c){ return '['+c[0]+':'+c[1]+':'+c[2]+']'; }
 function coordLinkHtml(coord, label){ return `<button type="button" class="coord-link" data-coord="${coord[0]}:${coord[1]}:${coord[2]}">${label!=null?label:coordStr(coord)}</button>`; }
 function validCoord(galaxy, system, pos){ return Number.isInteger(galaxy) && galaxy>=1 && galaxy<=UNIVERSE.galaxies && Number.isInteger(system) && system>=1 && system<=UNIVERSE.systems && Number.isInteger(pos) && pos>=1 && pos<=UNIVERSE.positions; }
 function debrisKey(coord){ return coord[0]+':'+coord[1]+':'+coord[2]; }
 
-function seedGalaxy(state, galaxy, system){
+function createStarterEmpire(coord, name){
+  const planet = {
+    name: (name && String(name).trim()) || 'Heimatwelt',
+    coords: coord,
+    resources: {metal:1000, crystal:500, deut:0},
+    buildings: {}, research: {}, ships: {},
+    buildQueue: [], researchQueue: [], shipQueue: []
+  };
+  ensurePlanetDefaults(planet);
+  return {
+    timeScale: 20,
+    now: Date.now(),
+    planets: [planet],
+    fleets: [],
+    reports: [],
+    messages: ['Willkommen bei Stellare Industrien! Dein Heimatplanet wurde bei '+coordStr(coord)+' gegründet.'],
+    debrisFields: {},
+    moons: [],
+    alliance: {name:'Unabhängig', tag:'-', members:[], points:0, depot:{metal:0, crystal:0, deut:0}},
+    officerExpiry: {},
+    darkMatter: 500,
+    expeditions: [],
+    lifeform: {active:'humans', points:0, buildings:{}, research:{}},
+    marketRate: { metal:1, crystal:1.5, deut:3 },
+    logs: ['Imperium gegründet.'],
+  };
+}
+
+// Finds which player (if any) owns a planet at the given coordinate.
+function findPlanetOwner(universe, coord, excludeUsername){
+  for(const [username, state] of Object.entries(universe.players)){
+    if(username === excludeUsername) continue;
+    const idx = state.planets.findIndex(pl=>pl.coords[0]===coord[0] && pl.coords[1]===coord[1] && pl.coords[2]===coord[2]);
+    if(idx>=0) return { username, planetIndex: idx };
+  }
+  return null;
+}
+
+// Deterministic NPC/empty layout, overlaid with real player planets for the viewer.
+function seedGalaxy(universe, galaxy, system, viewerUsername){
+  const occupied = {};
+  for(const [username, state] of Object.entries(universe.players)){
+    state.planets.forEach((pl, idx)=>{
+      if(pl.coords[0]===galaxy && pl.coords[1]===system) occupied[pl.coords[2]] = {username, planetIndex:idx, planet:pl};
+    });
+  }
   const rnd = (seed)=>{ let x=Math.sin(seed*999+system*13+galaxy*104729)*10000; return x-Math.floor(x); };
   const slots = [];
   for(let pos=1; pos<=UNIVERSE.positions; pos++){
-    const owned = state.planets.find(p=>p.coords[0]===galaxy && p.coords[1]===system && p.coords[2]===pos);
-    if(owned){ slots.push({pos, type:'own', planet:owned}); continue; }
+    const o = occupied[pos];
+    if(o){
+      if(o.username===viewerUsername) slots.push({pos, type:'own', planet:o.planet});
+      else slots.push({pos, type:'player', ownerUsername:o.username, planetName:o.planet.name, coords:o.planet.coords});
+      continue;
+    }
     const r = rnd(pos+system);
     if(r < 0.35){
       const level = Math.max(3, Math.floor(r*30));
@@ -118,6 +147,61 @@ function seedGalaxy(state, galaxy, system){
     }
   }
   return slots;
+}
+
+function isPositionFree(universe, galaxy, system, pos){
+  if(!validCoord(galaxy, system, pos)) return false;
+  if(findPlanetOwner(universe, [galaxy,system,pos], null)) return false;
+  const slots = seedGalaxy(universe, galaxy, system, null);
+  const slot = slots.find(s=>s.pos===pos);
+  return !!slot && slot.type==='empty';
+}
+
+function registerAccount(universe, username, passwordHash, coord, planetName){
+  username = String(username||'').trim();
+  if(!/^[A-Za-z0-9_\-]{3,20}$/.test(username)) return { ok:false, error:'Benutzername muss 3-20 Zeichen sein (Buchstaben, Zahlen, _ -)' };
+  if(universe.accounts[username]) return { ok:false, error:'Benutzername bereits vergeben' };
+  const [gal, sys, pos] = coord;
+  if(!validCoord(gal, sys, pos)) return { ok:false, error:'Ungültige Koordinaten' };
+  if(!isPositionFree(universe, gal, sys, pos)) return { ok:false, error:'Diese Position ist bereits belegt' };
+  universe.accounts[username] = { salt: passwordHash.salt, hash: passwordHash.hash, isAdmin:false, createdAt: Date.now() };
+  universe.players[username] = createStarterEmpire([gal,sys,pos], planetName);
+  return { ok:true };
+}
+
+function computeHighscore(universe){
+  return Object.entries(universe.players)
+    .map(([username, state])=>({ username, points: totalPlayerPoints(state), planets: state.planets.length }))
+    .sort((a,b)=>b.points-a.points);
+}
+
+function adminListPlayers(universe){
+  return Object.entries(universe.players).map(([username, state])=>({
+    username,
+    planets: state.planets.length,
+    points: totalPlayerPoints(state),
+    darkMatter: state.darkMatter,
+    createdAt: universe.accounts[username] ? universe.accounts[username].createdAt : null,
+    homeCoords: state.planets[0] ? state.planets[0].coords : null,
+  })).sort((a,b)=>b.points-a.points);
+}
+function adminDeletePlayer(universe, username){
+  username = String(username||'').trim();
+  if(universe.accounts[username] && universe.accounts[username].isAdmin) return { ok:false, error:'Admin-Konto kann nicht gelöscht werden' };
+  if(!universe.players[username]) return { ok:false, error:'Spieler nicht gefunden' };
+  delete universe.players[username];
+  delete universe.accounts[username];
+  return { ok:true };
+}
+function adminGrantResources(universe, username, res){
+  username = String(username||'').trim();
+  const state = universe.players[username];
+  if(!state) return { ok:false, error:'Spieler nicht gefunden' };
+  const p = state.planets[0];
+  if(!p) return { ok:false, error:'Spieler hat keinen Planeten' };
+  addRes(p, {metal:Number(res.metal)||0, crystal:Number(res.crystal)||0, deut:Number(res.deut)||0});
+  log(state, 'Admin hat Ressourcen gutgeschrieben');
+  return { ok:true };
 }
 
 function log(state, msg){ state.logs.unshift(new Date().toLocaleTimeString('de-DE')+' · '+msg); state.logs = state.logs.slice(0,10); }
@@ -224,10 +308,27 @@ function totalPlayerPoints(state){ return Math.floor(state.planets.reduce((s,p)=
 
 function ensurePlanetDefaults(p){ Object.keys(defs.buildings).forEach(k=>{ if(p.buildings[k]==null) p.buildings[k]=0; }); Object.keys(defs.research).forEach(k=>{ if(p.research[k]==null) p.research[k]=0; }); Object.keys(defs.ships).forEach(k=>{ if(p.ships[k]==null) p.ships[k]=0; }); if(!p.buildQueue) p.buildQueue=[]; if(!p.researchQueue) p.researchQueue=[]; if(!p.shipQueue) p.shipQueue=[]; }
 function ensureMoonDefaults(m){ ['lunarBase','sensorPhalanx','jumpGate'].forEach(k=>{ if(m.buildings[k]==null) m.buildings[k]=0; }); Object.keys(defs.ships).forEach(k=>{ if(m.ships[k]==null) m.ships[k]=0; }); if(!m.buildQueue) m.buildQueue=[]; }
-function ensureAllDefaults(state){ state.planets.forEach(ensurePlanetDefaults); state.moons.forEach(ensureMoonDefaults); if(!state.officerExpiry) state.officerExpiry={}; if(!state.marketRate) state.marketRate={metal:1,crystal:1.5,deut:3}; }
+function ensureAllDefaults(state){
+  state.planets.forEach(ensurePlanetDefaults);
+  state.moons.forEach(ensureMoonDefaults);
+  if(!state.officerExpiry) state.officerExpiry={};
+  if(!state.marketRate) state.marketRate={metal:1,crystal:1.5,deut:3};
+  if(state.darkMatter==null) state.darkMatter=0;
+  if(!state.expeditions) state.expeditions=[];
+  if(!state.lifeform) state.lifeform={active:'humans',points:0,buildings:{},research:{}};
+  if(!state.alliance) state.alliance={name:'Unabhängig',tag:'-',members:[],points:0,depot:{metal:0,crystal:0,deut:0}};
+  if(!state.logs) state.logs=[];
+  if(!state.messages) state.messages=[];
+  if(!state.reports) state.reports=[];
+  if(!state.fleets) state.fleets=[];
+  if(!state.moons) state.moons=[];
+  if(!state.debrisFields) state.debrisFields={};
+  if(state.now==null) state.now=Date.now();
+  if(state.timeScale==null) state.timeScale=20;
+}
 
-function normalizeState(data){
-  const fresh = createInitialState();
+function normalizePlayerState(data){
+  const fresh = createStarterEmpire([1,1,1], 'Heimatwelt');
   const state = {
     timeScale: 20,
     now: Date.now(),
@@ -249,7 +350,17 @@ function normalizeState(data){
   return state;
 }
 
-// ---- Action handlers ----
+function normalizeUniverse(data){
+  const universe = { accounts: (data && data.accounts) || {}, players: {} };
+  const playersData = (data && data.players) || {};
+  for(const [username, pstate] of Object.entries(playersData)){
+    ensureAllDefaults(pstate);
+    universe.players[username] = pstate;
+  }
+  return universe;
+}
+
+// ---- Action handlers (operate on a single player's empire state) ----
 
 function requirePlanet(state, planetIndex){
   const p = state.planets[planetIndex];
@@ -312,7 +423,8 @@ function enqueueDefense(state, planetIndex, key){
   return ok(state, def.name+' in Bau');
 }
 
-function sendFleet(state, planetIndex, params){
+function sendFleet(universe, username, planetIndex, params){
+  const state = universe.players[username];
   const p = requirePlanet(state, planetIndex);
   const mission = params.mission;
   if(!missionLabels[mission]) return fail(state, 'Unbekannte Mission');
@@ -321,11 +433,15 @@ function sendFleet(state, planetIndex, params){
   const toCoord = [gal, sys, pos];
   const ownIdx = state.planets.findIndex(pl=>pl.coords[0]===gal && pl.coords[1]===sys && pl.coords[2]===pos);
   if(mission==='attack' && ownIdx>=0) return fail(state, 'Eigene Planeten können nicht angegriffen werden');
-  let toPlanetIndex=null, npcSlot=null, emptySlot=null;
+  let toPlanetIndex=null, toOwner=null, npcSlot=null, emptySlot=null;
   if(ownIdx>=0) toPlanetIndex = ownIdx;
   else {
-    const slots = seedGalaxy(state, gal, sys); const slot = slots.find(s=>s.pos===pos);
-    if(slot.type==='npc') npcSlot = slot; else if(slot.type==='empty') emptySlot = slot;
+    const owner = findPlanetOwner(universe, toCoord, username);
+    if(owner){ toPlanetIndex = owner.planetIndex; toOwner = owner.username; }
+    else {
+      const slots = seedGalaxy(universe, gal, sys, username); const slot = slots.find(s=>s.pos===pos);
+      if(slot.type==='npc') npcSlot = slot; else if(slot.type==='empty') emptySlot = slot;
+    }
   }
   const ships = {};
   Object.keys(defs.ships).forEach(k=>{ if(defs.ships[k].role!=='power') ships[k]=Number((params.ships||{})[k])||0; });
@@ -352,7 +468,7 @@ function sendFleet(state, planetIndex, params){
   if(mission==='transport'){ p.resources.metal-=cargo.metal; p.resources.crystal-=cargo.crystal; p.resources.deut-=cargo.deut; }
   p.resources.deut-=fuel;
 
-  state.fleets.push({from:planetIndex, toCoord, toPlanetIndex, npcSlot, emptySlot, ships, cargo:mission==='transport'?cargo:{metal:0,crystal:0,deut:0}, mission, arrive:Date.now()+dur*1000, returnAt:Date.now()+dur*2000, phase:'outbound', fuel});
+  state.fleets.push({from:planetIndex, toCoord, toPlanetIndex, toOwner, npcSlot, emptySlot, ships, cargo:mission==='transport'?cargo:{metal:0,crystal:0,deut:0}, mission, arrive:Date.now()+dur*1000, returnAt:Date.now()+dur*2000, phase:'outbound', fuel});
   return ok(state, missionLabels[mission]+'-Flotte nach '+coordLinkHtml(toCoord)+' gestartet');
 }
 
@@ -451,7 +567,8 @@ function merchantBuy(state, planetIndex, resourceType, amount){
   addRes(p, {[resourceType]:amount});
   return ok(state, 'Händler: '+amount+' '+resourceType+' für '+cost+' Dunkle Materie gekauft');
 }
-function launchMissiles(state, planetIndex, targetPos, count){
+function launchMissiles(universe, username, planetIndex, targetPos, count){
+  const state = universe.players[username];
   const p = requirePlanet(state, planetIndex);
   count = Math.floor(Number(count))||0;
   targetPos = Math.floor(Number(targetPos))||0;
@@ -459,14 +576,40 @@ function launchMissiles(state, planetIndex, targetPos, count){
   if(targetPos<1 || targetPos>UNIVERSE.positions) return fail(state, 'Ungültige Zielposition');
   const ownIdx = state.planets.findIndex(pl=>pl.coords[0]===p.coords[0] && pl.coords[1]===p.coords[1] && pl.coords[2]===targetPos);
   if(ownIdx>=0) return fail(state, 'Eigene Planeten können nicht angegriffen werden');
-  const slots = seedGalaxy(state, p.coords[0], p.coords[1]); const slot = slots.find(s=>s.pos===targetPos);
-  if(!slot || slot.type!=='npc') return fail(state, 'Kein gültiges Ziel auf dieser Position');
+  const targetCoord = [p.coords[0], p.coords[1], targetPos];
+  const owner = findPlanetOwner(universe, targetCoord, username);
+  let npcSlot = null;
+  if(!owner){
+    const slots = seedGalaxy(universe, p.coords[0], p.coords[1], username); const slot = slots.find(s=>s.pos===targetPos);
+    if(!slot || slot.type!=='npc') return fail(state, 'Kein gültiges Ziel auf dieser Position');
+    npcSlot = slot;
+  }
   p.buildings.interplanetaryMissile -= count;
   const missileAttack = count*defs.buildings.interplanetaryMissile.attack;
-  const defPower = sidePower(slot.defenseShips, defs.buildings).attack;
+  if(owner){
+    const targetState = universe.players[owner.username];
+    const t = targetState.planets[owner.planetIndex];
+    const defBefore = extractDefense(t.buildings);
+    const defPower = sidePower(defBefore, defs.buildings).attack;
+    const netDamage = Math.max(0, missileAttack-defPower);
+    if(netDamage>0){
+      const totalHull = sidePower(defBefore, defs.buildings).hull;
+      const destroyRatio = totalHull>0 ? Math.min(1, netDamage/totalHull) : 0;
+      const survivingDef = applyLosses(defBefore, destroyRatio);
+      for(const k of Object.keys(defBefore)) t.buildings[k]=survivingDef[k];
+      message(state, 'Raketenangriff auf '+t.name+' ('+owner.username+') bei '+coordLinkHtml(targetCoord)+': '+netDamage+' Schaden an der Verteidigung.');
+      log(state, 'Raketenangriff auf '+owner.username+' · '+netDamage+' Schaden');
+      message(targetState, 'Dein Planet '+t.name+' wurde von '+username+' mit Raketen beschossen! Schaden: '+netDamage+'.');
+      log(targetState, 'Raketenangriff von '+username+' erlitten');
+      return ok(state, 'Raketen abgefeuert · '+netDamage+' Schaden');
+    }
+    message(state, 'Raketenangriff auf '+t.name+' von der Verteidigung vollständig abgefangen.');
+    return ok(state, 'Raketen abgefeuert · abgefangen');
+  }
+  const defPower = sidePower(npcSlot.defenseShips, defs.buildings).attack;
   const netDamage = Math.max(0, missileAttack-defPower);
-  if(netDamage>0){ message(state, 'Raketenangriff auf '+slot.name+' bei '+coordLinkHtml([p.coords[0],p.coords[1],targetPos])+': '+netDamage+' Schaden an der Verteidigung.'); return ok(state, 'Raketen abgefeuert · '+netDamage+' Schaden'); }
-  message(state, 'Raketenangriff auf '+slot.name+' von der Verteidigung vollständig abgefangen.');
+  if(netDamage>0){ message(state, 'Raketenangriff auf '+npcSlot.name+' bei '+coordLinkHtml(targetCoord)+': '+netDamage+' Schaden an der Verteidigung.'); return ok(state, 'Raketen abgefeuert · '+netDamage+' Schaden'); }
+  message(state, 'Raketenangriff auf '+npcSlot.name+' von der Verteidigung vollständig abgefangen.');
   return ok(state, 'Raketen abgefeuert · abgefangen');
 }
 function activateOfficer(state, key){
@@ -485,16 +628,30 @@ function setLifeform(state, species){
   return ok(state, 'Lebensform gewechselt');
 }
 
-function resolveArrival(state, f){
+function resolveArrival(universe, username, f){
+  const state = universe.players[username];
+  const targetState = f.toOwner ? universe.players[f.toOwner] : null;
   if(f.mission==='transport'){
-    const target = f.toPlanetIndex!=null ? state.planets[f.toPlanetIndex] : null;
-    if(target){ addRes(target,f.cargo); log(state, 'Transport hat '+target.name+' erreicht und entladen'); }
+    const target = targetState ? targetState.planets[f.toPlanetIndex] : (f.toPlanetIndex!=null ? state.planets[f.toPlanetIndex] : null);
+    if(target){
+      addRes(target,f.cargo);
+      log(state, 'Transport hat '+target.name+' erreicht und entladen');
+      if(targetState){ message(targetState, 'Eingehender Transport von '+username+' bei '+coordLinkHtml(target.coords)+' erhalten.'); log(targetState, 'Transport von '+username+' erhalten'); }
+    }
     f.phase='return';
   } else if(f.mission==='spy'){
     if(f.npcSlot){
       const defPower = sidePower(f.npcSlot.defenseShips, defs.buildings).attack;
       state.reports.unshift({time:new Date().toLocaleTimeString('de-DE'), target:f.npcSlot.name, coords:coordStr(f.toCoord), coordArr:f.toCoord, resources:{metal:f.npcSlot.metal, crystal:f.npcSlot.crystal, deut:f.npcSlot.deut}, defense:defPower, fleet:f.npcSlot.fleet});
       log(state, 'Spionagebericht über '+f.npcSlot.name+' erhalten');
+    } else if(targetState){
+      const t = targetState.planets[f.toPlanetIndex];
+      if(t){
+        state.reports.unshift({time:new Date().toLocaleTimeString('de-DE'), target:t.name+' ('+f.toOwner+')', coords:coordStr(t.coords), coordArr:t.coords, resources:{...t.resources}, defense:sidePower(extractDefense(t.buildings), defs.buildings).attack, fleet:t.ships});
+        log(state, 'Spionagebericht über '+t.name+' ('+f.toOwner+') erhalten');
+        message(targetState, 'Dein Planet '+t.name+' wurde von '+username+' ausspioniert.');
+        log(targetState, 'Spionage durch '+username+' entdeckt');
+      }
     } else if(f.toPlanetIndex!=null){
       const t = state.planets[f.toPlanetIndex];
       state.reports.unshift({time:new Date().toLocaleTimeString('de-DE'), target:t.name, coords:coordStr(t.coords), coordArr:t.coords, resources:{...t.resources}, defense:sidePower(extractDefense(t.buildings), defs.buildings).attack, fleet:t.ships});
@@ -525,6 +682,40 @@ function resolveArrival(state, f){
         message(state, 'Angriffsbericht: Niederlage gegen '+f.npcSlot.name+' bei '+coordLinkHtml(f.toCoord)+' ('+roundsText+'). Eigene Verluste erlitten.');
         log(state, 'Angriff auf '+f.npcSlot.name+' gescheitert · Verluste erlitten');
       }
+    } else if(targetState){
+      const t = targetState.planets[f.toPlanetIndex];
+      if(!t){ log(state, 'Angriff nicht möglich: Ziel existiert nicht mehr'); f.cargo={metal:0,crystal:0,deut:0}; f.phase='return'; return; }
+      const defBefore = extractDefense(t.buildings);
+      const battle = simulateBattle(f.ships, t.ships, defBefore);
+      const survivingAttacker = applyLosses(f.ships, battle.attackerLossRatio);
+      const survivingDefenderFleet = applyLosses(t.ships, battle.defenderLossRatio);
+      const survivingDef = applyLosses(defBefore, battle.defenderLossRatio);
+      const lostAttacker = diffLosses(f.ships, survivingAttacker);
+      const lostDefenderFleet = diffLosses(t.ships, survivingDefenderFleet);
+      const debrisMetal = Math.floor(shipCostSum(lostAttacker,'metal')*0.3 + shipCostSum(lostDefenderFleet,'metal')*0.3);
+      const debrisCrystal = Math.floor(shipCostSum(lostAttacker,'crystal')*0.3 + shipCostSum(lostDefenderFleet,'crystal')*0.3);
+      f.ships = survivingAttacker;
+      t.ships = survivingDefenderFleet;
+      for(const k of Object.keys(defBefore)) t.buildings[k] = survivingDef[k];
+      const roundsText = battle.rounds>0 ? battle.rounds+' Kampfrunde(n)' : 'kampflos (keine Verteidigung)';
+      if(debrisMetal+debrisCrystal>0){ addDebris(state, f.toCoord, debrisMetal, debrisCrystal); maybeCreateMoon(state, f.toCoord, debrisMetal+debrisCrystal); }
+      if(battle.attackerWon){
+        const loot = {metal: Math.floor(t.resources.metal*0.5), crystal: Math.floor(t.resources.crystal*0.5), deut: Math.floor(t.resources.deut*0.5)};
+        const cap = capacityForShips(f.ships); const totalLoot = Math.min(cap, loot.metal+loot.crystal+loot.deut);
+        const ratio = (loot.metal+loot.crystal+loot.deut)>0 ? totalLoot/(loot.metal+loot.crystal+loot.deut) : 0;
+        f.cargo = {metal:Math.floor(loot.metal*ratio), crystal:Math.floor(loot.crystal*ratio), deut:Math.floor(loot.deut*ratio)};
+        t.resources.metal -= f.cargo.metal; t.resources.crystal -= f.cargo.crystal; t.resources.deut -= f.cargo.deut;
+        message(state, 'Angriffsbericht: Sieg gegen '+t.name+' ('+f.toOwner+') bei '+coordLinkHtml(f.toCoord)+' ('+roundsText+'). Beute '+(f.cargo.metal+f.cargo.crystal+f.cargo.deut)+'. Trümmerfeld: '+(debrisMetal+debrisCrystal)+'.');
+        log(state, 'Angriff auf '+f.toOwner+' erfolgreich · Beute '+(f.cargo.metal+f.cargo.crystal+f.cargo.deut));
+        message(targetState, 'Dein Planet '+t.name+' wurde von '+username+' angegriffen und geplündert! Verlust: '+(f.cargo.metal+f.cargo.crystal+f.cargo.deut)+'.');
+        log(targetState, 'Angriff von '+username+' erlitten · Verluste');
+      } else {
+        f.cargo={metal:0,crystal:0,deut:0};
+        message(state, 'Angriffsbericht: Niederlage gegen '+t.name+' ('+f.toOwner+') bei '+coordLinkHtml(f.toCoord)+' ('+roundsText+'). Eigene Verluste erlitten.');
+        log(state, 'Angriff auf '+f.toOwner+' gescheitert · Verluste erlitten');
+        message(targetState, 'Dein Planet '+t.name+' wurde von '+username+' angegriffen – Verteidigung erfolgreich!');
+        log(targetState, 'Angriff von '+username+' abgewehrt');
+      }
     } else {
       log(state, 'Angriff nicht möglich'); f.cargo={metal:0,crystal:0,deut:0};
     }
@@ -543,8 +734,11 @@ function resolveArrival(state, f){
     f.phase='return';
   } else if(f.mission==='colonize'){
     if(f.emptySlot){
+      if(!isPositionFree(universe, f.toCoord[0], f.toCoord[1], f.toCoord[2])){
+        log(state, 'Kolonisierung fehlgeschlagen: Feld ist inzwischen belegt'); f.phase='return'; return;
+      }
       const homeResearch = state.planets[f.from] ? state.planets[f.from].research : {};
-      const newPlanet = {name:'Kolonie '+coordStr(f.toCoord), coords:f.toCoord, owner:'player', resources:{metal:500, crystal:300, deut:100}, buildings:{metalMine:1, crystalMine:1, deutSynth:0, solarPlant:1, robotFactory:0, shipyard:0, researchLab:0, metalStorage:1, crystalStorage:1, deutTank:1}, research:{...homeResearch}, ships:{smallCargo:0, largeCargo:0, colonyShip:0, espionageProbe:0, lightFighter:0, cruiser:0}, buildQueue:[], researchQueue:[], shipQueue:[]};
+      const newPlanet = {name:'Kolonie '+coordStr(f.toCoord), coords:f.toCoord, resources:{metal:500, crystal:300, deut:100}, buildings:{metalMine:1, crystalMine:1, deutSynth:0, solarPlant:1, robotFactory:0, shipyard:0, researchLab:0, metalStorage:1, crystalStorage:1, deutTank:1}, research:{...homeResearch}, ships:{smallCargo:0, largeCargo:0, colonyShip:0, espionageProbe:0, lightFighter:0, cruiser:0}, buildQueue:[], researchQueue:[], shipQueue:[]};
       ensurePlanetDefaults(newPlanet);
       state.planets.push(newPlanet);
       f.ships.colonyShip = Math.max(0, f.ships.colonyShip-1);
@@ -554,52 +748,58 @@ function resolveArrival(state, f){
   }
 }
 
-function tick(state){
+function tick(universe){
   const now = Date.now();
-  const dt = (now-state.now)/1000; state.now = now;
-  const hours = (dt*state.timeScale)/3600;
-  state.planets.forEach(p=>{
-    const inc = hourly(state, p); const cap = maxStorage(p);
-    p.resources.metal = Math.max(0, Math.min(cap.metal, p.resources.metal+inc.metal*hours));
-    p.resources.crystal = Math.max(0, Math.min(cap.crystal, p.resources.crystal+inc.crystal*hours));
-    p.resources.deut = Math.max(0, Math.min(cap.deut, p.resources.deut+inc.deut*hours));
-    while(p.buildQueue[0] && p.buildQueue[0].done<=now){ const q=p.buildQueue.shift(); p.buildings[q.key]=(p.buildings[q.key]||0)+1; log(state, p.name+': '+q.name+' fertig'); }
-    while(p.researchQueue[0] && p.researchQueue[0].done<=now){ const q=p.researchQueue.shift(); p.research[q.key]=(p.research[q.key]||0)+1; log(state, p.name+': '+q.name+' fertig'); }
-    while(p.shipQueue[0] && p.shipQueue[0].done<=now){ const q=p.shipQueue.shift(); p.ships[q.key]=(p.ships[q.key]||0)+1; log(state, p.name+': '+q.name+' fertig'); }
-  });
-  state.moons.forEach(m=>{ while(m.buildQueue[0] && m.buildQueue[0].done<=now){ const q=m.buildQueue.shift(); m.buildings[q.key]=(m.buildings[q.key]||0)+1; message(state, 'Mond '+coordLinkHtml(m.coord)+': '+q.name+' fertig'); } });
-  state.fleets.forEach(f=>{
-    if(f.phase==='outbound' && f.arrive<=now){ resolveArrival(state, f); }
-    if(f.phase==='return' && f.returnAt<=now){
-      const source = state.planets[f.from];
-      if(source){
-        for(const [k,v] of Object.entries(f.ships)) source.ships[k]=(source.ships[k]||0)+v;
-        if(f.mission!=='transport'&&f.mission!=='colonize') addRes(source,f.cargo);
-        log(state, 'Flotte nach '+source.name+' zurückgekehrt');
+  for(const state of Object.values(universe.players)){
+    const dt = (now-state.now)/1000; state.now = now;
+    const hours = (dt*state.timeScale)/3600;
+    state.planets.forEach(p=>{
+      const inc = hourly(state, p); const cap = maxStorage(p);
+      p.resources.metal = Math.max(0, Math.min(cap.metal, p.resources.metal+inc.metal*hours));
+      p.resources.crystal = Math.max(0, Math.min(cap.crystal, p.resources.crystal+inc.crystal*hours));
+      p.resources.deut = Math.max(0, Math.min(cap.deut, p.resources.deut+inc.deut*hours));
+      while(p.buildQueue[0] && p.buildQueue[0].done<=now){ const q=p.buildQueue.shift(); p.buildings[q.key]=(p.buildings[q.key]||0)+1; log(state, p.name+': '+q.name+' fertig'); }
+      while(p.researchQueue[0] && p.researchQueue[0].done<=now){ const q=p.researchQueue.shift(); p.research[q.key]=(p.research[q.key]||0)+1; log(state, p.name+': '+q.name+' fertig'); }
+      while(p.shipQueue[0] && p.shipQueue[0].done<=now){ const q=p.shipQueue.shift(); p.ships[q.key]=(p.ships[q.key]||0)+1; log(state, p.name+': '+q.name+' fertig'); }
+    });
+    state.moons.forEach(m=>{ while(m.buildQueue[0] && m.buildQueue[0].done<=now){ const q=m.buildQueue.shift(); m.buildings[q.key]=(m.buildings[q.key]||0)+1; message(state, 'Mond '+coordLinkHtml(m.coord)+': '+q.name+' fertig'); } });
+  }
+  for(const [username, state] of Object.entries(universe.players)){
+    state.fleets.forEach(f=>{
+      if(f.phase==='outbound' && f.arrive<=now){ resolveArrival(universe, username, f); }
+      if(f.phase==='return' && f.returnAt<=now){
+        const source = state.planets[f.from];
+        if(source){
+          for(const [k,v] of Object.entries(f.ships)) source.ships[k]=(source.ships[k]||0)+v;
+          if(f.mission!=='transport'&&f.mission!=='colonize') addRes(source,f.cargo);
+          log(state, 'Flotte nach '+source.name+' zurückgekehrt');
+        }
+        f.phase='done';
       }
-      f.phase='done';
-    }
-  });
-  state.fleets = state.fleets.filter(f=>f.phase!=='done');
-  state.expeditions.forEach(exp=>{ if(exp.done<=now && !exp.resolved){ exp.resolved=true; resolveExpedition(state, exp); } });
-  state.expeditions = state.expeditions.filter(exp=>!exp.resolved);
+    });
+    state.fleets = state.fleets.filter(f=>f.phase!=='done');
+    state.expeditions.forEach(exp=>{ if(exp.done<=now && !exp.resolved){ exp.resolved=true; resolveExpedition(state, exp); } });
+    state.expeditions = state.expeditions.filter(exp=>!exp.resolved);
+  }
 }
 
-function applyAction(state, type, payload){
+function applyAction(universe, username, type, payload){
   payload = payload || {};
+  const state = universe.players[username];
+  if(!state) throw new Error('Kein Spielerimperium für dieses Konto');
   switch(type){
     case 'enqueueBuild': return enqueueBuild(state, payload.planetIndex, payload.key);
     case 'enqueueResearch': return enqueueResearch(state, payload.planetIndex, payload.key);
     case 'enqueueShip': return enqueueShip(state, payload.planetIndex, payload.key);
     case 'enqueueDefense': return enqueueDefense(state, payload.planetIndex, payload.key);
-    case 'sendFleet': return sendFleet(state, payload.planetIndex, payload);
+    case 'sendFleet': return sendFleet(universe, username, payload.planetIndex, payload);
     case 'sendExpedition': return sendExpedition(state, payload.planetIndex, payload.ships, payload.durationSlot);
     case 'enqueueMoonBuild': return enqueueMoonBuild(state, payload.planetIndex, payload.moonIndex, payload.key);
     case 'jumpGateTransfer': return jumpGateTransfer(state, payload.fromMoonIndex, payload.toMoonIndex, payload.ships);
     case 'depositAlliance': return depositAlliance(state, payload.planetIndex);
     case 'marketTrade': return marketTrade(state, payload.planetIndex, payload.give, payload.want, payload.amount);
     case 'merchantBuy': return merchantBuy(state, payload.planetIndex, payload.resourceType, payload.amount);
-    case 'launchMissiles': return launchMissiles(state, payload.planetIndex, payload.targetPos, payload.count);
+    case 'launchMissiles': return launchMissiles(universe, username, payload.planetIndex, payload.targetPos, payload.count);
     case 'activateOfficer': return activateOfficer(state, payload.key);
     case 'setLifeform': return setLifeform(state, payload.species);
     default: throw new Error('Unbekannte Aktion: '+type);
@@ -608,7 +808,9 @@ function applyAction(state, type, payload){
 
 module.exports = {
   defs, UNIVERSE, missionLabels,
-  createInitialState, normalizeState, ensureAllDefaults,
+  createUniverse, normalizeUniverse, normalizePlayerState, createStarterEmpire,
+  registerAccount, findPlanetOwner, isPositionFree,
   seedGalaxy, validCoord, coordStr, coordLinkHtml, debrisKey,
+  computeHighscore, adminListPlayers, adminDeletePlayer, adminGrantResources,
   applyAction, tick,
 };

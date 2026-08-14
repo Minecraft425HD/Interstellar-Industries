@@ -4,39 +4,73 @@ const express = require('express');
 const fs = require('fs');
 const path = require('path');
 const engine = require('./gameEngine');
+const auth = require('./auth');
 
 const PORT = process.env.PORT || 3000;
 const DATA_DIR = path.join(__dirname, 'data');
-const DATA_FILE = path.join(DATA_DIR, 'state.json');
+const DATA_FILE = path.join(DATA_DIR, 'universe.json');
 
-function loadState(){
+const ADMIN_USERNAME = 'admin';
+const ADMIN_PASSWORD = 'Scheissexbox2.';
+
+function ensureAdminAccount(universe){
+  if(!universe.accounts[ADMIN_USERNAME]){
+    const { salt, hash } = auth.hashPassword(ADMIN_PASSWORD);
+    universe.accounts[ADMIN_USERNAME] = { salt, hash, isAdmin:true, createdAt: Date.now() };
+    console.log('Admin-Konto initialisiert (Benutzername: ' + ADMIN_USERNAME + ')');
+  }
+}
+
+function loadUniverse(){
   try {
     if(fs.existsSync(DATA_FILE)){
       const raw = fs.readFileSync(DATA_FILE, 'utf8');
-      const state = engine.normalizeState(JSON.parse(raw));
-      console.log('Spielstand geladen aus ' + DATA_FILE);
-      return state;
+      const universe = engine.normalizeUniverse(JSON.parse(raw));
+      console.log('Universum geladen aus ' + DATA_FILE + ' ('+Object.keys(universe.players).length+' Spieler)');
+      ensureAdminAccount(universe);
+      return universe;
     }
   } catch(e){
-    console.error('Spielstand konnte nicht geladen werden, starte neu:', e.message);
+    console.error('Universum konnte nicht geladen werden, starte neu:', e.message);
   }
-  console.log('Kein vorhandener Spielstand gefunden, initialisiere neues Universum.');
-  return engine.createInitialState();
+  console.log('Kein vorhandenes Universum gefunden, initialisiere neu.');
+  const universe = engine.createUniverse();
+  ensureAdminAccount(universe);
+  return universe;
 }
 
-let state = loadState();
+let universe = loadUniverse();
 let dirty = false;
 
-function saveState(){
+function saveUniverse(){
   try {
     fs.mkdirSync(DATA_DIR, { recursive: true });
     const tmpFile = DATA_FILE + '.tmp';
-    fs.writeFileSync(tmpFile, JSON.stringify(state));
+    fs.writeFileSync(tmpFile, JSON.stringify(universe));
     fs.renameSync(tmpFile, DATA_FILE);
     dirty = false;
   } catch(e){
-    console.error('Spielstand konnte nicht gespeichert werden:', e.message);
+    console.error('Universum konnte nicht gespeichert werden:', e.message);
   }
+}
+
+// ---- Sessions (in-memory; a restart simply requires logging in again) ----
+const sessions = new Map(); // token -> { username, isAdmin, createdAt }
+const SESSION_TTL_MS = 30*24*3600*1000;
+
+function issueToken(username, isAdmin){
+  const token = auth.genToken();
+  sessions.set(token, { username, isAdmin, createdAt: Date.now() });
+  return token;
+}
+function sessionFromHeader(req){
+  const header = req.headers.authorization || '';
+  const token = header.startsWith('Bearer ') ? header.slice(7) : null;
+  if(!token) return null;
+  const s = sessions.get(token);
+  if(!s) return null;
+  if(Date.now() - s.createdAt > SESSION_TTL_MS){ sessions.delete(token); return null; }
+  return { token, ...s };
 }
 
 const app = express();
@@ -45,62 +79,138 @@ app.use(express.json({ limit: '2mb' }));
 app.use((req, res, next) => {
   res.header('Access-Control-Allow-Origin', '*');
   res.header('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Content-Type');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   if(req.method === 'OPTIONS') return res.sendStatus(200);
   next();
 });
 
+function requireAuth(req, res, next){
+  const session = sessionFromHeader(req);
+  if(!session) return res.status(401).json({ ok:false, error:'Nicht angemeldet' });
+  req.username = session.username;
+  req.isAdmin = session.isAdmin;
+  next();
+}
+function requireAdmin(req, res, next){
+  if(!req.isAdmin) return res.status(403).json({ ok:false, error:'Admin-Rechte erforderlich' });
+  next();
+}
+
 app.get('/api/health', (req, res) => {
-  res.json({ ok: true, uptime: process.uptime(), planets: state.planets.length });
+  res.json({ ok:true, uptime: process.uptime(), players: Object.keys(universe.players).length });
 });
 
-app.get('/api/state', (req, res) => {
-  res.json(state);
+// Coordinate occupancy for a system — public so the registration screen (no token yet) can show free slots.
+app.get('/api/galaxy', (req, res) => {
+  const galaxy = Number(req.query.galaxy), system = Number(req.query.system);
+  if(!engine.validCoord(galaxy, system, 1)) return res.status(400).json({ ok:false, error:'Ungültige Koordinaten' });
+  const session = sessionFromHeader(req);
+  const slots = engine.seedGalaxy(universe, galaxy, system, session ? session.username : null);
+  res.json({ ok:true, slots });
 });
 
-app.post('/api/action', (req, res) => {
+app.post('/api/register', (req, res) => {
+  const { username, password, galaxy, system, position, planetName } = req.body || {};
+  if(!username || !password) return res.status(400).json({ ok:false, error:'Benutzername und Passwort erforderlich' });
+  if(String(password).length < 6) return res.status(400).json({ ok:false, error:'Passwort muss mindestens 6 Zeichen haben' });
+  const coord = [Number(galaxy), Number(system), Number(position)];
+  const passwordHash = auth.hashPassword(password);
+  const result = engine.registerAccount(universe, username, passwordHash, coord, planetName);
+  if(!result.ok) return res.status(400).json(result);
+  dirty = true; saveUniverse();
+  const uname = String(username).trim();
+  const token = issueToken(uname, false);
+  res.json({ ok:true, token, username: uname, isAdmin:false });
+});
+
+app.post('/api/login', (req, res) => {
+  const uname = String((req.body && req.body.username) || '').trim();
+  const password = (req.body && req.body.password) || '';
+  const account = universe.accounts[uname];
+  if(!account || !auth.verifyPassword(password, account.salt, account.hash)){
+    return res.status(401).json({ ok:false, error:'Benutzername oder Passwort falsch' });
+  }
+  const token = issueToken(uname, !!account.isAdmin);
+  res.json({ ok:true, token, username: uname, isAdmin: !!account.isAdmin });
+});
+
+app.post('/api/logout', requireAuth, (req, res) => {
+  const session = sessionFromHeader(req);
+  if(session) sessions.delete(session.token);
+  res.json({ ok:true });
+});
+
+app.get('/api/state', requireAuth, (req, res) => {
+  const empire = universe.players[req.username];
+  if(!empire) return res.json({ ok:true, isAdmin: req.isAdmin, username: req.username, planets: null });
+  res.json(Object.assign({ ok:true, isAdmin: req.isAdmin, username: req.username }, empire));
+});
+
+app.post('/api/action', requireAuth, (req, res) => {
   const { type, payload } = req.body || {};
-  if(!type) return res.status(400).json({ ok: false, error: 'Kein Aktionstyp angegeben' });
+  if(!type) return res.status(400).json({ ok:false, error:'Kein Aktionstyp angegeben' });
+  if(!universe.players[req.username]) return res.status(400).json({ ok:false, error:'Dieses Konto hat kein Spielerimperium (Admin-Konten spielen nicht mit)' });
   try {
-    const result = engine.applyAction(state, type, payload);
+    const result = engine.applyAction(universe, req.username, type, payload);
     dirty = true;
-    saveState();
-    res.json({ ok: result.ok, message: result.message, state });
+    saveUniverse();
+    res.json({ ok: result.ok, message: result.message, state: Object.assign({ isAdmin: req.isAdmin, username: req.username }, universe.players[req.username]) });
   } catch(err){
     console.error('Aktion fehlgeschlagen:', type, err.message);
-    res.status(400).json({ ok: false, error: err.message, state });
+    res.status(400).json({ ok:false, error: err.message });
   }
 });
 
-app.get('/api/backup', (req, res) => {
+app.get('/api/backup', requireAuth, (req, res) => {
+  if(!universe.players[req.username]) return res.status(400).json({ ok:false, error:'Kein Spielerimperium' });
   res.setHeader('Content-Disposition', 'attachment; filename="stellare-industrien-backup.json"');
-  res.json(state);
+  res.json(universe.players[req.username]);
 });
 
-app.post('/api/restore', (req, res) => {
+app.post('/api/restore', requireAuth, (req, res) => {
   try {
-    state = engine.normalizeState(req.body);
-    saveState();
-    res.json({ ok: true, state });
+    if(!universe.players[req.username]) return res.status(400).json({ ok:false, error:'Kein Spielerimperium' });
+    universe.players[req.username] = engine.normalizePlayerState(req.body);
+    dirty = true; saveUniverse();
+    res.json({ ok:true, state: Object.assign({ isAdmin: req.isAdmin, username: req.username }, universe.players[req.username]) });
   } catch(err){
-    res.status(400).json({ ok: false, error: err.message });
+    res.status(400).json({ ok:false, error: err.message });
   }
 });
 
-// tick loop: the universe keeps advancing even with no client connected
+app.get('/api/highscore', requireAuth, (req, res) => {
+  res.json({ ok:true, list: engine.computeHighscore(universe) });
+});
+
+app.get('/api/admin/players', requireAuth, requireAdmin, (req, res) => {
+  res.json({ ok:true, players: engine.adminListPlayers(universe) });
+});
+app.post('/api/admin/deletePlayer', requireAuth, requireAdmin, (req, res) => {
+  const result = engine.adminDeletePlayer(universe, req.body && req.body.username);
+  if(result.ok){ dirty=true; saveUniverse(); }
+  res.status(result.ok?200:400).json(result);
+});
+app.post('/api/admin/grantResources', requireAuth, requireAdmin, (req, res) => {
+  const { username, metal, crystal, deut } = req.body || {};
+  const result = engine.adminGrantResources(universe, username, { metal, crystal, deut });
+  if(result.ok){ dirty=true; saveUniverse(); }
+  res.status(result.ok?200:400).json(result);
+});
+
+// tick loop: the universe keeps advancing for every player even with no client connected
 setInterval(() => {
-  engine.tick(state);
+  engine.tick(universe);
   dirty = true;
 }, 1000);
 
 // periodic safety-net save (actions already save immediately; this covers pure tick progress)
 setInterval(() => {
-  if(dirty) saveState();
+  if(dirty) saveUniverse();
 }, 15000);
 
 function shutdown(){
-  console.log('Beende Server, speichere Spielstand...');
-  saveState();
+  console.log('Beende Server, speichere Universum...');
+  saveUniverse();
   process.exit(0);
 }
 process.on('SIGINT', shutdown);
@@ -109,4 +219,5 @@ process.on('SIGTERM', shutdown);
 app.listen(PORT, '0.0.0.0', () => {
   console.log('Stellare Industrien Server läuft auf Port ' + PORT);
   console.log('Im lokalen Netzwerk erreichbar unter http://<Pi-IP>:' + PORT);
+  console.log('Admin-Login: Benutzername "' + ADMIN_USERNAME + '"');
 });
