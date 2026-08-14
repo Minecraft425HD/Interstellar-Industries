@@ -123,6 +123,41 @@ const $ = s => document.querySelector(s);
 const fmt = n => new Intl.NumberFormat('de-DE',{maximumFractionDigits:0}).format(Math.floor(n));
 const fmt1 = n => new Intl.NumberFormat('de-DE',{maximumFractionDigits:1}).format(n);
 function coordStr(c){return '['+c[0]+':'+c[1]+':'+c[2]+']'}
+function coordLinkHtml(coord, label){ return `<button type="button" class="coord-link" data-coord="${coord[0]}:${coord[1]}:${coord[2]}">${label!=null?label:coordStr(coord)}</button>`; }
+function closeCoordMenu(){ const m=document.getElementById('coordMenu'); if(m) m.remove(); }
+function openCoordMenu(anchorEl){
+  closeCoordMenu();
+  const [gal,sys,pos] = anchorEl.dataset.coord.split(':').map(Number);
+  const missions = [['transport','Transport'],['spy','Spionage'],['attack','Angriff'],['colonize','Kolonisierung'],['harvest','Trümmerfeld-Bergung']];
+  const menu = document.createElement('div');
+  menu.id = 'coordMenu';
+  menu.className = 'coord-menu';
+  menu.innerHTML = `<div class="coord-menu-title">[${gal}:${sys}:${pos}]</div>` + missions.map(([m,label])=>`<button type="button" data-menu-mission="${m}">${label}</button>`).join('');
+  document.body.appendChild(menu);
+  const rect = anchorEl.getBoundingClientRect();
+  const menuRect = menu.getBoundingClientRect();
+  let top = rect.bottom + 4, left = rect.left;
+  if(left + menuRect.width > window.innerWidth - 8) left = window.innerWidth - menuRect.width - 8;
+  if(top + menuRect.height > window.innerHeight - 8) top = rect.top - menuRect.height - 4;
+  if(left < 8) left = 8;
+  if(top < 8) top = 8;
+  menu.style.top = top+'px';
+  menu.style.left = left+'px';
+  menu.querySelectorAll('[data-menu-mission]').forEach(btn=>{
+    btn.onclick = ()=>{
+      state.fleetPrefill = {mission: btn.dataset.menuMission, gal, sys, pos};
+      state.view='fleet';
+      closeCoordMenu();
+      render();
+    };
+  });
+}
+document.addEventListener('click', (e)=>{
+  const link = e.target.closest('.coord-link');
+  if(link){ e.stopPropagation(); openCoordMenu(link); return; }
+  const menu = document.getElementById('coordMenu');
+  if(menu && !menu.contains(e.target)){ closeCoordMenu(); }
+});
 function log(msg){state.logs.unshift(new Date().toLocaleTimeString('de-DE')+' · '+msg); state.logs=state.logs.slice(0,10); renderSide();}
 function message(msg){state.messages.unshift(new Date().toLocaleTimeString('de-DE')+' · '+msg); state.messages=state.messages.slice(0,20);}
 function meetsRequirements(p, req){ if(!req) return true; for(const [k,v] of Object.entries(req)){ const have = p.buildings[k]!=null ? p.buildings[k] : (p.research[k]!=null ? p.research[k] : 0); if(have<v) return false; } return true; }
@@ -251,7 +286,7 @@ function launchMissiles(targetPos, count){
   const missileAttack = count*defs.buildings.interplanetaryMissile.attack;
   const defPower = sidePower(slot.defenseShips, defs.buildings).attack;
   const netDamage = Math.max(0, missileAttack-defPower);
-  if(netDamage>0){ message('Raketenangriff auf '+slot.name+' bei '+coordStr([p.coords[0],p.coords[1],targetPos])+': '+fmt(netDamage)+' Schaden an der Verteidigung.'); log('Raketen abgefeuert · '+fmt(netDamage)+' Schaden'); }
+  if(netDamage>0){ message('Raketenangriff auf '+slot.name+' bei '+coordLinkHtml([p.coords[0],p.coords[1],targetPos])+': '+fmt(netDamage)+' Schaden an der Verteidigung.'); log('Raketen abgefeuert · '+fmt(netDamage)+' Schaden'); }
   else { message('Raketenangriff auf '+slot.name+' von der Verteidigung vollständig abgefangen.'); log('Raketen abgefeuert · abgefangen'); }
   render();
 }
@@ -358,7 +393,7 @@ function sendFleet(form){
   p.resources.deut-=fuel;
 
   state.fleets.push({from, toCoord, toPlanetIndex, npcSlot, emptySlot, ships, cargo:mission==='transport'?cargo:{metal:0,crystal:0,deut:0}, mission, arrive:Date.now()+dur*1000, returnAt:Date.now()+dur*2000, phase:'outbound', fuel});
-  log(missionLabels[mission]+'-Flotte nach '+coordStr(toCoord)+' gestartet'); render();
+  log(missionLabels[mission]+'-Flotte nach '+coordLinkHtml(toCoord)+' gestartet'); render();
 }
 
 function resolveArrival(f){
@@ -370,11 +405,11 @@ function resolveArrival(f){
   } else if(f.mission==='spy'){
     if(f.npcSlot){
       const defPower = sidePower(f.npcSlot.defenseShips, defs.buildings).attack;
-      state.reports.unshift({time:new Date().toLocaleTimeString('de-DE'), target:f.npcSlot.name, coords:coordStr(f.toCoord), resources:{metal:f.npcSlot.metal, crystal:f.npcSlot.crystal, deut:f.npcSlot.deut}, defense:defPower, fleet:f.npcSlot.fleet});
+      state.reports.unshift({time:new Date().toLocaleTimeString('de-DE'), target:f.npcSlot.name, coords:coordStr(f.toCoord), coordArr:f.toCoord, resources:{metal:f.npcSlot.metal, crystal:f.npcSlot.crystal, deut:f.npcSlot.deut}, defense:defPower, fleet:f.npcSlot.fleet});
       log('Spionagebericht über '+f.npcSlot.name+' erhalten');
     } else if(f.toPlanetIndex!=null){
       const t=state.planets[f.toPlanetIndex];
-      state.reports.unshift({time:new Date().toLocaleTimeString('de-DE'), target:t.name, coords:coordStr(t.coords), resources:{...t.resources}, defense:sidePower(extractDefense(t.buildings), defs.buildings).attack, fleet:t.ships});
+      state.reports.unshift({time:new Date().toLocaleTimeString('de-DE'), target:t.name, coords:coordStr(t.coords), coordArr:t.coords, resources:{...t.resources}, defense:sidePower(extractDefense(t.buildings), defs.buildings).attack, fleet:t.ships});
       log('Spionagebericht über '+t.name+' erhalten');
     }
     f.phase='return';
@@ -395,11 +430,11 @@ function resolveArrival(f){
         const cap = capacityForShips(f.ships); const totalLoot = Math.min(cap, loot.metal+loot.crystal+loot.deut);
         const ratio = (loot.metal+loot.crystal+loot.deut)>0 ? totalLoot/(loot.metal+loot.crystal+loot.deut) : 0;
         f.cargo = {metal:Math.floor(loot.metal*ratio), crystal:Math.floor(loot.crystal*ratio), deut:Math.floor(loot.deut*ratio)};
-        message('Angriffsbericht: Sieg gegen '+f.npcSlot.name+' bei '+coordStr(f.toCoord)+' ('+roundsText+'). Beute '+fmt(f.cargo.metal+f.cargo.crystal+f.cargo.deut)+'. Trümmerfeld: '+fmt(debrisMetal+debrisCrystal)+'.');
+        message('Angriffsbericht: Sieg gegen '+f.npcSlot.name+' bei '+coordLinkHtml(f.toCoord)+' ('+roundsText+'). Beute '+fmt(f.cargo.metal+f.cargo.crystal+f.cargo.deut)+'. Trümmerfeld: '+fmt(debrisMetal+debrisCrystal)+'.');
         log('Angriff auf '+f.npcSlot.name+' erfolgreich · Beute '+fmt(f.cargo.metal+f.cargo.crystal+f.cargo.deut));
       } else {
         f.cargo={metal:0,crystal:0,deut:0};
-        message('Angriffsbericht: Niederlage gegen '+f.npcSlot.name+' bei '+coordStr(f.toCoord)+' ('+roundsText+'). Eigene Verluste erlitten.');
+        message('Angriffsbericht: Niederlage gegen '+f.npcSlot.name+' bei '+coordLinkHtml(f.toCoord)+' ('+roundsText+'). Eigene Verluste erlitten.');
         log('Angriff auf '+f.npcSlot.name+' gescheitert · Verluste erlitten');
       }
     } else {
@@ -415,7 +450,7 @@ function resolveArrival(f){
       field.metal -= gained.metal; field.crystal -= gained.crystal;
       if(field.metal<=0 && field.crystal<=0) delete state.debrisFields[key];
       f.cargo = gained;
-      log('Trümmerfeld bei '+coordStr(f.toCoord)+' geborgen: '+fmt(gained.metal+gained.crystal));
+      log('Trümmerfeld bei '+coordLinkHtml(f.toCoord)+' geborgen: '+fmt(gained.metal+gained.crystal));
     } else { f.cargo={metal:0,crystal:0,deut:0}; }
     f.phase='return';
   } else if(f.mission==='colonize'){
@@ -440,7 +475,7 @@ function tick(){
     while(p.researchQueue[0] && p.researchQueue[0].done<=now){ const q=p.researchQueue.shift(); p.research[q.key]=(p.research[q.key]||0)+1; log(p.name+': '+q.name+' fertig'); }
     while(p.shipQueue[0] && p.shipQueue[0].done<=now){ const q=p.shipQueue.shift(); p.ships[q.key]=(p.ships[q.key]||0)+1; log(p.name+': '+q.name+' fertig'); }
   });
-  state.moons.forEach(m=>{ while(m.buildQueue[0] && m.buildQueue[0].done<=now){ const q=m.buildQueue.shift(); m.buildings[q.key]=(m.buildings[q.key]||0)+1; message('Mond '+coordStr(m.coord)+': '+q.name+' fertig'); } });
+  state.moons.forEach(m=>{ while(m.buildQueue[0] && m.buildQueue[0].done<=now){ const q=m.buildQueue.shift(); m.buildings[q.key]=(m.buildings[q.key]||0)+1; message('Mond '+coordLinkHtml(m.coord)+': '+q.name+' fertig'); } });
   state.fleets.forEach(f=>{
     if(f.phase==='outbound' && f.arrive<=now){ resolveArrival(f); }
     if(f.phase==='return' && f.returnAt<=now){ const source=state.planets[f.from]; for(const [k,v] of Object.entries(f.ships)) source.ships[k]=(source.ships[k]||0)+v; if(f.mission!=='transport'&&f.mission!=='colonize') addRes(source,f.cargo); f.phase='done'; log('Flotte nach '+source.name+' zurückgekehrt'); }
@@ -455,7 +490,7 @@ function tick(){
 const navItems = [['overview','Übersicht'],['buildings','Gebäude'],['facilities','Anlagen'],['defense','Verteidigung'],['resources','Ressourcen'],['research','Forschung'],['shipyard','Werft'],['fleet','Flotte'],['expeditions','Expeditionen'],['galaxy','Galaxie'],['moons','Monde'],['alliance','Allianz'],['officers','Offiziere'],['lifeform','Lebensform'],['market','Markt'],['reports','Berichte'],['messages','Nachrichten'],['empire','Imperium'],['highscore','Rangliste'],['settings','Einstellungen']];
 
 function renderNav(){ $('#nav').innerHTML = navItems.map(([id,label])=>`<button class="${state.view===id?'active':''}" data-view="${id}">${label}</button>`).join(''); document.querySelectorAll('[data-view]').forEach(b=>b.onclick=()=>{ if(b.dataset.view!=='fleet') state.fleetPrefill=null; state.view=b.dataset.view; render(); }); }
-function renderTop(){ const p=active(), inc=hourly(p), e=energyStats(p); $('#planetName').textContent=p.name; $('#planetCoords').textContent=coordStr(p.coords); $('#metalTop').textContent=fmt(p.resources.metal); $('#crystalTop').textContent=fmt(p.resources.crystal); $('#deutTop').textContent=fmt(p.resources.deut); $('#metalRate').textContent=fmt1(inc.metal)+'/h'; $('#crystalRate').textContent=fmt1(inc.crystal)+'/h'; $('#deutRate').textContent=fmt1(inc.deut)+'/h'; $('#energyTop').textContent=fmt(e.prod); $('#energyUse').textContent=fmt(e.use)+' genutzt'; }
+function renderTop(){ const p=active(), inc=hourly(p), e=energyStats(p); $('#planetName').textContent=p.name; $('#planetCoords').innerHTML=coordLinkHtml(p.coords); $('#metalTop').textContent=fmt(p.resources.metal); $('#crystalTop').textContent=fmt(p.resources.crystal); $('#deutTop').textContent=fmt(p.resources.deut); $('#metalRate').textContent=fmt1(inc.metal)+'/h'; $('#crystalRate').textContent=fmt1(inc.crystal)+'/h'; $('#deutRate').textContent=fmt1(inc.deut)+'/h'; $('#energyTop').textContent=fmt(e.prod); $('#energyUse').textContent=fmt(e.use)+' genutzt'; }
 function renderSide(){
   $('#planetTabs').innerHTML = state.planets.map((p,i)=>`<button class="pill ${state.activePlanet===i?'active':''}" data-planet="${i}">${p.name}</button>`).join('');
   document.querySelectorAll('[data-planet]').forEach(b=>b.onclick=()=>{state.activePlanet=Number(b.dataset.planet); render();});
@@ -464,7 +499,7 @@ function renderSide(){
   p.researchQueue.forEach(q=>qs.push(`<div class="queue-item">Forschung · ${q.name}<br><span class="small">${secsLeft(q.done)} s</span></div>`));
   p.shipQueue.forEach(q=>qs.push(`<div class="queue-item">Werft · ${q.name}<br><span class="small">${secsLeft(q.done)} s</span></div>`));
   $('#queues').innerHTML = qs.join('') || '<div class="small">Keine aktiven Aufträge.</div>';
-  $('#fleetMovements').innerHTML = state.fleets.map(f=>`<div class="queue-item">${missionLabels[f.mission]} ${state.planets[f.from].name} → ${coordStr(f.toCoord)}<br><span class="small">${f.phase==='outbound'?'Ankunft':'Rückflug'} in ${secsLeft(f.phase==='outbound'?f.arrive:f.returnAt)} s</span></div>`).join('') || '<div class="small">Keine Flotten unterwegs.</div>';
+  $('#fleetMovements').innerHTML = state.fleets.map(f=>`<div class="queue-item">${missionLabels[f.mission]} ${state.planets[f.from].name} → ${coordLinkHtml(f.toCoord)}<br><span class="small">${f.phase==='outbound'?'Ankunft':'Rückflug'} in ${secsLeft(f.phase==='outbound'?f.arrive:f.returnAt)} s</span></div>`).join('') || '<div class="small">Keine Flotten unterwegs.</div>';
   $('#logs').innerHTML = state.logs.map(x=>`<div class="log">${x}</div>`).join('');
 }
 
@@ -530,7 +565,7 @@ function viewGalaxy(){
   <div class="galaxy-grid">${slots.map(s=>{
     const key = debrisKey([gal,sys,s.pos]); const debris = state.debrisFields[key];
     const debrisRow = debris ? `<div class="sub">Trümmerfeld: M ${fmt(debris.metal)} · K ${fmt(debris.crystal)} <button class="btn alt" data-mission-target="harvest:${gal}:${sys}:${s.pos}" style="margin-left:8px;padding:6px 10px;min-height:32px">Bergen</button></div>` : '';
-    if(s.type==='own') return `<div class="slot own"><div>${s.pos}</div><div><strong>${s.planet.name}</strong><div class="sub">${coordStr(s.planet.coords)}</div>${debrisRow}</div><div><span class="badge own">Eigen</span></div><div class="sub">Metall ${fmt(s.planet.resources.metal)}</div><div></div></div>`;
+    if(s.type==='own') return `<div class="slot own"><div>${s.pos}</div><div><strong>${s.planet.name}</strong><div class="sub">${coordLinkHtml(s.planet.coords)}</div>${debrisRow}</div><div><span class="badge own">Eigen</span></div><div class="sub">Metall ${fmt(s.planet.resources.metal)}</div><div></div></div>`;
     if(s.type==='npc'){ const defPower = sidePower(s.defenseShips, defs.buildings).attack; return `<div class="slot"><div>${s.pos}</div><div><strong>${s.name}</strong><div class="sub">Stufe ${s.level}</div>${debrisRow}</div><div><span class="badge npc">NPC</span></div><div class="sub">Def ${fmt(defPower)}</div><div><button class="btn danger" data-mission-target="attack:${gal}:${sys}:${s.pos}">Angriff</button> <button class="btn alt" data-mission-target="spy:${gal}:${sys}:${s.pos}">Spionage</button></div></div>`; }
     return `<div class="slot empty"><div>${s.pos}</div><div>Freies Feld${debrisRow}</div><div><span class="badge empty">Leer</span></div><div class="sub">—</div><div><button class="btn good" data-mission-target="colonize:${gal}:${sys}:${s.pos}">Kolonisieren</button></div></div>`;
   }).join('')}</div>`; }
@@ -591,7 +626,7 @@ function viewMoons(){
       <label>Kreuzer<select name="cruiser">${Array.from({length:(m.ships.cruiser||0)+1},(_,i)=>`<option>${i}</option>`).join('')}</select></label>
       <button class="btn good" type="submit">Sofort transferieren</button>
     </form>` : '<div class="small">Es gibt noch keinen zweiten Mond für einen Transfer.</div>';
-    detail = `<div class="grid2">
+    detail = `<div class="small" style="margin-bottom:10px">Koordinaten: ${coordLinkHtml(m.coord)}</div><div class="grid2">
       <div class="card"><h3>Mondgebäude</h3><div class="list">${buildRows}</div></div>
       <div class="card"><h3>Baustatus</h3><div class="queue">${queueRows}</div></div>
     </div>
@@ -620,9 +655,9 @@ function viewLifeform(){ const lf=state.lifeform; const species=[['humans','Mens
 
 function viewMarket(){ const r=state.marketRate; return `<h2>Markt</h2><div class="market-grid"><div class="card"><div class="label">Metall</div><div class="value">${fmt1(r.metal)}</div></div><div class="card"><div class="label">Kristall</div><div class="value">${fmt1(r.crystal)}</div></div><div class="card"><div class="label">Deuterium</div><div class="value">${fmt1(r.deut)}</div></div></div><div style="height:16px"></div><div class="grid2"><div class="card"><h3>Ressourcen handeln</h3><form class="market-form" id="marketForm"><label>Abgeben<select name="give"><option value="metal">Metall</option><option value="crystal">Kristall</option><option value="deut">Deuterium</option></select></label><label>Erhalten<select name="want"><option value="crystal">Kristall</option><option value="metal">Metall</option><option value="deut">Deuterium</option></select></label><label>Menge<input type="number" min="1" value="100" name="amount"></label><button class="btn good" type="submit">Am Markt tauschen</button></form></div><div class="card"><h3>Händler (Dunkle Materie)</h3><div class="small">Tausche Dunkle Materie sofort gegen Ressourcen. Kurs: 5 Einheiten pro 1 DM.</div><div style="height:10px"></div><form class="market-form" id="merchantForm"><label>Ressource<select name="resource"><option value="metal">Metall</option><option value="crystal">Kristall</option><option value="deut">Deuterium</option></select></label><label>Menge<input type="number" min="1" value="1000" name="amount"></label><button class="btn warn" type="submit">Kaufen</button></form><div class="small" style="margin-top:8px">Dunkle Materie: ${fmt(state.darkMatter)}</div></div></div>`; }
 
-function viewReports(){ if(state.reports.length===0) return `<h2>Berichte</h2><div class="small">Noch keine Spionageberichte vorhanden.</div>`; return `<h2>Spionageberichte</h2>${state.reports.map(r=>`<div class="report"><div class="row" style="border:none;background:none;padding:0"><strong>${r.target}</strong><span class="small">${r.time}</span></div><div class="small">${r.coords}</div><div class="grid3" style="margin-top:8px"><div class="card"><div class="label">Metall</div><div class="value">${fmt(r.resources.metal)}</div></div><div class="card"><div class="label">Kristall</div><div class="value">${fmt(r.resources.crystal)}</div></div><div class="card"><div class="label">Deuterium</div><div class="value">${fmt(r.resources.deut)}</div></div></div><div class="small" style="margin-top:8px">Verteidigung: ${fmt(r.defense)} · Flotte: ${Object.entries(r.fleet||{}).map(([k,v])=>v?defs.ships[k].name+' x'+v:null).filter(Boolean).join(', ')||'unbekannt'}</div></div>`).join('')}`; }
+function viewReports(){ if(state.reports.length===0) return `<h2>Berichte</h2><div class="small">Noch keine Spionageberichte vorhanden.</div>`; return `<h2>Spionageberichte</h2>${state.reports.map(r=>`<div class="report"><div class="row" style="border:none;background:none;padding:0"><strong>${r.target}</strong><span class="small">${r.time}</span></div><div class="small">${r.coordArr?coordLinkHtml(r.coordArr):r.coords}</div><div class="grid3" style="margin-top:8px"><div class="card"><div class="label">Metall</div><div class="value">${fmt(r.resources.metal)}</div></div><div class="card"><div class="label">Kristall</div><div class="value">${fmt(r.resources.crystal)}</div></div><div class="card"><div class="label">Deuterium</div><div class="value">${fmt(r.resources.deut)}</div></div></div><div class="small" style="margin-top:8px">Verteidigung: ${fmt(r.defense)} · Flotte: ${Object.entries(r.fleet||{}).map(([k,v])=>v?defs.ships[k].name+' x'+v:null).filter(Boolean).join(', ')||'unbekannt'}</div></div>`).join('')}`; }
 
-function viewEmpire(){ return `<h2>Imperium</h2><div class="small">Gesamtpunkte: ${fmt(totalPlayerPoints())}</div><div style="height:10px"></div><table><thead><tr><th>Planet</th><th>Koordinaten</th><th>Metall/h</th><th>Kristall/h</th><th>Deut/h</th><th>Energie</th><th>Punkte</th></tr></thead><tbody>${state.planets.map(p=>{ const inc=hourly(p), e=energyStats(p), pts=Math.floor(computePoints(p)/1000); return `<tr><td>${p.name}</td><td>${coordStr(p.coords)}</td><td>${fmt1(inc.metal)}</td><td>${fmt1(inc.crystal)}</td><td>${fmt1(inc.deut)}</td><td>${fmt(e.prod)}/${fmt(e.use)}</td><td>${fmt(pts)}</td></tr>`; }).join('')}</tbody></table>`; }
+function viewEmpire(){ return `<h2>Imperium</h2><div class="small">Gesamtpunkte: ${fmt(totalPlayerPoints())}</div><div style="height:10px"></div><table><thead><tr><th>Planet</th><th>Koordinaten</th><th>Metall/h</th><th>Kristall/h</th><th>Deut/h</th><th>Energie</th><th>Punkte</th></tr></thead><tbody>${state.planets.map(p=>{ const inc=hourly(p), e=energyStats(p), pts=Math.floor(computePoints(p)/1000); return `<tr><td>${p.name}</td><td>${coordLinkHtml(p.coords)}</td><td>${fmt1(inc.metal)}</td><td>${fmt1(inc.crystal)}</td><td>${fmt1(inc.deut)}</td><td>${fmt(e.prod)}/${fmt(e.use)}</td><td>${fmt(pts)}</td></tr>`; }).join('')}</tbody></table>`; }
 
 function viewHighscore(){
   const playerPoints = totalPlayerPoints();

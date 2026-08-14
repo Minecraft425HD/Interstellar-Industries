@@ -211,6 +211,31 @@ table th{
 
 .market-grid{ display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; }
 
+.coord-link{
+  background:none; border:none; padding:0; margin:0; font:inherit; cursor:pointer;
+  color:var(--accent2); text-decoration:underline dotted; text-underline-offset:3px;
+  display:inline; -webkit-tap-highlight-color:rgba(63,169,245,.3);
+}
+.coord-link:hover, .coord-link:focus{ color:var(--accent); }
+
+.coord-menu{
+  position:fixed; z-index:200; min-width:196px;
+  background-image: var(--tex-diagonal), linear-gradient(180deg, var(--panel), var(--panel2));
+  background-repeat: repeat, no-repeat;
+  border:1px solid var(--accent); border-radius:3px 12px 3px 12px;
+  box-shadow: 0 0 22px -4px rgba(63,169,245,.65), 0 14px 26px -14px rgba(0,0,0,.85);
+  padding:6px; display:flex; flex-direction:column; gap:4px;
+}
+.coord-menu .coord-menu-title{
+  font-size:10.5px; color:var(--accent2); text-transform:uppercase; letter-spacing:.04em;
+  padding:5px 8px 3px; border-bottom:1px solid var(--border); margin-bottom:2px;
+}
+.coord-menu button{
+  text-align:left; background:rgba(255,255,255,.03); border:1px solid transparent; color:var(--text);
+  padding:8px 10px; border-radius:3px 8px 3px 8px; font-size:12.5px; cursor:pointer;
+}
+.coord-menu button:hover{ background:rgba(63,169,245,.2); border-color:var(--accent); color:var(--accent2); }
+
 .report{
   background-image: var(--tex-diagonal-soft), linear-gradient(180deg, var(--panel2), #0a1120);
   background-repeat: repeat, no-repeat;
