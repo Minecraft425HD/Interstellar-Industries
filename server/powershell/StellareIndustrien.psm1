@@ -217,6 +217,61 @@ function Backup-StellareUniverse {
     return $Destination
 }
 
+function Reset-StellareUniverse {
+    <#
+    .SYNOPSIS
+        Setzt das gesamte Universum vollstaendig zurueck: loescht ALLE registrierten
+        Accounts und Imperien unwiderruflich (das Admin-Konto wird beim naechsten
+        Start automatisch neu angelegt).
+    .DESCRIPTION
+        Fragt standardmaessig eine Bestaetigung ab und erstellt vorher automatisch
+        ein Backup. Mit -Force wird ohne Rueckfrage zurueckgesetzt (z.B. fuer
+        Skripte); mit -SkipBackup wird kein Sicherheits-Backup erstellt.
+    #>
+    [CmdletBinding()]
+    param([switch]$Force, [switch]$SkipBackup)
+
+    if(-not (Test-Path $script:UniverseFile)){
+        Write-Warning "Keine Universumsdatei gefunden unter $script:UniverseFile - nichts zurueckzusetzen."
+        return
+    }
+
+    if(-not $Force){
+        Write-Host "WARNUNG: Dies loescht ALLE registrierten Spieler und Imperien unwiderruflich!" -ForegroundColor Red
+        $answer = Read-Host "Zum Bestaetigen 'ZURUECKSETZEN' eintippen (sonst abbrechen)"
+        if($answer -ne 'ZURUECKSETZEN'){
+            Write-Host "Abgebrochen, nichts wurde geloescht." -ForegroundColor Yellow
+            return
+        }
+    }
+
+    if(-not $SkipBackup){
+        Write-Host "Erstelle Sicherheits-Backup vor dem Zuruecksetzen..." -ForegroundColor Cyan
+        Backup-StellareUniverse | Out-Null
+    }
+
+    $wasRunning = $false
+    try {
+        $status = & sudo systemctl is-active $script:ServiceName 2>$null
+        $wasRunning = ($status -eq 'active')
+    } catch { }
+
+    if($wasRunning){
+        Write-Host "Stoppe Server..." -ForegroundColor Cyan
+        Invoke-Native sudo systemctl stop $script:ServiceName
+    }
+
+    Remove-Item -Path $script:UniverseFile -Force
+    Write-Host "Universum zurueckgesetzt." -ForegroundColor Green
+
+    if($wasRunning){
+        Write-Host "Starte Server neu (mit frischem Universum)..." -ForegroundColor Cyan
+        Invoke-Native sudo systemctl start $script:ServiceName
+        Start-Sleep -Seconds 2
+        Get-StellareServerStatus
+    }
+}
+
 function Update-StellareServer {
     <#
     .SYNOPSIS
@@ -438,7 +493,7 @@ function Uninstall-StellareTunnel {
 
 Export-ModuleMember -Function `
     Install-StellareServer, Start-StellareServer, Stop-StellareServer, Restart-StellareServer, `
-    Get-StellareServerStatus, Get-StellareServerLog, Backup-StellareUniverse, Update-StellareServer, `
+    Get-StellareServerStatus, Get-StellareServerLog, Backup-StellareUniverse, Reset-StellareUniverse, Update-StellareServer, `
     Uninstall-StellareServer, Enable-StellareAutostart, Disable-StellareAutostart, Get-StellarePiAddress, `
     Install-StellareCloudflared, Install-StellareTunnel, Start-StellareTunnel, Stop-StellareTunnel, `
     Restart-StellareTunnel, Get-StellareTunnelAddress, Get-StellareTunnelStatus, Get-StellareTunnelLog, `

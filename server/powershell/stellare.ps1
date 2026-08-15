@@ -15,7 +15,7 @@
 param(
     [Parameter(Position=0)]
     [ValidateSet(
-        'install','start','stop','restart','status','logs','backup','update','uninstall',
+        'install','start','stop','restart','status','logs','backup','reset','update','uninstall',
         'enable-autostart','disable-autostart','address',
         'tunnel-install','tunnel-start','tunnel-stop','tunnel-restart','tunnel-address',
         'tunnel-status','tunnel-logs','tunnel-uninstall',
@@ -27,6 +27,7 @@ param(
     [int]$Lines = 100,
     [switch]$Follow,
     [switch]$RemoveData,
+    [switch]$SkipBackup,
     [switch]$Force
 )
 
@@ -40,6 +41,7 @@ switch ($Command) {
     'status'            { Get-StellareServerStatus -Port $Port }
     'logs'              { Get-StellareServerLog -Lines $Lines -Follow:$Follow }
     'backup'            { Backup-StellareUniverse }
+    'reset'             { Reset-StellareUniverse -Force:$Force -SkipBackup:$SkipBackup }
     'update'            { Update-StellareServer }
     'uninstall'         { Uninstall-StellareServer -RemoveData:$RemoveData }
     'enable-autostart'  { Enable-StellareAutostart }
@@ -68,6 +70,11 @@ Server-Befehle:
   status                      Dienststatus + API-Gesundheitscheck anzeigen
   logs [-Lines n] [-Follow]   Server-Logs anzeigen (optional live verfolgen)
   backup                      Universum-Datei sichern (server/backups/)
+  reset [-Force] [-SkipBackup] Universum VOLLSTAENDIG zuruecksetzen (loescht ALLE
+                               Accounts/Imperien unwiderruflich). Fragt zur Sicherheit
+                               nach ("ZURUECKSETZEN" eintippen), ausser bei -Force.
+                               Erstellt vorher automatisch ein Backup, ausser bei
+                               -SkipBackup. Stoppt/startet den Server bei Bedarf.
   update                      git pull + npm install + Neustart
   uninstall [-RemoveData]     systemd-Dienst entfernen (Spieldaten bleiben,
                                ausser -RemoveData wird angegeben)
