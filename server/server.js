@@ -73,8 +73,13 @@ function sessionFromHeader(req){
   return { token, ...s };
 }
 
+const LOG_BUFFER_MAX = 500;
+const logBuffer = [];
 function logLine(msg){
-  console.log('[' + new Date().toISOString() + '] ' + msg);
+  const line = '[' + new Date().toISOString() + '] ' + msg;
+  console.log(line);
+  logBuffer.push(line);
+  if(logBuffer.length > LOG_BUFFER_MAX) logBuffer.shift();
 }
 function clientIp(req){
   const raw = req.headers['x-forwarded-for'] || req.socket.remoteAddress || '?';
@@ -241,6 +246,9 @@ app.get('/api/highscore', requireAuth, (req, res) => {
 
 app.get('/api/admin/players', requireAuth, requireAdmin, (req, res) => {
   res.json({ ok:true, players: engine.adminListPlayers(universe) });
+});
+app.get('/api/admin/log', requireAuth, requireAdmin, (req, res) => {
+  res.json({ ok:true, lines: logBuffer });
 });
 app.post('/api/admin/deletePlayer', requireAuth, requireAdmin, (req, res) => {
   const target = req.body && req.body.username;

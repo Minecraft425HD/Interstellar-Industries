@@ -138,7 +138,17 @@ document.addEventListener('click', (e)=>{
   if(menu && !menu.contains(e.target)){ closeCoordMenu(); }
 });
 
-function showError(msg){ state.logs = ['⚠ '+msg, ...state.logs].slice(0,10); renderSide(); }
+function showError(msg){ state.logs = ['⚠ '+msg, ...state.logs].slice(0,10); renderSide(); showToast(msg); }
+
+let toastTimer = null;
+function showToast(msg){
+  let el = document.getElementById('toast');
+  if(!el){ el = document.createElement('div'); el.id = 'toast'; document.body.appendChild(el); }
+  el.textContent = msg;
+  el.classList.add('show');
+  if(toastTimer) clearTimeout(toastTimer);
+  toastTimer = setTimeout(()=>{ el.classList.remove('show'); }, 4500);
+}
 
 function meetsRequirements(p, req){ if(!req) return true; for(const [k,v] of Object.entries(req)){ const have = p.buildings[k]!=null ? p.buildings[k] : (p.research[k]!=null ? p.research[k] : 0); if(have<v) return false; } return true; }
 function requirementText(req){ if(!req) return ''; return Object.entries(req).map(([k,v])=>{ const nm = defs.buildings[k]?defs.buildings[k].name:(defs.research[k]?defs.research[k].name:k); return nm+' Stufe '+v; }).join(', '); }
@@ -387,6 +397,7 @@ function logout(){
   apiFetch('/api/logout', {method:'POST'}).catch(()=>{});
   setToken(''); setStoredUsername('');
   state.username=null; state.isAdmin=false; state.adminMode=false; everConnected=false;
+  stopAdminLogPolling();
   render();
 }
 
@@ -492,10 +503,16 @@ function renderAuthScreen(){
 }
 
 // ---- Admin panel ----
+let adminView = 'players'; // 'players' | 'log'
 let adminPlayers = null;
 let adminLoading = false;
 let adminError = '';
 let adminPendingDelete = null;
+let adminLogLines = null;
+let adminLogLoading = false;
+let adminLogPollTimer = null;
+
+function escapeHtml(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
 async function fetchAdminPlayers(){
   adminLoading = true; adminError='';
@@ -508,48 +525,95 @@ async function fetchAdminPlayers(){
   renderAdminPanel();
 }
 
+async function fetchAdminLog(){
+  adminLogLoading = (adminLogLines===null);
+  if(adminLogLoading) renderAdminPanel();
+  try {
+    const data = await apiFetch('/api/admin/log');
+    adminLogLines = data.lines;
+  } catch(err){ adminError = err.message; }
+  adminLogLoading = false;
+  if(state.adminMode && adminView==='log') renderAdminPanel();
+}
+
+function stopAdminLogPolling(){ if(adminLogPollTimer){ clearInterval(adminLogPollTimer); adminLogPollTimer=null; } }
+function startAdminLogPolling(){
+  stopAdminLogPolling();
+  adminLogPollTimer = setInterval(()=>{ if(state.adminMode && adminView==='log') fetchAdminLog(); }, 2000);
+}
+
 function renderAdminPanel(){
   const view = $('#view');
   if(!view) return;
-  if(adminPlayers===null && !adminLoading) fetchAdminPlayers();
-  const rows = (adminPlayers||[]).map(p=>{
-    const actions = adminPendingDelete===p.username
-      ? `<button class="btn danger" data-admin-confirm-delete="${p.username}" style="padding:6px 10px;min-height:32px">Wirklich löschen?</button> <button class="btn alt" data-admin-cancel-delete="1" style="padding:6px 10px;min-height:32px">Abbrechen</button>`
-      : `<button class="btn alt" data-admin-grant="${p.username}" style="padding:6px 10px;min-height:32px">+10k Ressourcen</button> <button class="btn danger" data-admin-delete="${p.username}" style="padding:6px 10px;min-height:32px">Löschen</button>`;
-    return `<tr>
-      <td>${p.username}</td>
-      <td>${p.homeCoords ? p.homeCoords.join(':') : '-'}</td>
-      <td>${fmt(p.points)}</td>
-      <td>${fmt(p.planets)}</td>
-      <td>${fmt(p.darkMatter)}</td>
-      <td>${p.createdAt ? new Date(p.createdAt).toLocaleDateString('de-DE') : '-'}</td>
-      <td>${actions}</td>
-    </tr>`;
-  }).join('');
+  if(adminView==='players' && adminPlayers===null && !adminLoading) fetchAdminPlayers();
+  if(adminView==='log' && adminLogLines===null && !adminLogLoading) fetchAdminLog();
+
+  const tabsHtml = `<div class="planet-tabs" style="margin:10px 0">
+    <button class="pill ${adminView==='players'?'active':''}" data-admin-view="players">Spieler-Verwaltung</button>
+    <button class="pill ${adminView==='log'?'active':''}" data-admin-view="log">Live-Log</button>
+  </div>`;
+
+  let bodyHtml = '';
+  if(adminView==='players'){
+    const rows = (adminPlayers||[]).map(p=>{
+      const actions = adminPendingDelete===p.username
+        ? `<button class="btn danger" data-admin-confirm-delete="${p.username}" style="padding:6px 10px;min-height:32px">Wirklich löschen?</button> <button class="btn alt" data-admin-cancel-delete="1" style="padding:6px 10px;min-height:32px">Abbrechen</button>`
+        : `<button class="btn alt" data-admin-grant="${p.username}" style="padding:6px 10px;min-height:32px">+10k Ressourcen</button> <button class="btn danger" data-admin-delete="${p.username}" style="padding:6px 10px;min-height:32px">Löschen</button>`;
+      return `<tr>
+        <td>${p.username}</td>
+        <td>${p.homeCoords ? p.homeCoords.join(':') : '-'}</td>
+        <td>${fmt(p.points)}</td>
+        <td>${fmt(p.planets)}</td>
+        <td>${fmt(p.darkMatter)}</td>
+        <td>${p.createdAt ? new Date(p.createdAt).toLocaleDateString('de-DE') : '-'}</td>
+        <td>${actions}</td>
+      </tr>`;
+    }).join('');
+    bodyHtml = `<button class="btn alt" id="adminRefreshBtn">Aktualisieren</button>
+    <div style="height:14px"></div>
+    ${adminLoading ? '<div class="small">Lade Spielerliste…</div>' : ''}
+    ${adminPlayers && adminPlayers.length===0 ? '<div class="small">Noch keine Spieler registriert.</div>' : ''}
+    ${adminPlayers && adminPlayers.length>0 ? `<div style="overflow-x:auto"><table><thead><tr><th>Benutzername</th><th>Heimatkoordinaten</th><th>Punkte</th><th>Planeten</th><th>Dunkle Materie</th><th>Registriert</th><th>Aktionen</th></tr></thead><tbody>${rows}</tbody></table></div>` : ''}`;
+  } else {
+    const linesHtml = (adminLogLines||[]).map(l=>`<div>${escapeHtml(l)}</div>`).join('');
+    bodyHtml = `<div class="small" style="margin-bottom:8px">Aktualisiert automatisch alle 2 Sekunden – zeigt jede Verbindung und Aktion aller Spieler in Echtzeit.</div>
+    ${adminLogLoading ? '<div class="small">Lade Log…</div>' : ''}
+    <div id="adminLogBox" style="background:#0a0e14;border:1px solid var(--border);border-radius:8px;padding:10px;height:60vh;min-height:320px;overflow-y:auto;font-family:monospace;font-size:11px;line-height:1.5;white-space:pre-wrap;word-break:break-word;">${linesHtml || '<span class="small">Noch keine Logeinträge.</span>'}</div>`;
+  }
+
   view.innerHTML = `<div class="card" style="max-width:960px;margin:4vh auto;">
     <h2>Admin-Modus</h2>
     <div class="small">Angemeldet als ${state.username} · Server: ${getServerUrl()}</div>
-    <div style="height:10px"></div>
-    <button class="btn alt" id="adminRefreshBtn">Aktualisieren</button>
-    <button class="btn danger" id="adminLogoutBtn" style="margin-left:10px">Abmelden</button>
-    <div style="height:14px"></div>
-    ${adminLoading ? '<div class="small">Lade Spielerliste…</div>' : ''}
-    ${adminError ? `<div class="small" style="color:var(--danger)">${adminError}</div>` : ''}
-    ${adminPlayers && adminPlayers.length===0 ? '<div class="small">Noch keine Spieler registriert.</div>' : ''}
-    ${adminPlayers && adminPlayers.length>0 ? `<div style="overflow-x:auto"><table><thead><tr><th>Benutzername</th><th>Heimatkoordinaten</th><th>Punkte</th><th>Planeten</th><th>Dunkle Materie</th><th>Registriert</th><th>Aktionen</th></tr></thead><tbody>${rows}</tbody></table></div>` : ''}
+    <button class="btn danger" id="adminLogoutBtn" style="margin-top:10px">Abmelden</button>
+    ${tabsHtml}
+    ${adminError ? `<div class="small" style="color:var(--danger);margin-bottom:10px">${adminError}</div>` : ''}
+    ${bodyHtml}
   </div>`;
-  const rb = $('#adminRefreshBtn'); if(rb) rb.onclick=()=>{ adminPlayers=null; adminPendingDelete=null; fetchAdminPlayers(); };
+
   const lb = $('#adminLogoutBtn'); if(lb) lb.onclick=logout;
-  document.querySelectorAll('[data-admin-delete]').forEach(b=>b.onclick=()=>{ adminPendingDelete=b.dataset.adminDelete; renderAdminPanel(); });
-  document.querySelectorAll('[data-admin-cancel-delete]').forEach(b=>b.onclick=()=>{ adminPendingDelete=null; renderAdminPanel(); });
-  document.querySelectorAll('[data-admin-confirm-delete]').forEach(b=>b.onclick=async ()=>{
-    try { await apiFetch('/api/admin/deletePlayer', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({username:b.dataset.adminConfirmDelete})}); adminPendingDelete=null; adminPlayers=null; fetchAdminPlayers(); }
-    catch(err){ adminError = err.message; renderAdminPanel(); }
+  document.querySelectorAll('[data-admin-view]').forEach(b=>b.onclick=()=>{
+    adminView = b.dataset.adminView;
+    adminError = '';
+    if(adminView==='log'){ startAdminLogPolling(); if(adminLogLines===null) fetchAdminLog(); }
+    else { stopAdminLogPolling(); }
+    renderAdminPanel();
   });
-  document.querySelectorAll('[data-admin-grant]').forEach(b=>b.onclick=async ()=>{
-    try { await apiFetch('/api/admin/grantResources', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({username:b.dataset.adminGrant, metal:10000, crystal:10000, deut:10000})}); adminPlayers=null; fetchAdminPlayers(); }
-    catch(err){ adminError = err.message; renderAdminPanel(); }
-  });
+
+  if(adminView==='players'){
+    const rb = $('#adminRefreshBtn'); if(rb) rb.onclick=()=>{ adminPlayers=null; adminPendingDelete=null; fetchAdminPlayers(); };
+    document.querySelectorAll('[data-admin-delete]').forEach(b=>b.onclick=()=>{ adminPendingDelete=b.dataset.adminDelete; renderAdminPanel(); });
+    document.querySelectorAll('[data-admin-cancel-delete]').forEach(b=>b.onclick=()=>{ adminPendingDelete=null; renderAdminPanel(); });
+    document.querySelectorAll('[data-admin-confirm-delete]').forEach(b=>b.onclick=async ()=>{
+      try { await apiFetch('/api/admin/deletePlayer', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({username:b.dataset.adminConfirmDelete})}); adminPendingDelete=null; adminPlayers=null; fetchAdminPlayers(); }
+      catch(err){ adminError = err.message; renderAdminPanel(); }
+    });
+    document.querySelectorAll('[data-admin-grant]').forEach(b=>b.onclick=async ()=>{
+      try { await apiFetch('/api/admin/grantResources', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({username:b.dataset.adminGrant, metal:10000, crystal:10000, deut:10000})}); adminPlayers=null; fetchAdminPlayers(); }
+      catch(err){ adminError = err.message; renderAdminPanel(); }
+    });
+  } else {
+    const box = $('#adminLogBox'); if(box) box.scrollTop = box.scrollHeight;
+  }
 }
 
 // ---- Galaxy view data (fetched from the server so real players show up) ----

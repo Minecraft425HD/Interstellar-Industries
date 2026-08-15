@@ -260,6 +260,18 @@ button.slot{ font:inherit; color:inherit; width:100%; }
 body.disconnected #topbar, body.disconnected #nav, body.disconnected #sidebar{ display:none; }
 body.disconnected main#view{ padding-top:10vh; }
 
+#toast{
+  position:fixed; left:50%; bottom:22px; transform:translateX(-50%) translateY(20px);
+  max-width:min(92vw, 480px); padding:13px 18px; border-radius:10px;
+  background-image: var(--tex-diagonal), linear-gradient(180deg, #6b1c2a, #4a1420);
+  color:#ffd7dc; border:1px solid var(--danger);
+  font-size:13px; font-weight:600; text-align:center; line-height:1.4;
+  box-shadow: 0 10px 28px rgba(0,0,0,.5);
+  opacity:0; pointer-events:none; z-index:200;
+  transition: opacity .25s ease, transform .25s ease;
+}
+#toast.show{ opacity:1; transform:translateX(-50%) translateY(0); }
+
 @media (max-width: 860px){
   #layout{ flex-direction:column; }
   #sidebar{ width:auto; flex:none; border-right:none; border-bottom:1px solid var(--border); max-height:220px; }
