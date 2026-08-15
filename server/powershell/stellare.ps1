@@ -26,7 +26,8 @@ param(
     [int]$Port = 3000,
     [int]$Lines = 100,
     [switch]$Follow,
-    [switch]$RemoveData
+    [switch]$RemoveData,
+    [switch]$Force
 )
 
 Import-Module (Join-Path $PSScriptRoot 'StellareIndustrien.psm1') -Force
@@ -44,7 +45,7 @@ switch ($Command) {
     'enable-autostart'  { Enable-StellareAutostart }
     'disable-autostart' { Disable-StellareAutostart }
     'address'           { Get-StellarePiAddress | ForEach-Object { Write-Host $_ } }
-    'tunnel-install'    { Install-StellareTunnel -Port $Port }
+    'tunnel-install'    { Install-StellareTunnel -Port $Port -Force:$Force }
     'tunnel-start'      { Start-StellareTunnel }
     'tunnel-stop'       { Stop-StellareTunnel }
     'tunnel-restart'    { Restart-StellareTunnel }
@@ -75,8 +76,10 @@ Server-Befehle:
   address                     LAN-IP-Adresse(n) des Pi anzeigen
 
 Fernzugriff-Befehle (Cloudflare Tunnel, ohne Portweiterleitung):
-  tunnel-install               cloudflared installieren + Tunnel-Dienst einrichten/starten,
-                                zeigt die oeffentliche https://...trycloudflare.com-Adresse
+  tunnel-install [-Force]       cloudflared installieren + Tunnel-Dienst einrichten/starten,
+                                zeigt die oeffentliche https://...trycloudflare.com-Adresse.
+                                -Force laedt cloudflared auch dann neu herunter, wenn schon
+                                eine (moeglicherweise kaputte) Datei vorhanden ist.
   tunnel-start                 Tunnel starten
   tunnel-stop                  Tunnel stoppen (Server dann nur noch lokal erreichbar)
   tunnel-restart                Tunnel neu starten (Adresse aendert sich dabei!)

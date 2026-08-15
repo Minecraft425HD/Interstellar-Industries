@@ -19,15 +19,19 @@ function Invoke-Native {
     <#
     .SYNOPSIS
         Führt einen externen Befehl aus und wirft einen PowerShell-Fehler, wenn er fehlschlägt.
+    .DESCRIPTION
+        Bewusst OHNE param()/[CmdletBinding()] geschrieben: Aufrufe wie
+        "Invoke-Native sudo rm -f $path" duerfen NICHT durch PowerShells eigene
+        Parameterbindung interpretiert werden (z.B. wuerde "-f" sonst als
+        Praefix von "-FilePath" fehlinterpretiert und dem eigentlichen Befehl
+        entzogen). $args faengt hier daher wirklich jedes Token roh ab.
     #>
-    [CmdletBinding()]
-    param(
-        [Parameter(Mandatory, Position=0)][string]$FilePath,
-        [Parameter(Position=1, ValueFromRemainingArguments)][string[]]$ArgumentList
-    )
-    & $FilePath @ArgumentList
+    if($args.Count -eq 0){ throw "Invoke-Native: kein Programm angegeben." }
+    $filePath = $args[0]
+    $rest = if($args.Count -gt 1){ $args[1..($args.Count-1)] } else { @() }
+    & $filePath @rest
     if($LASTEXITCODE -ne 0){
-        throw "Befehl fehlgeschlagen: $FilePath $($ArgumentList -join ' ') (Exit-Code $LASTEXITCODE)"
+        throw "Befehl fehlgeschlagen: $filePath $($rest -join ' ') (Exit-Code $LASTEXITCODE)"
     }
 }
 
@@ -250,20 +254,38 @@ function Uninstall-StellareServer {
 function Install-StellareCloudflared {
     <#
     .SYNOPSIS
-        Laedt das cloudflared-Binary passend zur Architektur des Pi herunter, falls noch nicht vorhanden.
+        Laedt das cloudflared-Binary passend zur Architektur des Pi herunter, falls noch nicht
+        vorhanden oder nicht lauffaehig (z.B. falsche Architektur von einem frueheren Versuch).
     #>
     [CmdletBinding()]
-    param()
-    if(Test-Path $script:TunnelBinary){
-        Write-Host "cloudflared bereits installiert: $(& $script:TunnelBinary --version 2>$null)" -ForegroundColor Green
-        return
+    param([switch]$Force)
+
+    if((Test-Path $script:TunnelBinary) -and -not $Force){
+        $versionOutput = $null
+        $works = $false
+        try {
+            $versionOutput = & $script:TunnelBinary --version 2>&1
+            $works = ($LASTEXITCODE -eq 0)
+        } catch { $works = $false }
+        if($works){
+            Write-Host "cloudflared bereits installiert: $versionOutput" -ForegroundColor Green
+            return
+        }
+        Write-Warning "Vorhandenes cloudflared unter $script:TunnelBinary laesst sich nicht ausfuehren (evtl. falsche Architektur von einem frueheren Versuch) - wird neu heruntergeladen."
+        Invoke-Native sudo rm -f $script:TunnelBinary
+    } elseif(Test-Path $script:TunnelBinary){
+        Invoke-Native sudo rm -f $script:TunnelBinary
     }
+
     $archRaw = (& uname -m).Trim()
+    Write-Host "Erkannte Architektur: $archRaw" -ForegroundColor Cyan
     $arch = switch ($archRaw) {
         'aarch64' { 'arm64' }
+        'arm64'   { 'arm64' }
         'armv7l'  { 'arm' }
         'armv6l'  { 'arm' }
         'x86_64'  { 'amd64' }
+        'amd64'   { 'amd64' }
         default   { throw "Nicht unterstuetzte Architektur fuer cloudflared: $archRaw" }
     }
     Write-Host "Lade cloudflared ($arch)..." -ForegroundColor Cyan
@@ -271,7 +293,17 @@ function Install-StellareCloudflared {
     Invoke-Native curl -fsSL -o $tmp "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-$arch"
     Invoke-Native sudo install -m 0755 $tmp $script:TunnelBinary
     Remove-Item $tmp -Force
-    Write-Host "cloudflared installiert: $(& $script:TunnelBinary --version 2>$null)" -ForegroundColor Green
+
+    $versionOutput = $null
+    $works = $false
+    try {
+        $versionOutput = & $script:TunnelBinary --version 2>&1
+        $works = ($LASTEXITCODE -eq 0)
+    } catch { $works = $false }
+    if(-not $works){
+        throw "cloudflared wurde heruntergeladen, laesst sich aber nicht ausfuehren (Exec format error?). Erkannte Architektur: '$archRaw' -> '$arch'. Bitte 'uname -m' und 'cat /etc/os-release' pruefen und mitteilen."
+    }
+    Write-Host "cloudflared installiert: $versionOutput" -ForegroundColor Green
 }
 
 function Install-StellareTunnel {
@@ -285,9 +317,9 @@ function Install-StellareTunnel {
         Mit Get-StellareTunnelAddress laesst sie sich jederzeit erneut abrufen.
     #>
     [CmdletBinding()]
-    param([int]$Port = 3000)
+    param([int]$Port = 3000, [switch]$Force)
 
-    Install-StellareCloudflared
+    Install-StellareCloudflared -Force:$Force
 
     Write-Host "== Tunnel-Dienst einrichten ==" -ForegroundColor Cyan
     $currentUser = (& whoami).Trim()
