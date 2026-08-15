@@ -1,70 +1,70 @@
 const defs = {
   buildings: {
-    metalMine:{name:'Metallmine', base:{metal:60, crystal:15, deut:0}, powerUse:l=>10*l, prod:l=>30*l*Math.pow(1.1,l)},
-    crystalMine:{name:'Kristallmine', base:{metal:48, crystal:24, deut:0}, powerUse:l=>10*l, prod:l=>20*l*Math.pow(1.1,l)},
-    deutSynth:{name:'Deuterium-Synthesizer', base:{metal:225, crystal:75, deut:0}, powerUse:l=>20*l, prod:l=>10*l*Math.pow(1.1,l)},
-    solarPlant:{name:'Solarkraftwerk', base:{metal:75, crystal:30, deut:0}, power:l=>40*l*Math.pow(1.05,l)},
-    fusionReactor:{name:'Fusionskraftwerk', base:{metal:900, crystal:360, deut:180}, power:l=>30*l*Math.pow(1.05,l), deutUse:l=>Math.floor(10*l*Math.pow(1.1,l)), requires:{deutSynth:5, energyTech:3}},
-    robotFactory:{name:'Roboterfabrik', base:{metal:400, crystal:120, deut:200}},
-    shipyard:{name:'Raumschiffwerft', base:{metal:400, crystal:200, deut:100}, requires:{robotFactory:2}},
-    spaceDock:{name:'Raumstation', base:{metal:20000, crystal:40000, deut:0}, requires:{shipyard:3}},
-    researchLab:{name:'Forschungslabor', base:{metal:200, crystal:400, deut:200}},
-    metalStorage:{name:'Metallspeicher', base:{metal:1000, crystal:0, deut:0}},
-    crystalStorage:{name:'Kristallspeicher', base:{metal:1000, crystal:500, deut:0}},
-    deutTank:{name:'Deuteriumtank', base:{metal:1000, crystal:1000, deut:0}},
-    missileLauncher:{name:'Raketenwerfer', base:{metal:2000, crystal:0, deut:0}, isDefense:true, attack:80, shield:20, hull:2000, requires:{shipyard:1}},
-    lightLaser:{name:'Leichtes Laser-Geschütz', base:{metal:1500, crystal:500, deut:0}, isDefense:true, attack:100, shield:25, hull:2000, requires:{shipyard:2, energyTech:1}},
-    heavyLaser:{name:'Schweres Laser-Geschütz', base:{metal:6000, crystal:2000, deut:0}, isDefense:true, attack:250, shield:100, hull:8000, requires:{shipyard:4, energyTech:3}},
-    gaussCannon:{name:'Gauß-Kanone', base:{metal:20000, crystal:15000, deut:2000}, isDefense:true, attack:1100, shield:200, hull:35000, requires:{shipyard:6, weaponsTech:3, shieldingTech:1, energyTech:6}},
-    ionCannon:{name:'Ionenkanone', base:{metal:5000, crystal:3000, deut:0}, isDefense:true, attack:150, shield:500, hull:8000, requires:{shipyard:4, ionTech:4}},
-    plasmaTurret:{name:'Plasmawerfer', base:{metal:50000, crystal:50000, deut:30000}, isDefense:true, attack:3000, shield:300, hull:100000, requires:{shipyard:8, plasmaTech:7}},
-    smallShield:{name:'Kleine Schildkuppel', base:{metal:10000, crystal:10000, deut:0}, isDefense:true, unique:true, attack:1, shield:2000, hull:20000, requires:{shieldingTech:2}},
-    largeShield:{name:'Große Schildkuppel', base:{metal:50000, crystal:50000, deut:0}, isDefense:true, unique:true, attack:1, shield:10000, hull:100000, requires:{shipyard:6, shieldingTech:6}},
-    interplanetaryMissile:{name:'Interplanetare Rakete', base:{metal:12500, crystal:2500, deut:0}, isDefense:true, attack:12000, shield:0, hull:1, requires:{missileSilo:4}},
-    naniteFactory:{name:'Nanitenfabrik', base:{metal:1000000, crystal:500000, deut:100000}, requires:{robotFactory:10, computerTech:10}, facility:true},
-    terraformer:{name:'Terraformer', base:{metal:0, crystal:50000, deut:100000}, requires:{naniteFactory:1, energyTech:12}, facility:true},
-    allianceDepot:{name:'Allianzdepot', base:{metal:20000, crystal:40000, deut:0}, requires:{shipyard:3}, facility:true},
-    missileSilo:{name:'Raketensilo', base:{metal:20000, crystal:20000, deut:1000}, requires:{shipyard:1}, facility:true},
-    sensorPhalanx:{name:'Sensorphalanx', base:{metal:20000, crystal:40000, deut:20000}, requires:{naniteFactory:1}, moonOnly:true, facility:true},
-    jumpGate:{name:'Sprungtor', base:{metal:2000000, crystal:4000000, deut:800000}, requires:{naniteFactory:1, hyperspaceTech:7}, moonOnly:true, facility:true},
-    lunarBase:{name:'Lunarbasis', base:{metal:20000, crystal:40000, deut:20000}, requires:{}, moonOnly:true, facility:true},
+    metalMine:{name:'Metallmine', desc:'Produziert Metall, den wichtigsten Rohstoff für Gebäude und Schiffe. Jede Stufe erhöht die Förderleistung.', base:{metal:60, crystal:15, deut:0}, powerUse:l=>10*l, prod:l=>30*l*Math.pow(1.1,l)},
+    crystalMine:{name:'Kristallmine', desc:'Produziert Kristall, benötigt für fortschrittlichere Bauten und Technologien.', base:{metal:48, crystal:24, deut:0}, powerUse:l=>10*l, prod:l=>20*l*Math.pow(1.1,l)},
+    deutSynth:{name:'Deuterium-Synthesizer', desc:'Gewinnt Deuterium aus der Planetenatmosphäre - Treibstoff für Flotten und Antrieb der Fusionskraftwerke.', base:{metal:225, crystal:75, deut:0}, powerUse:l=>20*l, prod:l=>10*l*Math.pow(1.1,l)},
+    solarPlant:{name:'Solarkraftwerk', desc:'Erzeugt Energie durch Sonnenlicht, die von den Minen zum Betrieb benötigt wird.', base:{metal:75, crystal:30, deut:0}, power:l=>40*l*Math.pow(1.05,l)},
+    fusionReactor:{name:'Fusionskraftwerk', desc:'Erzeugt zusätzliche Energie durch Verbrennung von Deuterium - unabhängig vom Sonnenlicht, verbraucht aber laufend Deuterium.', base:{metal:900, crystal:360, deut:180}, power:l=>30*l*Math.pow(1.05,l), deutUse:l=>Math.floor(10*l*Math.pow(1.1,l)), requires:{deutSynth:5, energyTech:3}},
+    robotFactory:{name:'Roboterfabrik', desc:'Beschleunigt den Bau von Gebäuden und ist Voraussetzung für viele fortgeschrittene Anlagen.', base:{metal:400, crystal:120, deut:200}},
+    shipyard:{name:'Raumschiffwerft', desc:'Ermöglicht den Bau von Raumschiffen und Verteidigungsanlagen.', base:{metal:400, crystal:200, deut:100}, requires:{robotFactory:2}},
+    spaceDock:{name:'Raumstation', desc:'Fortgeschrittene Werftanlage, Voraussetzung für die stärksten Kriegsschiffe.', base:{metal:20000, crystal:40000, deut:0}, requires:{shipyard:3}},
+    researchLab:{name:'Forschungslabor', desc:'Ermöglicht das Erforschen neuer Technologien und beschleunigt laufende Forschung.', base:{metal:200, crystal:400, deut:200}},
+    metalStorage:{name:'Metallspeicher', desc:'Erhöht die maximale Lagerkapazität für Metall.', base:{metal:1000, crystal:0, deut:0}},
+    crystalStorage:{name:'Kristallspeicher', desc:'Erhöht die maximale Lagerkapazität für Kristall.', base:{metal:1000, crystal:500, deut:0}},
+    deutTank:{name:'Deuteriumtank', desc:'Erhöht die maximale Lagerkapazität für Deuterium.', base:{metal:1000, crystal:1000, deut:0}},
+    missileLauncher:{name:'Raketenwerfer', desc:'Einfache, günstige Verteidigungsanlage mit solidem Grundschutz.', base:{metal:2000, crystal:0, deut:0}, isDefense:true, attack:80, shield:20, hull:2000, requires:{shipyard:1}},
+    lightLaser:{name:'Leichtes Laser-Geschütz', desc:'Leichte Laserkanone mit ausgewogenem Verhältnis aus Kosten und Feuerkraft.', base:{metal:1500, crystal:500, deut:0}, isDefense:true, attack:100, shield:25, hull:2000, requires:{shipyard:2, energyTech:1}},
+    heavyLaser:{name:'Schweres Laser-Geschütz', desc:'Schwere Laserkanone mit deutlich mehr Angriffskraft.', base:{metal:6000, crystal:2000, deut:0}, isDefense:true, attack:250, shield:100, hull:8000, requires:{shipyard:4, energyTech:3}},
+    gaussCannon:{name:'Gauß-Kanone', desc:'Schweres Railgun-Geschütz mit hoher Durchschlagskraft, teuer aber effektiv.', base:{metal:20000, crystal:15000, deut:2000}, isDefense:true, attack:1100, shield:200, hull:35000, requires:{shipyard:6, weaponsTech:3, shieldingTech:1, energyTech:6}},
+    ionCannon:{name:'Ionenkanone', desc:'Spezialisiert auf hohe Schildwerte - schwer zu durchdringen.', base:{metal:5000, crystal:3000, deut:0}, isDefense:true, attack:150, shield:500, hull:8000, requires:{shipyard:4, ionTech:4}},
+    plasmaTurret:{name:'Plasmawerfer', desc:'Stärkste konventionelle Verteidigungsanlage mit enormer Feuerkraft.', base:{metal:50000, crystal:50000, deut:30000}, isDefense:true, attack:3000, shield:300, hull:100000, requires:{shipyard:8, plasmaTech:7}},
+    smallShield:{name:'Kleine Schildkuppel', desc:'Errichtet einen Schutzschild um den gesamten Planeten (nur einmal baubar).', base:{metal:10000, crystal:10000, deut:0}, isDefense:true, unique:true, attack:1, shield:2000, hull:20000, requires:{shieldingTech:2}},
+    largeShield:{name:'Große Schildkuppel', desc:'Mächtiger Schutzschild mit deutlich höherer Kapazität als die kleine Schildkuppel (nur einmal baubar).', base:{metal:50000, crystal:50000, deut:0}, isDefense:true, unique:true, attack:1, shield:10000, hull:100000, requires:{shipyard:6, shieldingTech:6}},
+    interplanetaryMissile:{name:'Interplanetare Rakete', desc:'Einweg-Fernwaffe gegen gegnerische Verteidigung in Reichweite des Raketensilos.', base:{metal:12500, crystal:2500, deut:0}, isDefense:true, attack:12000, shield:0, hull:1, requires:{missileSilo:4}},
+    naniteFactory:{name:'Nanitenfabrik', desc:'Hochentwickelte Fertigungsanlage, Voraussetzung für die fortschrittlichsten Bauten.', base:{metal:1000000, crystal:500000, deut:100000}, requires:{robotFactory:10, computerTech:10}, facility:true},
+    terraformer:{name:'Terraformer', desc:'Formt die Planetenoberfläche um und schafft zusätzlichen Baugrund.', base:{metal:0, crystal:50000, deut:100000}, requires:{naniteFactory:1, energyTech:12}, facility:true},
+    allianceDepot:{name:'Allianzdepot', desc:'Lagerplatz für Ressourcen, die der Allianz zur Verfügung gestellt werden.', base:{metal:20000, crystal:40000, deut:0}, requires:{shipyard:3}, facility:true},
+    missileSilo:{name:'Raketensilo', desc:'Lagert und startet interplanetare Raketen zum Fernangriff auf gegnerische Verteidigung.', base:{metal:20000, crystal:20000, deut:1000}, requires:{shipyard:1}, facility:true},
+    sensorPhalanx:{name:'Sensorphalanx', desc:'Ermöglicht die Überwachung fremder Systeme von einem Mond aus.', base:{metal:20000, crystal:40000, deut:20000}, requires:{naniteFactory:1}, moonOnly:true, facility:true},
+    jumpGate:{name:'Sprungtor', desc:'Verbindet zwei eigene Monde für verzögerungsfreien Flottentransfer.', base:{metal:2000000, crystal:4000000, deut:800000}, requires:{naniteFactory:1, hyperspaceTech:7}, moonOnly:true, facility:true},
+    lunarBase:{name:'Lunarbasis', desc:'Grundlegende Infrastruktur auf einem Mond, Voraussetzung für weitere Mondgebäude.', base:{metal:20000, crystal:40000, deut:20000}, requires:{}, moonOnly:true, facility:true},
   },
   research: {
-    energyTech:{name:'Energietechnik', base:{metal:0, crystal:800, deut:400}, requires:{researchLab:1}},
-    combustion:{name:'Verbrennungstriebwerk', base:{metal:400, crystal:0, deut:600}, requires:{researchLab:1, energyTech:1}},
-    computerTech:{name:'Computertechnik', base:{metal:0, crystal:400, deut:600}, requires:{researchLab:1}},
-    weaponsTech:{name:'Waffentechnik', base:{metal:800, crystal:200, deut:0}, requires:{researchLab:4}},
-    shieldingTech:{name:'Schildtechnik', base:{metal:200, crystal:600, deut:0}, requires:{researchLab:6, energyTech:3}},
-    espionageTech:{name:'Spionagetechnik', base:{metal:200, crystal:1000, deut:200}, requires:{researchLab:3}},
-    impulseDrive:{name:'Impulstriebwerk', base:{metal:2000, crystal:4000, deut:600}, requires:{researchLab:2, energyTech:1}},
-    armourTech:{name:'Rumpfpanzerung', base:{metal:1000, crystal:0, deut:0}, requires:{researchLab:2}},
-    hyperspaceTech:{name:'Hyperraumtechnik', base:{metal:0, crystal:4000, deut:2000}, requires:{researchLab:7, energyTech:5, shieldingTech:5}},
-    hyperspaceDrive:{name:'Hyperraumantrieb', base:{metal:10000, crystal:20000, deut:6000}, requires:{researchLab:7, hyperspaceTech:3}},
-    laserTech:{name:'Lasertechnik', base:{metal:200, crystal:100, deut:0}, requires:{researchLab:1, energyTech:2}},
-    ionTech:{name:'Iontechnik', base:{metal:1000, crystal:300, deut:100}, requires:{researchLab:4, laserTech:5, energyTech:4}},
-    plasmaTech:{name:'Plasmatechnik', base:{metal:2000, crystal:4000, deut:1000}, requires:{researchLab:4, energyTech:8, laserTech:10, ionTech:5}},
-    gravitonTech:{name:'Gravitationstechnik', base:{metal:0, crystal:0, deut:0}, requires:{researchLab:12}},
-    astrophysics:{name:'Astrophysik', base:{metal:4000, crystal:8000, deut:4000}, requires:{researchLab:3, espionageTech:4, impulseDrive:3}},
-    intergalacticNetwork:{name:'Intergalaktisches Forschungsnetzwerk', base:{metal:240000, crystal:400000, deut:160000}, requires:{researchLab:10, computerTech:8}},
+    energyTech:{name:'Energietechnik', desc:'Grundlagentechnologie für effizientere Energiegewinnung, Voraussetzung für viele weitere Forschungen.', base:{metal:0, crystal:800, deut:400}, requires:{researchLab:1}},
+    combustion:{name:'Verbrennungstriebwerk', desc:'Verbessert konventionelle Schiffsantriebe.', base:{metal:400, crystal:0, deut:600}, requires:{researchLab:1, energyTech:1}},
+    computerTech:{name:'Computertechnik', desc:'Erhöht die maximale Anzahl gleichzeitiger Flottenbewegungen und ist Grundlage für viele Technologien.', base:{metal:0, crystal:400, deut:600}, requires:{researchLab:1}},
+    weaponsTech:{name:'Waffentechnik', desc:'Erhöht die Angriffskraft aller Schiffe und Verteidigungsanlagen.', base:{metal:800, crystal:200, deut:0}, requires:{researchLab:4}},
+    shieldingTech:{name:'Schildtechnik', desc:'Erhöht die Schildstärke aller Schiffe und Verteidigungsanlagen.', base:{metal:200, crystal:600, deut:0}, requires:{researchLab:6, energyTech:3}},
+    espionageTech:{name:'Spionagetechnik', desc:'Verbessert Spionageberichte und die Erfolgschance bei Forschungsdiebstahl.', base:{metal:200, crystal:1000, deut:200}, requires:{researchLab:3}},
+    impulseDrive:{name:'Impulstriebwerk', desc:'Schnellerer Antrieb für mittelschwere Schiffe.', base:{metal:2000, crystal:4000, deut:600}, requires:{researchLab:2, energyTech:1}},
+    armourTech:{name:'Rumpfpanzerung', desc:'Erhöht die Hüllenstärke aller Schiffe und Verteidigungsanlagen.', base:{metal:1000, crystal:0, deut:0}, requires:{researchLab:2}},
+    hyperspaceTech:{name:'Hyperraumtechnik', desc:'Grundlage für Hyperraumantrieb und weitere fortschrittliche Technologien.', base:{metal:0, crystal:4000, deut:2000}, requires:{researchLab:7, energyTech:5, shieldingTech:5}},
+    hyperspaceDrive:{name:'Hyperraumantrieb', desc:'Schnellster verfügbarer Antrieb für große Kriegsschiffe.', base:{metal:10000, crystal:20000, deut:6000}, requires:{researchLab:7, hyperspaceTech:3}},
+    laserTech:{name:'Lasertechnik', desc:'Grundlage für Laserwaffen und weiterführende Waffentechnologien.', base:{metal:200, crystal:100, deut:0}, requires:{researchLab:1, energyTech:2}},
+    ionTech:{name:'Iontechnik', desc:'Grundlage für Ionenwaffen und -verteidigung.', base:{metal:1000, crystal:300, deut:100}, requires:{researchLab:4, laserTech:5, energyTech:4}},
+    plasmaTech:{name:'Plasmatechnik', desc:'Grundlage für Plasmawaffen, die stärkste konventionelle Waffentechnologie.', base:{metal:2000, crystal:4000, deut:1000}, requires:{researchLab:4, energyTech:8, laserTech:10, ionTech:5}},
+    gravitonTech:{name:'Gravitationstechnik', desc:'Extrem aufwendige Forschung, Voraussetzung für den Todesstern.', base:{metal:0, crystal:0, deut:0}, requires:{researchLab:12}},
+    astrophysics:{name:'Astrophysik', desc:'Erhöht die maximale Anzahl an Kolonien und gleichzeitigen Expeditionen.', base:{metal:4000, crystal:8000, deut:4000}, requires:{researchLab:3, espionageTech:4, impulseDrive:3}},
+    intergalacticNetwork:{name:'Intergalaktisches Forschungsnetzwerk', desc:'Beschleunigt die Forschung durch ein Netzwerk verbundener Forschungslabore.', base:{metal:240000, crystal:400000, deut:160000}, requires:{researchLab:10, computerTech:8}},
   },
   ships: {
-    smallCargo:{name:'Kleiner Transporter', cost:{metal:2000, crystal:2000, deut:0}, cargo:5000, speed:1, fuel:12, attack:5, shield:10, hull:4000, role:'cargo', requires:{shipyard:2}},
-    largeCargo:{name:'Großer Transporter', cost:{metal:6000, crystal:6000, deut:0}, cargo:25000, speed:0.8, fuel:28, attack:5, shield:25, hull:12000, role:'cargo', requires:{shipyard:4}},
-    colonyShip:{name:'Kolonieschiff', cost:{metal:10000, crystal:20000, deut:10000}, cargo:7500, speed:0.6, fuel:60, attack:0, shield:100, hull:30000, role:'colony', requires:{shipyard:4, combustion:3}},
-    espionageProbe:{name:'Spionagesonde', cost:{metal:0, crystal:1000, deut:0}, cargo:5, speed:3, fuel:1, attack:0, shield:0, hull:1000, role:'probe', requires:{shipyard:3, combustion:3}},
-    lightFighter:{name:'Leichter Jäger', cost:{metal:3000, crystal:1000, deut:0}, cargo:50, speed:1.4, fuel:20, attack:50, shield:10, hull:4000, role:'combat', requires:{shipyard:1, combustion:1}},
-    heavyFighter:{name:'Schwerer Jäger', cost:{metal:6000, crystal:4000, deut:0}, cargo:100, speed:1.0, fuel:25, attack:150, shield:25, hull:10000, role:'combat', requires:{shipyard:3, armourTech:2, impulseDrive:2}},
-    cruiser:{name:'Kreuzer', cost:{metal:20000, crystal:7000, deut:2000}, cargo:800, speed:1.1, fuel:40, attack:400, shield:50, hull:27000, role:'combat', requires:{shipyard:5, weaponsTech:2}},
-    battleship:{name:'Schlachtschiff', cost:{metal:45000, crystal:15000, deut:0}, cargo:1500, speed:0.8, fuel:50, attack:1000, shield:200, hull:60000, role:'combat', requires:{shipyard:7, hyperspaceDrive:4}},
-    battlecruiser:{name:'Großer Kreuzer', cost:{metal:30000, crystal:40000, deut:15000}, cargo:750, speed:0.9, fuel:250, attack:700, shield:400, hull:70000, role:'combat', requires:{shipyard:8, hyperspaceTech:5, laserTech:12}},
-    bomber:{name:'Bomber', cost:{metal:50000, crystal:25000, deut:15000}, cargo:500, speed:0.6, fuel:65, attack:1000, shield:500, hull:75000, role:'combat', requires:{shipyard:8, plasmaTech:5, impulseDrive:6}},
-    destroyer:{name:'Zerstörer', cost:{metal:60000, crystal:50000, deut:15000}, cargo:2000, speed:0.7, fuel:100, attack:2000, shield:500, hull:110000, role:'combat', requires:{shipyard:9, hyperspaceTech:5, hyperspaceDrive:6}},
-    reaper:{name:'Reaper', cost:{metal:85000, crystal:55000, deut:20000}, cargo:10000, speed:0.6, fuel:80, attack:2800, shield:700, hull:140000, role:'combat', requires:{shipyard:10, spaceDock:1, hyperspaceTech:6, hyperspaceDrive:7}},
-    pathfinder:{name:'Pfadfinder', cost:{metal:8000, crystal:15000, deut:8000}, cargo:10000, speed:1.6, fuel:20, attack:200, shield:100, hull:23000, role:'combat', requires:{shipyard:5, spaceDock:1, hyperspaceDrive:2, hyperspaceTech:3}},
-    deathstar:{name:'Todesstern', cost:{metal:5000000, crystal:4000000, deut:1000000}, cargo:1000000, speed:0.4, fuel:1, attack:200000, shield:50000, hull:9000000, role:'combat', requires:{shipyard:12, hyperspaceTech:6, gravitonTech:1}},
-    solarSatellite:{name:'Solarsatellit', cost:{metal:0, crystal:2000, deut:500}, cargo:0, speed:0, fuel:0, attack:1, shield:1, hull:2000, role:'power', requires:{}},
-    recycler:{name:'Recycler', cost:{metal:10000, crystal:6000, deut:2000}, cargo:20000, speed:0.7, fuel:30, attack:1, shield:10, hull:16000, role:'recycler', requires:{shipyard:4, combustion:6}},
-    researchShip:{name:'Forschungsschiff', cost:{metal:8000, crystal:15000, deut:6000}, cargo:500, speed:1.2, fuel:15, attack:0, shield:10, hull:5000, role:'research', requires:{shipyard:3, researchLab:3, computerTech:4}},
+    smallCargo:{name:'Kleiner Transporter', desc:'Günstiger Transporter für kleinere Ladungen.', cost:{metal:2000, crystal:2000, deut:0}, cargo:5000, speed:1, fuel:12, attack:5, shield:10, hull:4000, role:'cargo', requires:{shipyard:2}},
+    largeCargo:{name:'Großer Transporter', desc:'Transporter mit deutlich größerer Ladekapazität.', cost:{metal:6000, crystal:6000, deut:0}, cargo:25000, speed:0.8, fuel:28, attack:5, shield:25, hull:12000, role:'cargo', requires:{shipyard:4}},
+    colonyShip:{name:'Kolonieschiff', desc:'Wird für die Gründung neuer Kolonien benötigt.', cost:{metal:10000, crystal:20000, deut:10000}, cargo:7500, speed:0.6, fuel:60, attack:0, shield:100, hull:30000, role:'colony', requires:{shipyard:4, combustion:3}},
+    espionageProbe:{name:'Spionagesonde', desc:'Günstige, schnelle Sonde für Spionagemissionen.', cost:{metal:0, crystal:1000, deut:0}, cargo:5, speed:3, fuel:1, attack:0, shield:0, hull:1000, role:'probe', requires:{shipyard:3, combustion:3}},
+    lightFighter:{name:'Leichter Jäger', desc:'Günstiges Kampfschiff für frühe Angriffe.', cost:{metal:3000, crystal:1000, deut:0}, cargo:50, speed:1.4, fuel:20, attack:50, shield:10, hull:4000, role:'combat', requires:{shipyard:1, combustion:1}},
+    heavyFighter:{name:'Schwerer Jäger', desc:'Robusteres Kampfschiff mit mehr Feuerkraft als der leichte Jäger.', cost:{metal:6000, crystal:4000, deut:0}, cargo:100, speed:1.0, fuel:25, attack:150, shield:25, hull:10000, role:'combat', requires:{shipyard:3, armourTech:2, impulseDrive:2}},
+    cruiser:{name:'Kreuzer', desc:'Vielseitiges Kampfschiff, effektiv gegen leichte Jäger.', cost:{metal:20000, crystal:7000, deut:2000}, cargo:800, speed:1.1, fuel:40, attack:400, shield:50, hull:27000, role:'combat', requires:{shipyard:5, weaponsTech:2}},
+    battleship:{name:'Schlachtschiff', desc:'Schweres Kampfschiff mit hoher Feuerkraft und Hülle.', cost:{metal:45000, crystal:15000, deut:0}, cargo:1500, speed:0.8, fuel:50, attack:1000, shield:200, hull:60000, role:'combat', requires:{shipyard:7, hyperspaceDrive:4}},
+    battlecruiser:{name:'Großer Kreuzer', desc:'Spezialisiert auf die Bekämpfung von Verteidigungsanlagen.', cost:{metal:30000, crystal:40000, deut:15000}, cargo:750, speed:0.9, fuel:250, attack:700, shield:400, hull:70000, role:'combat', requires:{shipyard:8, hyperspaceTech:5, laserTech:12}},
+    bomber:{name:'Bomber', desc:'Spezialisiert auf die Zerstörung feindlicher Verteidigungsanlagen.', cost:{metal:50000, crystal:25000, deut:15000}, cargo:500, speed:0.6, fuel:65, attack:1000, shield:500, hull:75000, role:'combat', requires:{shipyard:8, plasmaTech:5, impulseDrive:6}},
+    destroyer:{name:'Zerstörer', desc:'Schweres Kampfschiff, besonders effektiv gegen Bomber.', cost:{metal:60000, crystal:50000, deut:15000}, cargo:2000, speed:0.7, fuel:100, attack:2000, shield:500, hull:110000, role:'combat', requires:{shipyard:9, hyperspaceTech:5, hyperspaceDrive:6}},
+    reaper:{name:'Reaper', desc:'Elite-Kampfschiff mit enormer Feuerkraft und Hülle.', cost:{metal:85000, crystal:55000, deut:20000}, cargo:10000, speed:0.6, fuel:80, attack:2800, shield:700, hull:140000, role:'combat', requires:{shipyard:10, spaceDock:1, hyperspaceTech:6, hyperspaceDrive:7}},
+    pathfinder:{name:'Pfadfinder', desc:'Schnelles, vielseitiges Schiff mit hoher Ladekapazität.', cost:{metal:8000, crystal:15000, deut:8000}, cargo:10000, speed:1.6, fuel:20, attack:200, shield:100, hull:23000, role:'combat', requires:{shipyard:5, spaceDock:1, hyperspaceDrive:2, hyperspaceTech:3}},
+    deathstar:{name:'Todesstern', desc:'Die mächtigste Waffe im Universum - extrem teuer und stark.', cost:{metal:5000000, crystal:4000000, deut:1000000}, cargo:1000000, speed:0.4, fuel:1, attack:200000, shield:50000, hull:9000000, role:'combat', requires:{shipyard:12, hyperspaceTech:6, gravitonTech:1}},
+    solarSatellite:{name:'Solarsatellit', desc:'Liefert zusätzliche Energie, kann sich nicht bewegen oder kämpfen.', cost:{metal:0, crystal:2000, deut:500}, cargo:0, speed:0, fuel:0, attack:1, shield:1, hull:2000, role:'power', requires:{}},
+    recycler:{name:'Recycler', desc:'Sammelt Trümmerfelder nach Schlachten ein.', cost:{metal:10000, crystal:6000, deut:2000}, cargo:20000, speed:0.7, fuel:30, attack:1, shield:10, hull:16000, role:'recycler', requires:{shipyard:4, combustion:6}},
+    researchProbe:{name:'Forschungssonde', desc:'Baugleich mit der Spionagesonde, ermöglicht aber bei Spionage gegen NPC-Kolonien den Diebstahl fremder Forschung.', cost:{metal:0, crystal:1000, deut:0}, cargo:5, speed:3, fuel:1, attack:0, shield:0, hull:1000, role:'research', requires:{shipyard:3, combustion:3}},
   }
 };
 const missionLabels = {transport:'Transport', spy:'Spionage', attack:'Angriff', colonize:'Kolonisierung', harvest:'Trümmerfeld-Bergung'};
@@ -132,9 +132,41 @@ function openCoordMenu(anchorEl){
     };
   });
 }
+function infoIconHtml(type, key){ return `<button type="button" class="info-btn" data-info-type="${type}" data-info-key="${key}" title="Info" aria-label="Info">ⓘ</button>`; }
+function closeInfoModal(){ const m=document.getElementById('infoModal'); if(m) m.remove(); }
+function openInfoModal(type, key){
+  closeInfoModal();
+  const table = type==='building' ? defs.buildings : (type==='research' ? defs.research : defs.ships);
+  const d = table && table[key];
+  if(!d) return;
+  const statsRows = [];
+  if(d.attack!=null) statsRows.push(['Angriff', fmt(d.attack)]);
+  if(d.shield!=null) statsRows.push(['Schild', fmt(d.shield)]);
+  if(d.hull!=null) statsRows.push(['Hülle', fmt(d.hull)]);
+  if(d.cargo!=null) statsRows.push(['Ladekapazität', fmt(d.cargo)]);
+  if(d.speed!=null) statsRows.push(['Geschwindigkeit', d.speed]);
+  if(d.requires && Object.keys(d.requires).length) statsRows.push(['Voraussetzung', requirementText(d.requires)]);
+  const modal = document.createElement('div');
+  modal.id = 'infoModal';
+  modal.className = 'info-modal';
+  modal.innerHTML = `<div class="info-modal-box">
+    <div class="info-modal-head"><strong>${d.name}</strong><button type="button" class="info-modal-close" data-info-close="1">&times;</button></div>
+    <div class="info-modal-body">
+      <p>${d.desc||'Keine Beschreibung verfügbar.'}</p>
+      ${statsRows.length ? `<table class="info-modal-table">${statsRows.map(([k,v])=>`<tr><td>${k}</td><td>${v}</td></tr>`).join('')}</table>` : ''}
+    </div>
+  </div>`;
+  document.body.appendChild(modal);
+}
 document.addEventListener('click', (e)=>{
   const link = e.target.closest('.coord-link');
   if(link){ e.stopPropagation(); openCoordMenu(link); return; }
+  const infoBtn = e.target.closest('.info-btn');
+  if(infoBtn){ e.stopPropagation(); openInfoModal(infoBtn.dataset.infoType, infoBtn.dataset.infoKey); return; }
+  if(e.target.closest('[data-info-close]')){ closeInfoModal(); return; }
+  const modalBox = e.target.closest('.info-modal-box');
+  const modalOverlay = e.target.closest('.info-modal');
+  if(modalOverlay && !modalBox){ closeInfoModal(); return; }
   const menu = document.getElementById('coordMenu');
   if(menu && !menu.contains(e.target)){ closeCoordMenu(); }
 });
@@ -749,12 +781,12 @@ function viewOverview(){ const p=active(), e=energyStats(p), inc=hourly(p), cap=
     <div class="card"><h3>Flottenstatus</h3><div class="list">${Object.entries(p.ships).map(([k,v])=>`<div class="row"><div><strong>${defs.ships[k].name}</strong></div><div>${fmt(v)}</div></div>`).join('')}</div></div>
   </div>`; }
 
-function viewBuildings(){ const p=active(); return `<h2>Gebäude</h2><div class="list">${Object.entries(defs.buildings).filter(([,d])=>!d.isDefense && !d.facility).map(([k,d])=>{ const lvl=(p.buildings[k]||0)+1; const c=buildingCost(d.base,lvl); const ok=meetsRequirements(p,d.requires); return `<div class="row"><div><strong>${d.name}</strong><div class="sub">Stufe ${p.buildings[k]||0}</div><div class="sub">Kosten: M ${fmt(c.metal)} · K ${fmt(c.crystal)} · D ${fmt(c.deut)}</div>${!ok?`<div class="sub warn-text">Benötigt: ${requirementText(d.requires)}</div>`:''}</div><button class="btn" data-build="${k}" ${ok?'':'disabled'}>Ausbauen</button></div>`; }).join('')}</div>`; }
+function viewBuildings(){ const p=active(); return `<h2>Gebäude</h2><div class="list">${Object.entries(defs.buildings).filter(([,d])=>!d.isDefense && !d.facility).map(([k,d])=>{ const lvl=(p.buildings[k]||0)+1; const c=buildingCost(d.base,lvl); const ok=meetsRequirements(p,d.requires); return `<div class="row"><div><strong>${d.name}</strong><div class="sub">Stufe ${p.buildings[k]||0}</div><div class="sub">Kosten: M ${fmt(c.metal)} · K ${fmt(c.crystal)} · D ${fmt(c.deut)}</div>${!ok?`<div class="sub warn-text">Benötigt: ${requirementText(d.requires)}</div>`:''}</div><div style="display:flex;gap:6px;align-items:center">${infoIconHtml('building',k)}<button class="btn" data-build="${k}" ${ok?'':'disabled'}>Ausbauen</button></div></div>`; }).join('')}</div>`; }
 
-function viewFacilities(){ const p=active(); const facKeys = Object.entries(defs.buildings).filter(([,d])=>d.facility && !d.moonOnly); return `<h2>Anlagen</h2><div class="list">${facKeys.map(([k,d])=>{ const lvl=(p.buildings[k]||0)+1; const c=buildingCost(d.base,lvl); const ok=meetsRequirements(p,d.requires); return `<div class="row"><div><strong>${d.name}</strong><div class="sub">Stufe ${p.buildings[k]||0}</div><div class="sub">Kosten: M ${fmt(c.metal)} · K ${fmt(c.crystal)} · D ${fmt(c.deut)}</div>${!ok?`<div class="sub warn-text">Benötigt: ${requirementText(d.requires)}</div>`:''}</div><button class="btn alt" data-build="${k}" ${ok?'':'disabled'}>Ausbauen</button></div>`; }).join('')}</div>`; }
+function viewFacilities(){ const p=active(); const facKeys = Object.entries(defs.buildings).filter(([,d])=>d.facility && !d.moonOnly); return `<h2>Anlagen</h2><div class="list">${facKeys.map(([k,d])=>{ const lvl=(p.buildings[k]||0)+1; const c=buildingCost(d.base,lvl); const ok=meetsRequirements(p,d.requires); return `<div class="row"><div><strong>${d.name}</strong><div class="sub">Stufe ${p.buildings[k]||0}</div><div class="sub">Kosten: M ${fmt(c.metal)} · K ${fmt(c.crystal)} · D ${fmt(c.deut)}</div>${!ok?`<div class="sub warn-text">Benötigt: ${requirementText(d.requires)}</div>`:''}</div><div style="display:flex;gap:6px;align-items:center">${infoIconHtml('building',k)}<button class="btn alt" data-build="${k}" ${ok?'':'disabled'}>Ausbauen</button></div></div>`; }).join('')}</div>`; }
 function viewResources(){ const p=active(), inc=hourly(p), e=energyStats(p); return `<h2>Ressourcen</h2><div class="grid2"><div class="card"><h3>Produktion pro Stunde</h3><div class="list"><div class="row"><span>Metall</span><strong>${fmt1(inc.metal)}</strong></div><div class="row"><span>Kristall</span><strong>${fmt1(inc.crystal)}</strong></div><div class="row"><span>Deuterium</span><strong>${fmt1(inc.deut)}</strong></div></div></div><div class="card"><h3>Energieeffizienz</h3><div class="bar"><span style="width:${Math.min(100,e.ratio*100)}%"></span></div><div style="height:10px"></div><div class="small">${fmt(e.prod)} verfügbar · ${fmt(e.use)} benötigt</div></div></div>`; }
-function viewResearch(){ const p=active(); return `<h2>Forschung</h2><div class="small">Max. Kolonien: ${maxColonies(p)} · Max. gleichzeitige Expeditionen: ${maxExpeditions(p)} (abhängig von Astrophysik)</div><div style="height:10px"></div><div class="list">${Object.entries(defs.research).map(([k,d])=>{ const lvl=p.research[k]+1; const c=scaledCost(d.base,lvl); const ok=meetsRequirements(p,d.requires); return `<div class="row"><div><strong>${d.name}</strong><div class="sub">Stufe ${p.research[k]}</div><div class="sub">Kosten: M ${fmt(c.metal)} · K ${fmt(c.crystal)} · D ${fmt(c.deut)}</div>${!ok?`<div class="sub warn-text">Benötigt: ${requirementText(d.requires)}</div>`:''}</div><button class="btn good" data-research="${k}" ${ok?'':'disabled'}>Forschen</button></div>`; }).join('')}</div>`; }
-function viewShipyard(){ const p=active(); return `<h2>Raumschiffwerft</h2><div class="list">${Object.entries(defs.ships).map(([k,d])=>{ const ok=meetsRequirements(p,d.requires); return `<div class="row"><div><strong>${d.name}</strong><div class="sub">Vorhanden ${fmt(p.ships[k]||0)} · Angriff ${d.attack} · Ladung ${fmt(d.cargo)}</div><div class="sub">Kosten: M ${fmt(d.cost.metal)} · K ${fmt(d.cost.crystal)} · D ${fmt(d.cost.deut)}</div>${!ok?`<div class="sub warn-text">Benötigt: ${requirementText(d.requires)}</div>`:''}</div><button class="btn warn" data-ship="${k}" ${ok?'':'disabled'}>Bauen</button></div>`; }).join('')}</div>`; }
+function viewResearch(){ const p=active(); return `<h2>Forschung</h2><div class="small">Max. Kolonien: ${maxColonies(p)} · Max. gleichzeitige Expeditionen: ${maxExpeditions(p)} (abhängig von Astrophysik)</div><div style="height:10px"></div><div class="list">${Object.entries(defs.research).map(([k,d])=>{ const lvl=p.research[k]+1; const c=scaledCost(d.base,lvl); const ok=meetsRequirements(p,d.requires); return `<div class="row"><div><strong>${d.name}</strong><div class="sub">Stufe ${p.research[k]}</div><div class="sub">Kosten: M ${fmt(c.metal)} · K ${fmt(c.crystal)} · D ${fmt(c.deut)}</div>${!ok?`<div class="sub warn-text">Benötigt: ${requirementText(d.requires)}</div>`:''}</div><div style="display:flex;gap:6px;align-items:center">${infoIconHtml('research',k)}<button class="btn good" data-research="${k}" ${ok?'':'disabled'}>Forschen</button></div></div>`; }).join('')}</div>`; }
+function viewShipyard(){ const p=active(); return `<h2>Raumschiffwerft</h2><div class="list">${Object.entries(defs.ships).map(([k,d])=>{ const ok=meetsRequirements(p,d.requires); return `<div class="row"><div><strong>${d.name}</strong><div class="sub">Vorhanden ${fmt(p.ships[k]||0)} · Angriff ${d.attack} · Ladung ${fmt(d.cargo)}</div><div class="sub">Kosten: M ${fmt(d.cost.metal)} · K ${fmt(d.cost.crystal)} · D ${fmt(d.cost.deut)}</div>${!ok?`<div class="sub warn-text">Benötigt: ${requirementText(d.requires)}</div>`:''}</div><div style="display:flex;gap:6px;align-items:center">${infoIconHtml('ship',k)}<button class="btn warn" data-ship="${k}" ${ok?'':'disabled'}>Bauen</button></div></div>`; }).join('')}</div>`; }
 
 function viewFleet(){
   const p=active();
@@ -823,7 +855,7 @@ function viewDefense(){
     const disabled = !ok || uniqueBlocked || missileBlocked;
     const cm=Math.floor(d.base.metal*d2), cc=Math.floor(d.base.crystal*d2), cd=Math.floor(d.base.deut*d2);
     const capNote = k==='interplanetaryMissile' ? `<div class="sub">Kapazität: ${count}/${missileCap} (Raketensilo)</div>` : '';
-    return `<div class="row"><div><strong>${d.name}</strong><div class="sub">Vorhanden ${fmt(count)} · Angriff ${d.attack} · Schild ${fmt(d.shield)} · Hülle ${fmt(d.hull)}</div>${capNote}<div class="sub">Kosten: M ${fmt(cm)} · K ${fmt(cc)} · D ${fmt(cd)}</div>${!ok?`<div class="sub warn-text">Benötigt: ${requirementText(d.requires)}</div>`:''}${uniqueBlocked?'<div class="sub warn-text">Bereits vorhanden (Unikat)</div>':''}${missileBlocked?'<div class="sub warn-text">Silo-Kapazität erreicht</div>':''}</div><button class="btn danger" data-defense="${k}" ${disabled?'disabled':''}>Bauen</button></div>`;
+    return `<div class="row"><div><strong>${d.name}</strong><div class="sub">Vorhanden ${fmt(count)} · Angriff ${d.attack} · Schild ${fmt(d.shield)} · Hülle ${fmt(d.hull)}</div>${capNote}<div class="sub">Kosten: M ${fmt(cm)} · K ${fmt(cc)} · D ${fmt(cd)}</div>${!ok?`<div class="sub warn-text">Benötigt: ${requirementText(d.requires)}</div>`:''}${uniqueBlocked?'<div class="sub warn-text">Bereits vorhanden (Unikat)</div>':''}${missileBlocked?'<div class="sub warn-text">Silo-Kapazität erreicht</div>':''}</div><div style="display:flex;gap:6px;align-items:center">${infoIconHtml('building',k)}<button class="btn danger" data-defense="${k}" ${disabled?'disabled':''}>Bauen</button></div></div>`;
   }).join('');
   const missileForm = (missileCap>=1 && (p.buildings.interplanetaryMissile||0)>0) ? missileLaunchFormHtml(p) : '';
   return `<h2>Verteidigung</h2><div class="list">${rows}</div><div style="height:16px"></div>${missileForm}`;

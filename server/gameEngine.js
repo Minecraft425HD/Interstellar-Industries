@@ -66,7 +66,7 @@ const defs = {
     deathstar:{name:'Todesstern', cost:{metal:5000000, crystal:4000000, deut:1000000}, cargo:1000000, speed:0.4, fuel:1, attack:200000, shield:50000, hull:9000000, role:'combat', requires:{shipyard:12, hyperspaceTech:6, gravitonTech:1}},
     solarSatellite:{name:'Solarsatellit', cost:{metal:0, crystal:2000, deut:500}, cargo:0, speed:0, fuel:0, attack:1, shield:1, hull:2000, role:'power', requires:{}},
     recycler:{name:'Recycler', cost:{metal:10000, crystal:6000, deut:2000}, cargo:20000, speed:0.7, fuel:30, attack:1, shield:10, hull:16000, role:'recycler', requires:{shipyard:4, combustion:6}},
-    researchShip:{name:'Forschungsschiff', cost:{metal:8000, crystal:15000, deut:6000}, cargo:500, speed:1.2, fuel:15, attack:0, shield:10, hull:5000, role:'research', requires:{shipyard:3, researchLab:3, computerTech:4}},
+    researchProbe:{name:'Forschungssonde', cost:{metal:0, crystal:1000, deut:0}, cargo:5, speed:3, fuel:1, attack:0, shield:0, hull:1000, role:'research', requires:{shipyard:3, combustion:3}},
   }
 };
 const missionLabels = {transport:'Transport', spy:'Spionage', attack:'Angriff', colonize:'Kolonisierung', harvest:'Trümmerfeld-Bergung'};
@@ -747,7 +747,7 @@ function resolveArrival(universe, username, f){
       const defPower = sidePower(f.npcSlot.defenseShips, defs.buildings).attack;
       state.reports.unshift({time:new Date().toLocaleTimeString('de-DE'), target:f.npcSlot.name, coords:coordStr(f.toCoord), coordArr:f.toCoord, resources:{metal:f.npcSlot.metal, crystal:f.npcSlot.crystal, deut:f.npcSlot.deut}, defense:defPower, fleet:f.npcSlot.fleet, buildings:f.npcSlot.buildings, research:f.npcSlot.research});
       log(state, 'Spionagebericht über '+f.npcSlot.name+' erhalten');
-      if(f.ships.researchShip>0) attemptResearchTheft(state, state.planets[f.from], f.npcSlot);
+      if(f.ships.researchProbe>0) attemptResearchTheft(state, state.planets[f.from], f.npcSlot);
     } else if(targetState){
       const t = targetState.planets[f.toPlanetIndex];
       if(t){

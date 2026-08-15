@@ -158,6 +158,47 @@ h3{ margin:0 0 10px; font-size:14px; color:var(--accent2); }
 .row .sub{ font-size:11.5px; color:var(--muted); margin-top:2px; }
 .warn-text{ color:var(--warn) !important; }
 
+.info-btn{
+  flex:0 0 auto; width:26px; height:26px; border-radius:50%;
+  border:1px solid var(--accent2); background:rgba(124,247,208,.08);
+  color:var(--accent2); font-size:14px; font-weight:700; line-height:1;
+  cursor:pointer; display:flex; align-items:center; justify-content:center;
+  padding:0; transition:background .15s, transform .1s;
+}
+.info-btn:hover{ background:rgba(124,247,208,.2); }
+.info-btn:active{ transform:scale(.92); }
+
+.info-modal{
+  position:fixed; inset:0; z-index:200;
+  background:rgba(4,8,16,.72);
+  display:flex; align-items:center; justify-content:center;
+  padding:16px;
+}
+.info-modal-box{
+  width:100%; max-width:420px; max-height:80vh; overflow-y:auto;
+  background-image: var(--tex-diagonal-soft), linear-gradient(180deg, var(--panel2), #0a1120);
+  background-repeat: repeat, no-repeat;
+  border:1px solid var(--border); border-radius:10px;
+  box-shadow: 0 20px 60px -12px rgba(0,0,0,.7);
+}
+.info-modal-head{
+  display:flex; align-items:center; justify-content:space-between; gap:10px;
+  padding:12px 14px; border-bottom:1px solid var(--border);
+  position:sticky; top:0; background:var(--panel2);
+}
+.info-modal-head strong{ font-size:14px; color:var(--text); }
+.info-modal-close{
+  border:none; background:transparent; color:var(--muted); font-size:20px;
+  line-height:1; cursor:pointer; padding:2px 6px;
+}
+.info-modal-close:hover{ color:var(--text); }
+.info-modal-body{ padding:14px; }
+.info-modal-body p{ margin:0 0 10px 0; font-size:13px; color:var(--text); line-height:1.5; }
+.info-modal-table{ width:100%; border-collapse:collapse; font-size:12.5px; }
+.info-modal-table td{ padding:5px 4px; border-top:1px solid var(--border); }
+.info-modal-table td:first-child{ color:var(--muted); }
+.info-modal-table td:last-child{ text-align:right; font-weight:700; color:var(--text); }
+
 .btn{
   border:none; border-radius:3px; padding:9px 16px; font-size:12.5px; font-weight:700;
   letter-spacing:.02em;
