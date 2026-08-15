@@ -188,6 +188,17 @@ let connectionError = '';
 let everConnected = false;
 let pollTimer = null;
 
+const API_TIMEOUT_MS = 10000;
+async function fetchWithTimeout(url, options, timeoutMs){
+  const controller = new AbortController();
+  const timer = setTimeout(()=>controller.abort(), timeoutMs || API_TIMEOUT_MS);
+  try {
+    return await fetch(url, Object.assign({}, options, {signal: controller.signal}));
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 async function apiFetch(path, options){
   const base = getServerUrl().replace(/\/$/,'');
   if(!base) throw new Error('Keine Serveradresse konfiguriert');
@@ -196,8 +207,11 @@ async function apiFetch(path, options){
   const token = getToken();
   if(token) headers['Authorization'] = 'Bearer '+token;
   let res;
-  try { res = await fetch(base+path, Object.assign({}, options, {headers})); }
-  catch(networkErr){ throw new Error('Server nicht erreichbar'); }
+  try { res = await fetchWithTimeout(base+path, Object.assign({}, options, {headers})); }
+  catch(networkErr){
+    if(networkErr.name==='AbortError') throw new Error('Zeitüberschreitung – Server antwortet nicht innerhalb von '+(API_TIMEOUT_MS/1000)+'s. Adresse/Port prüfen und ob Handy & Server im selben Netzwerk sind.');
+    throw new Error('Server nicht erreichbar');
+  }
   let body = null;
   try { body = await res.json(); } catch(e){ /* no body */ }
   if(res.status===401){
@@ -308,7 +322,7 @@ function renderConnectScreen(){
     <h2>Mit Server verbinden</h2>
     <div class="small" style="margin-bottom:14px">Stellare Industrien läuft als dedizierter Server, z.B. dauerhaft auf einem Raspberry Pi im Heimnetzwerk. Trage die Adresse ein, unter der er erreichbar ist.</div>
     <form id="connectForm" class="fleet-form">
-      <label>Server-Adresse<input type="text" name="url" value="${url}" placeholder="http://192.168.1.50:3000"></label>
+      <label>Server-Adresse<input type="text" name="url" value="${url}" placeholder="http://192.168.1.50:3000" autocapitalize="none" autocorrect="off" spellcheck="false" inputmode="url"></label>
       <button class="btn good" type="submit">Weiter</button>
     </form>
   </div>`;
@@ -342,11 +356,8 @@ async function fetchRegSlots(){
   regLoading = true; regSlots = null; authError='';
   renderAuthScreen();
   try {
-    const base = getServerUrl().replace(/\/$/,'');
-    const res = await fetch(base+'/api/galaxy?galaxy='+regForm.galaxy+'&system='+regForm.system);
-    const body = await res.json();
-    if(!res.ok) throw new Error((body && body.error) || 'Fehler beim Laden');
-    regSlots = body.slots;
+    const data = await apiFetch('/api/galaxy?galaxy='+regForm.galaxy+'&system='+regForm.system);
+    regSlots = data.slots;
   } catch(err){
     authError = 'Positionen konnten nicht geladen werden: '+err.message;
   }
@@ -368,8 +379,8 @@ function renderAuthScreen(){
   let body = '';
   if(authMode==='login'){
     body = `<form id="loginForm" class="fleet-form">
-      <label>Benutzername<input type="text" name="username" value="${regForm.username}" autocomplete="username"></label>
-      <label>Passwort<input type="password" name="password" autocomplete="current-password"></label>
+      <label>Benutzername<input type="text" name="username" value="${regForm.username}" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false"></label>
+      <label>Passwort<input type="password" name="password" autocomplete="current-password" autocapitalize="none" autocorrect="off" spellcheck="false"></label>
       <button class="btn good" type="submit">Anmelden</button>
     </form>`;
   } else {
@@ -388,9 +399,9 @@ function renderAuthScreen(){
     ${slotsHtml}
     <div style="height:14px"></div>
     <form id="registerForm" class="fleet-form">
-      <label>Benutzername<input type="text" name="username" value="${regForm.username}" autocomplete="username"></label>
-      <label>Passwort (min. 6 Zeichen)<input type="password" name="password" autocomplete="new-password"></label>
-      <label>Passwort wiederholen<input type="password" name="password2" autocomplete="new-password"></label>
+      <label>Benutzername<input type="text" name="username" value="${regForm.username}" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false"></label>
+      <label>Passwort (min. 6 Zeichen)<input type="password" name="password" autocomplete="new-password" autocapitalize="none" autocorrect="off" spellcheck="false"></label>
+      <label>Passwort wiederholen<input type="password" name="password2" autocomplete="new-password" autocapitalize="none" autocorrect="off" spellcheck="false"></label>
       <label>Planetenname (optional)<input type="text" name="planetName" value="${regForm.planetName}" placeholder="Heimatwelt"></label>
       <div class="small">Gewählte Position: ${regForm.selectedPos ? '['+regForm.galaxy+':'+regForm.system+':'+regForm.selectedPos+']' : 'keine – oben ein freies Feld anklicken'}</div>
       <button class="btn good" type="submit" ${regForm.selectedPos?'':'disabled'}>Konto erstellen</button>

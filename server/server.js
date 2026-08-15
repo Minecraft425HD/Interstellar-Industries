@@ -73,6 +73,14 @@ function sessionFromHeader(req){
   return { token, ...s };
 }
 
+function logLine(msg){
+  console.log('[' + new Date().toISOString() + '] ' + msg);
+}
+function clientIp(req){
+  const raw = req.headers['x-forwarded-for'] || req.socket.remoteAddress || '?';
+  return String(raw).replace('::ffff:', '');
+}
+
 const app = express();
 app.use(express.json({ limit: '2mb' }));
 
@@ -81,6 +89,20 @@ app.use((req, res, next) => {
   res.header('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
   res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   if(req.method === 'OPTIONS') return res.sendStatus(200);
+  next();
+});
+
+// Real-time access log: every incoming request, who it was (once authenticated),
+// what it hit and how it was answered. Visible live via `journalctl -u stellare-industrien -f`
+// or `pwsh ./stellare.ps1 logs -Follow`.
+app.use((req, res, next) => {
+  const start = Date.now();
+  const ip = clientIp(req);
+  res.on('finish', () => {
+    const dur = Date.now() - start;
+    const who = req.username ? (' user=' + req.username + (req.isAdmin ? '(admin)' : '')) : '';
+    logLine(ip + ' ' + req.method + ' ' + req.originalUrl + ' -> ' + res.statusCode + ' (' + dur + 'ms)' + who);
+  });
   next();
 });
 
@@ -111,26 +133,31 @@ app.get('/api/galaxy', (req, res) => {
 
 app.post('/api/register', (req, res) => {
   const { username, password, galaxy, system, position, planetName } = req.body || {};
-  if(!username || !password) return res.status(400).json({ ok:false, error:'Benutzername und Passwort erforderlich' });
-  if(String(password).length < 6) return res.status(400).json({ ok:false, error:'Passwort muss mindestens 6 Zeichen haben' });
+  const ip = clientIp(req);
+  if(!username || !password){ logLine('REGISTER FEHLGESCHLAGEN von ' + ip + ': Benutzername/Passwort fehlt'); return res.status(400).json({ ok:false, error:'Benutzername und Passwort erforderlich' }); }
+  if(String(password).length < 6){ logLine('REGISTER FEHLGESCHLAGEN von ' + ip + ' (' + username + '): Passwort zu kurz'); return res.status(400).json({ ok:false, error:'Passwort muss mindestens 6 Zeichen haben' }); }
   const coord = [Number(galaxy), Number(system), Number(position)];
   const passwordHash = auth.hashPassword(password);
   const result = engine.registerAccount(universe, username, passwordHash, coord, planetName);
-  if(!result.ok) return res.status(400).json(result);
+  if(!result.ok){ logLine('REGISTER FEHLGESCHLAGEN von ' + ip + ' (' + username + ' @ ' + coord.join(':') + '): ' + result.error); return res.status(400).json(result); }
   dirty = true; saveUniverse();
   const uname = String(username).trim();
   const token = issueToken(uname, false);
+  logLine('REGISTER OK: ' + uname + ' @ [' + coord.join(':') + '] von ' + ip);
   res.json({ ok:true, token, username: uname, isAdmin:false });
 });
 
 app.post('/api/login', (req, res) => {
   const uname = String((req.body && req.body.username) || '').trim();
   const password = (req.body && req.body.password) || '';
+  const ip = clientIp(req);
   const account = universe.accounts[uname];
   if(!account || !auth.verifyPassword(password, account.salt, account.hash)){
+    logLine('LOGIN FEHLGESCHLAGEN: "' + uname + '" von ' + ip);
     return res.status(401).json({ ok:false, error:'Benutzername oder Passwort falsch' });
   }
   const token = issueToken(uname, !!account.isAdmin);
+  logLine('LOGIN OK: ' + uname + (account.isAdmin ? ' (admin)' : '') + ' von ' + ip);
   res.json({ ok:true, token, username: uname, isAdmin: !!account.isAdmin });
 });
 
@@ -154,9 +181,10 @@ app.post('/api/action', requireAuth, (req, res) => {
     const result = engine.applyAction(universe, req.username, type, payload);
     dirty = true;
     saveUniverse();
+    logLine('AKTION ' + (result.ok ? 'OK' : 'ABGELEHNT') + ': ' + req.username + ' -> ' + type + (result.message ? (' :: ' + result.message) : ''));
     res.json({ ok: result.ok, message: result.message, state: Object.assign({ isAdmin: req.isAdmin, username: req.username }, universe.players[req.username]) });
   } catch(err){
-    console.error('Aktion fehlgeschlagen:', type, err.message);
+    logLine('AKTION FEHLER: ' + req.username + ' -> ' + type + ' :: ' + err.message);
     res.status(400).json({ ok:false, error: err.message });
   }
 });
@@ -186,14 +214,17 @@ app.get('/api/admin/players', requireAuth, requireAdmin, (req, res) => {
   res.json({ ok:true, players: engine.adminListPlayers(universe) });
 });
 app.post('/api/admin/deletePlayer', requireAuth, requireAdmin, (req, res) => {
-  const result = engine.adminDeletePlayer(universe, req.body && req.body.username);
+  const target = req.body && req.body.username;
+  const result = engine.adminDeletePlayer(universe, target);
   if(result.ok){ dirty=true; saveUniverse(); }
+  logLine('ADMIN ' + req.username + (result.ok ? ' loeschte Spieler ' : ' konnte Spieler NICHT loeschen ') + target + (result.error ? (' :: ' + result.error) : ''));
   res.status(result.ok?200:400).json(result);
 });
 app.post('/api/admin/grantResources', requireAuth, requireAdmin, (req, res) => {
   const { username, metal, crystal, deut } = req.body || {};
   const result = engine.adminGrantResources(universe, username, { metal, crystal, deut });
   if(result.ok){ dirty=true; saveUniverse(); }
+  logLine('ADMIN ' + req.username + (result.ok ? ' gab Ressourcen an ' : ' konnte KEINE Ressourcen geben an ') + username + (result.error ? (' :: ' + result.error) : ''));
   res.status(result.ok?200:400).json(result);
 });
 
