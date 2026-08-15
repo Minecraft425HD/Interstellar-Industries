@@ -210,7 +210,7 @@ async function apiFetch(path, options){
   try { res = await fetchWithTimeout(base+path, Object.assign({}, options, {headers})); }
   catch(networkErr){
     if(networkErr.name==='AbortError') throw new Error('Zeitüberschreitung – Server antwortet nicht innerhalb von '+(API_TIMEOUT_MS/1000)+'s. Adresse/Port prüfen und ob Handy & Server im selben Netzwerk sind.');
-    throw new Error('Server nicht erreichbar');
+    throw new Error('Server nicht erreichbar ('+(networkErr.message || networkErr.name || 'Netzwerkfehler')+')');
   }
   let body = null;
   try { body = await res.json(); } catch(e){ /* no body */ }
@@ -314,25 +314,43 @@ function computePhase(){
   return state.adminMode ? 'admin' : 'game';
 }
 
+let connectCheck = null; // null | 'checking' | 'ok' | {error: msg}
 function renderConnectScreen(){
   const url = getServerUrl();
   const view = $('#view');
   if(!view) return;
+  let statusHtml = '';
+  if(connectCheck==='checking') statusHtml = '<div class="small" style="margin-top:12px;color:var(--muted)">Prüfe Erreichbarkeit…</div>';
+  else if(connectCheck && connectCheck.error) statusHtml = `<div class="small" style="margin-top:12px;color:var(--danger)">⚠ ${connectCheck.error}</div><button class="btn alt" type="button" id="useAnywayBtn" style="width:100%;margin-top:8px">Trotzdem übernehmen</button>`;
   view.innerHTML = `<div class="card" style="max-width:440px;margin:8vh auto;">
     <h2>Mit Server verbinden</h2>
     <div class="small" style="margin-bottom:14px">Stellare Industrien läuft als dedizierter Server, z.B. dauerhaft auf einem Raspberry Pi. Trage die Adresse ein, unter der er erreichbar ist – eine lokale Adresse im selben WLAN (z.B. http://192.168.1.50:3000) oder eine öffentliche Adresse von überall (z.B. https://dein-tunnel.trycloudflare.com).</div>
     <form id="connectForm" class="fleet-form">
       <label>Server-Adresse<input type="text" name="url" value="${url}" placeholder="http://192.168.1.50:3000" autocapitalize="none" autocorrect="off" spellcheck="false" inputmode="url"></label>
-      <button class="btn good" type="submit">Weiter</button>
+      <button class="btn good" type="submit">Verbindung prüfen</button>
     </form>
+    ${statusHtml}
   </div>`;
   const cf = $('#connectForm');
-  if(cf) cf.onsubmit = e=>{
+  if(cf) cf.onsubmit = async e=>{
     e.preventDefault();
     const u = cf.url.value.trim().replace(/\/$/,'');
     if(!u) return;
+    const previousUrl = getServerUrl();
     setServerUrl(u);
-    render();
+    connectCheck = 'checking';
+    renderConnectScreen();
+    try {
+      await apiFetch('/api/health');
+      connectCheck = 'ok';
+      render();
+    } catch(err){
+      connectCheck = { error: err.message };
+      setServerUrl(previousUrl);
+      renderConnectScreen();
+      const useBtn = $('#useAnywayBtn');
+      if(useBtn) useBtn.onclick = ()=>{ setServerUrl(u); connectCheck = null; render(); };
+    }
   };
 }
 
