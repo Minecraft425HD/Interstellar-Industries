@@ -66,6 +66,7 @@ const defs = {
     deathstar:{name:'Todesstern', cost:{metal:5000000, crystal:4000000, deut:1000000}, cargo:1000000, speed:0.4, fuel:1, attack:200000, shield:50000, hull:9000000, role:'combat', requires:{shipyard:12, hyperspaceTech:6, gravitonTech:1}},
     solarSatellite:{name:'Solarsatellit', cost:{metal:0, crystal:2000, deut:500}, cargo:0, speed:0, fuel:0, attack:1, shield:1, hull:2000, role:'power', requires:{}},
     recycler:{name:'Recycler', cost:{metal:10000, crystal:6000, deut:2000}, cargo:20000, speed:0.7, fuel:30, attack:1, shield:10, hull:16000, role:'recycler', requires:{shipyard:4, combustion:6}},
+    researchShip:{name:'Forschungsschiff', cost:{metal:8000, crystal:15000, deut:6000}, cargo:500, speed:1.2, fuel:15, attack:0, shield:10, hull:5000, role:'research', requires:{shipyard:3, researchLab:3, computerTech:4}},
   }
 };
 const missionLabels = {transport:'Transport', spy:'Spionage', attack:'Angriff', colonize:'Kolonisierung', harvest:'Trümmerfeld-Bergung'};
@@ -119,6 +120,73 @@ function findPlanetOwner(universe, coord, excludeUsername){
 }
 
 // Deterministic NPC/empty layout, overlaid with real player planets for the viewer.
+// Deterministic multi-stream PRNG for NPC flavor generation: same coords always
+// produce the same NPC (stable across views/players), while different "salt"
+// values give independent-looking numbers derived from the same seed.
+function npcSeedRandom(galaxy, system, pos, salt){
+  let x = Math.sin((pos*131 + system*13 + galaxy*104729) * 999 + salt*7919.13) * 10000;
+  return x - Math.floor(x);
+}
+
+const npcNamePrefixes = ['Kolonie','Außenposten','Bergwerk','Zitadelle','Forschungsstation','Handelsposten','Bastion','Siedlung','Werft','Relais','Vorposten','Garnison'];
+const npcNameSuffixes = ['Alpha','Beta','Gamma','Delta','Epsilon','Zeta','Eta','Theta','Iota','Kappa','Lambda','Sigma','Omega','Prime','Nova','Vega','Orion','Rigel','Centauri','Draconis','Kepler','Cygnus','Andromeda','Pyxis'];
+function npcPlanetName(galaxy, system, pos){
+  const pIdx = Math.floor(npcSeedRandom(galaxy,system,pos,1)*npcNamePrefixes.length);
+  const sIdx = Math.floor(npcSeedRandom(galaxy,system,pos,2)*npcNameSuffixes.length);
+  return npcNamePrefixes[pIdx]+' '+npcNameSuffixes[sIdx];
+}
+
+function npcBuildings(galaxy, system, pos, level){
+  const r = (salt)=>npcSeedRandom(galaxy,system,pos,salt);
+  const b = {};
+  b.metalMine = Math.max(1, Math.round(level*0.7 + r(10)*4));
+  b.crystalMine = Math.max(1, Math.round(level*0.55 + r(11)*3));
+  b.deutSynth = Math.max(0, Math.round(level*0.35 + r(12)*3));
+  b.solarPlant = Math.max(1, Math.round(level*0.6 + r(13)*3));
+  b.robotFactory = Math.min(10, Math.max(0, Math.round(level/4)));
+  b.shipyard = level>=8 ? Math.min(8, Math.max(1, Math.round(level/5))) : 0;
+  b.researchLab = level>=8 ? Math.min(8, Math.max(1, Math.round(level/6))) : 0;
+  b.metalStorage = Math.max(0, Math.round(level/5));
+  b.crystalStorage = Math.max(0, Math.round(level/6));
+  b.deutTank = Math.max(0, Math.round(level/7));
+  b.missileSilo = level>=12 ? Math.min(6, Math.round(level/8)) : 0;
+  return b;
+}
+
+function npcResearch(galaxy, system, pos, level){
+  const res = {};
+  const keys = Object.keys(defs.research);
+  keys.forEach((k,i)=>{
+    const base = Math.max(0, Math.floor(level/3) - 2);
+    res[k] = Math.max(0, base + Math.floor(npcSeedRandom(galaxy,system,pos,60+i)*4));
+  });
+  return res;
+}
+
+function npcDefense(galaxy, system, pos, level){
+  const r = (salt)=>npcSeedRandom(galaxy,system,pos,salt);
+  const d = {};
+  d.missileLauncher = Math.max(1, Math.round(level*3 + r(20)*level));
+  if(level>=6) d.lightLaser = Math.max(1, Math.round(level*1.2 + r(21)*level*0.5));
+  if(level>=12) d.heavyLaser = Math.max(1, Math.round(level*0.6 + r(22)*level*0.3));
+  if(level>=16) d.ionCannon = Math.max(1, Math.round(level*0.3 + r(23)*level*0.2));
+  if(level>=20) d.gaussCannon = Math.max(1, Math.round(level*0.15 + r(24)*level*0.1));
+  if(level>=25) d.plasmaTurret = Math.max(1, Math.round(level*0.08 + r(25)*level*0.05));
+  if(level>=22 && r(26)<0.3) d.smallShield = 1;
+  if(level>=28 && r(27)<0.2) d.largeShield = 1;
+  return d;
+}
+
+function npcFleet(galaxy, system, pos, level){
+  const r = (salt)=>npcSeedRandom(galaxy,system,pos,salt);
+  const f = {};
+  f.lightFighter = Math.max(1, Math.round(level*1.5 + r(40)*level*0.5));
+  if(level>=10) f.cruiser = Math.max(1, Math.round(level/4 + r(41)*level*0.1));
+  if(level>=18) f.heavyFighter = Math.max(1, Math.round(level/6 + r(42)*level*0.08));
+  if(level>=24) f.battleship = Math.max(1, Math.round(level/10 + r(43)*level*0.05));
+  return f;
+}
+
 function seedGalaxy(universe, galaxy, system, viewerUsername){
   const occupied = {};
   for(const [username, state] of Object.entries(universe.players)){
@@ -126,6 +194,9 @@ function seedGalaxy(universe, galaxy, system, viewerUsername){
       if(pl.coords[0]===galaxy && pl.coords[1]===system) occupied[pl.coords[2]] = {username, planetIndex:idx, planet:pl};
     });
   }
+  // Presence/level roll kept on the ORIGINAL single-seed formula so which positions
+  // are NPC vs. empty never shifts for already-registered players; only the content
+  // of each NPC (name/buildings/research/defense/fleet) is newly enriched below.
   const rnd = (seed)=>{ let x=Math.sin(seed*999+system*13+galaxy*104729)*10000; return x-Math.floor(x); };
   const slots = [];
   for(let pos=1; pos<=UNIVERSE.positions; pos++){
@@ -137,11 +208,16 @@ function seedGalaxy(universe, galaxy, system, viewerUsername){
     }
     const r = rnd(pos+system);
     if(r < 0.35){
-      const level = Math.max(3, Math.floor(r*30));
-      const defenseShips = { missileLauncher: level*4, lightLaser: Math.floor(level*1.5) };
-      const fleet = { lightFighter: Math.floor(level*1.5) };
-      if(level>10) fleet.cruiser = Math.floor(level/4);
-      slots.push({pos, type:'npc', name:'Kolonie '+String.fromCharCode(65+pos), level, metal:800*level, crystal:500*level, deut:200*level, defenseShips, fleet});
+      // Level uses its own wide, independent roll (3-35) so NPC strength actually
+      // spans the full tier range; only the presence check above (r<0.35) is kept
+      // on the original formula to avoid shifting which positions are occupied.
+      const level = Math.max(3, Math.min(35, Math.floor(3 + npcSeedRandom(galaxy,system,pos,0)*33)));
+      const name = npcPlanetName(galaxy, system, pos);
+      const buildings = npcBuildings(galaxy, system, pos, level);
+      const research = npcResearch(galaxy, system, pos, level);
+      const defenseShips = npcDefense(galaxy, system, pos, level);
+      const fleet = npcFleet(galaxy, system, pos, level);
+      slots.push({pos, type:'npc', name, level, metal:800*level, crystal:500*level, deut:200*level, buildings, research, defenseShips, fleet});
     } else {
       slots.push({pos, type:'empty'});
     }
@@ -628,6 +704,33 @@ function setLifeform(state, species){
   return ok(state, 'Lebensform gewechselt');
 }
 
+// Spy mission with a research ship present: chance-based tech steal from an NPC.
+// Success chance shifts with the attacker's espionage tech advantage over the NPC's;
+// on success, one random research field jumps to the NPC's level if it's higher.
+function attemptResearchTheft(state, p, npcSlot){
+  if(!p || !npcSlot || !npcSlot.research) return;
+  const atkEsp = p.research.espionageTech || 0;
+  const defEsp = npcSlot.research.espionageTech || 0;
+  const chance = Math.min(0.95, Math.max(0.05, 0.5 + 0.05*(atkEsp-defEsp)));
+  if(Math.random() > chance){
+    message(state, 'Forschungsdiebstahl bei '+npcSlot.name+' fehlgeschlagen (Erfolgschance war '+Math.round(chance*100)+'%).');
+    log(state, 'Forschungsdiebstahl bei '+npcSlot.name+' fehlgeschlagen');
+    return;
+  }
+  const keys = Object.keys(defs.research);
+  const key = keys[Math.floor(Math.random()*keys.length)];
+  const theirLevel = npcSlot.research[key] || 0;
+  const ourLevel = p.research[key] || 0;
+  if(theirLevel > ourLevel){
+    p.research[key] = theirLevel;
+    message(state, 'Forschungsdiebstahl bei '+npcSlot.name+' erfolgreich: '+defs.research[key].name+' auf Stufe '+theirLevel+' übernommen!');
+    log(state, 'Forschungsdiebstahl erfolgreich: '+defs.research[key].name+' Stufe '+theirLevel);
+  } else {
+    message(state, 'Forschungsdiebstahl bei '+npcSlot.name+' erfolgreich durchgeführt, aber '+defs.research[key].name+' war dort nicht weiter fortgeschritten als bei uns.');
+    log(state, 'Forschungsdiebstahl ohne Fortschritt ('+defs.research[key].name+')');
+  }
+}
+
 function resolveArrival(universe, username, f){
   const state = universe.players[username];
   const targetState = f.toOwner ? universe.players[f.toOwner] : null;
@@ -642,8 +745,9 @@ function resolveArrival(universe, username, f){
   } else if(f.mission==='spy'){
     if(f.npcSlot){
       const defPower = sidePower(f.npcSlot.defenseShips, defs.buildings).attack;
-      state.reports.unshift({time:new Date().toLocaleTimeString('de-DE'), target:f.npcSlot.name, coords:coordStr(f.toCoord), coordArr:f.toCoord, resources:{metal:f.npcSlot.metal, crystal:f.npcSlot.crystal, deut:f.npcSlot.deut}, defense:defPower, fleet:f.npcSlot.fleet});
+      state.reports.unshift({time:new Date().toLocaleTimeString('de-DE'), target:f.npcSlot.name, coords:coordStr(f.toCoord), coordArr:f.toCoord, resources:{metal:f.npcSlot.metal, crystal:f.npcSlot.crystal, deut:f.npcSlot.deut}, defense:defPower, fleet:f.npcSlot.fleet, buildings:f.npcSlot.buildings, research:f.npcSlot.research});
       log(state, 'Spionagebericht über '+f.npcSlot.name+' erhalten');
+      if(f.ships.researchShip>0) attemptResearchTheft(state, state.planets[f.from], f.npcSlot);
     } else if(targetState){
       const t = targetState.planets[f.toPlanetIndex];
       if(t){
