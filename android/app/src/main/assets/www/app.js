@@ -320,7 +320,7 @@ function renderConnectScreen(){
   if(!view) return;
   view.innerHTML = `<div class="card" style="max-width:440px;margin:8vh auto;">
     <h2>Mit Server verbinden</h2>
-    <div class="small" style="margin-bottom:14px">Stellare Industrien läuft als dedizierter Server, z.B. dauerhaft auf einem Raspberry Pi im Heimnetzwerk. Trage die Adresse ein, unter der er erreichbar ist.</div>
+    <div class="small" style="margin-bottom:14px">Stellare Industrien läuft als dedizierter Server, z.B. dauerhaft auf einem Raspberry Pi. Trage die Adresse ein, unter der er erreichbar ist – eine lokale Adresse im selben WLAN (z.B. http://192.168.1.50:3000) oder eine öffentliche Adresse von überall (z.B. https://dein-tunnel.trycloudflare.com).</div>
     <form id="connectForm" class="fleet-form">
       <label>Server-Adresse<input type="text" name="url" value="${url}" placeholder="http://192.168.1.50:3000" autocapitalize="none" autocorrect="off" spellcheck="false" inputmode="url"></label>
       <button class="btn good" type="submit">Weiter</button>

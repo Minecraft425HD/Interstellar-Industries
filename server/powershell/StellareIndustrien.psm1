@@ -11,6 +11,10 @@ $script:DataDir = Join-Path $script:ServerDir 'data'
 $script:UniverseFile = Join-Path $script:DataDir 'universe.json'
 $script:UnitTarget = '/etc/systemd/system/stellare-industrien.service'
 
+$script:TunnelServiceName = 'stellare-tunnel'
+$script:TunnelBinary = '/usr/local/bin/cloudflared'
+$script:TunnelUnitTarget = '/etc/systemd/system/stellare-tunnel.service'
+
 function Invoke-Native {
     <#
     .SYNOPSIS
@@ -243,7 +247,160 @@ function Uninstall-StellareServer {
     }
 }
 
+function Install-StellareCloudflared {
+    <#
+    .SYNOPSIS
+        Laedt das cloudflared-Binary passend zur Architektur des Pi herunter, falls noch nicht vorhanden.
+    #>
+    [CmdletBinding()]
+    param()
+    if(Test-Path $script:TunnelBinary){
+        Write-Host "cloudflared bereits installiert: $(& $script:TunnelBinary --version 2>$null)" -ForegroundColor Green
+        return
+    }
+    $archRaw = (& uname -m).Trim()
+    $arch = switch ($archRaw) {
+        'aarch64' { 'arm64' }
+        'armv7l'  { 'arm' }
+        'armv6l'  { 'arm' }
+        'x86_64'  { 'amd64' }
+        default   { throw "Nicht unterstuetzte Architektur fuer cloudflared: $archRaw" }
+    }
+    Write-Host "Lade cloudflared ($arch)..." -ForegroundColor Cyan
+    $tmp = [System.IO.Path]::GetTempFileName()
+    Invoke-Native curl -fsSL -o $tmp "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-$arch"
+    Invoke-Native sudo install -m 0755 $tmp $script:TunnelBinary
+    Remove-Item $tmp -Force
+    Write-Host "cloudflared installiert: $(& $script:TunnelBinary --version 2>$null)" -ForegroundColor Green
+}
+
+function Install-StellareTunnel {
+    <#
+    .SYNOPSIS
+        Richtet einen Cloudflare Quick Tunnel als systemd-Dienst ein, der den lokalen
+        Server unter einer zufaelligen *.trycloudflare.com-Adresse aus dem gesamten
+        Internet erreichbar macht - ganz ohne Portweiterleitung am Router.
+    .DESCRIPTION
+        Ohne eigene Domain aendert sich die Adresse bei jedem Neustart des Tunnels.
+        Mit Get-StellareTunnelAddress laesst sie sich jederzeit erneut abrufen.
+    #>
+    [CmdletBinding()]
+    param([int]$Port = 3000)
+
+    Install-StellareCloudflared
+
+    Write-Host "== Tunnel-Dienst einrichten ==" -ForegroundColor Cyan
+    $currentUser = (& whoami).Trim()
+    $unitContent = @"
+[Unit]
+Description=Stellare Industrien Cloudflare Tunnel
+After=network.target stellare-industrien.service
+Wants=stellare-industrien.service
+
+[Service]
+Type=simple
+ExecStart=$script:TunnelBinary tunnel --no-autoupdate --url http://127.0.0.1:$Port
+Restart=always
+RestartSec=3
+User=$currentUser
+
+[Install]
+WantedBy=multi-user.target
+"@
+    $tmpUnit = [System.IO.Path]::GetTempFileName()
+    Set-Content -Path $tmpUnit -Value $unitContent -NoNewline
+    Invoke-Native sudo cp $tmpUnit $script:TunnelUnitTarget
+    Remove-Item $tmpUnit -Force
+    Invoke-Native sudo systemctl daemon-reload
+    Invoke-Native sudo systemctl enable $script:TunnelServiceName
+    Invoke-Native sudo systemctl restart $script:TunnelServiceName
+
+    Write-Host "Warte auf die oeffentliche Tunnel-Adresse..." -ForegroundColor Cyan
+    $addr = Get-StellareTunnelAddress -MaxWaitSeconds 25
+    Write-Host ""
+    if($addr){
+        Write-Host "Server ist jetzt von ueberall im Internet erreichbar unter:" -ForegroundColor Green
+        Write-Host "  $addr" -ForegroundColor Green
+        Write-Host "Diese Adresse in der App unter 'Server aendern' eintragen (mit https://)." -ForegroundColor Green
+    } else {
+        Write-Warning "Tunnel-Adresse konnte noch nicht ermittelt werden. Gleich erneut versuchen mit: ./stellare.ps1 tunnel-address"
+    }
+    Write-Host "Hinweis: Bei jedem Neustart des Tunnels (Reboot, Absturz, manueller Neustart)" -ForegroundColor Yellow
+    Write-Host "aendert sich diese Adresse - dann einfach './stellare.ps1 tunnel-address' erneut aufrufen." -ForegroundColor Yellow
+}
+
+function Start-StellareTunnel {
+    [CmdletBinding()] param()
+    Invoke-Native sudo systemctl start $script:TunnelServiceName
+    Get-StellareTunnelAddress -MaxWaitSeconds 20 | Out-Null
+}
+
+function Stop-StellareTunnel {
+    [CmdletBinding()] param()
+    Invoke-Native sudo systemctl stop $script:TunnelServiceName
+    Write-Host "Tunnel gestoppt. Server ist nur noch im lokalen Netzwerk erreichbar." -ForegroundColor Yellow
+}
+
+function Restart-StellareTunnel {
+    [CmdletBinding()] param()
+    Invoke-Native sudo systemctl restart $script:TunnelServiceName
+    Write-Host "Warte auf neue Tunnel-Adresse..." -ForegroundColor Cyan
+    $addr = Get-StellareTunnelAddress -MaxWaitSeconds 20
+    if($addr){ Write-Host "Neue Adresse: $addr" -ForegroundColor Green }
+}
+
+function Get-StellareTunnelAddress {
+    <#
+    .SYNOPSIS
+        Liest die aktuelle oeffentliche *.trycloudflare.com-Adresse aus den Tunnel-Logs.
+    #>
+    [CmdletBinding()]
+    param([int]$MaxWaitSeconds = 5)
+    $deadline = (Get-Date).AddSeconds($MaxWaitSeconds)
+    do {
+        $log = & sudo journalctl -u $script:TunnelServiceName -n 300 --no-pager 2>$null
+        $urls = @()
+        foreach($line in $log){
+            foreach($m in [regex]::Matches($line, 'https://[a-z0-9-]+\.trycloudflare\.com')){
+                $urls += $m.Value
+            }
+        }
+        if($urls.Count -gt 0){
+            $url = $urls[-1]
+            Write-Host $url
+            return $url
+        }
+        Start-Sleep -Seconds 1
+    } while ((Get-Date) -lt $deadline)
+    Write-Warning "Keine Tunnel-Adresse gefunden. Laeuft der Tunnel? -> ./stellare.ps1 tunnel-status"
+    return $null
+}
+
+function Get-StellareTunnelStatus {
+    [CmdletBinding()] param()
+    & sudo systemctl status $script:TunnelServiceName --no-pager -l
+}
+
+function Get-StellareTunnelLog {
+    [CmdletBinding()]
+    param([int]$Lines = 100, [switch]$Follow)
+    if($Follow){ & sudo journalctl -u $script:TunnelServiceName -f }
+    else { & sudo journalctl -u $script:TunnelServiceName -n $Lines --no-pager }
+}
+
+function Uninstall-StellareTunnel {
+    [CmdletBinding()] param()
+    try { Invoke-Native sudo systemctl stop $script:TunnelServiceName } catch { Write-Warning $_.Exception.Message }
+    try { Invoke-Native sudo systemctl disable $script:TunnelServiceName } catch { Write-Warning $_.Exception.Message }
+    if(Test-Path $script:TunnelUnitTarget){ Invoke-Native sudo rm $script:TunnelUnitTarget }
+    Invoke-Native sudo systemctl daemon-reload
+    Write-Host "Tunnel-Dienst entfernt. Server ist nur noch im lokalen Netzwerk erreichbar." -ForegroundColor Green
+}
+
 Export-ModuleMember -Function `
     Install-StellareServer, Start-StellareServer, Stop-StellareServer, Restart-StellareServer, `
     Get-StellareServerStatus, Get-StellareServerLog, Backup-StellareUniverse, Update-StellareServer, `
-    Uninstall-StellareServer, Enable-StellareAutostart, Disable-StellareAutostart, Get-StellarePiAddress
+    Uninstall-StellareServer, Enable-StellareAutostart, Disable-StellareAutostart, Get-StellarePiAddress, `
+    Install-StellareCloudflared, Install-StellareTunnel, Start-StellareTunnel, Stop-StellareTunnel, `
+    Restart-StellareTunnel, Get-StellareTunnelAddress, Get-StellareTunnelStatus, Get-StellareTunnelLog, `
+    Uninstall-StellareTunnel

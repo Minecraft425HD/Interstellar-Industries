@@ -106,6 +106,27 @@ app.use((req, res, next) => {
   next();
 });
 
+// Simple in-memory rate limiting for the unauthenticated auth endpoints, since the
+// server may now be reachable from the whole internet (e.g. via a Cloudflare Tunnel)
+// instead of just the LAN.
+const rateLimitState = new Map(); // key -> { count, windowStart }
+function checkRateLimit(key, maxAttempts, windowMs){
+  const now = Date.now();
+  const entry = rateLimitState.get(key);
+  if(!entry || now - entry.windowStart > windowMs){
+    rateLimitState.set(key, { count: 1, windowStart: now });
+    return true;
+  }
+  entry.count++;
+  return entry.count <= maxAttempts;
+}
+setInterval(() => {
+  const now = Date.now();
+  for(const [key, entry] of rateLimitState.entries()){
+    if(now - entry.windowStart > 3600000) rateLimitState.delete(key);
+  }
+}, 600000);
+
 function requireAuth(req, res, next){
   const session = sessionFromHeader(req);
   if(!session) return res.status(401).json({ ok:false, error:'Nicht angemeldet' });
@@ -134,6 +155,10 @@ app.get('/api/galaxy', (req, res) => {
 app.post('/api/register', (req, res) => {
   const { username, password, galaxy, system, position, planetName } = req.body || {};
   const ip = clientIp(req);
+  if(!checkRateLimit('register:' + ip, 8, 3600000)){
+    logLine('REGISTER RATE-LIMIT: zu viele Versuche von ' + ip);
+    return res.status(429).json({ ok:false, error:'Zu viele Registrierungsversuche. Bitte in einer Stunde erneut versuchen.' });
+  }
   if(!username || !password){ logLine('REGISTER FEHLGESCHLAGEN von ' + ip + ': Benutzername/Passwort fehlt'); return res.status(400).json({ ok:false, error:'Benutzername und Passwort erforderlich' }); }
   if(String(password).length < 6){ logLine('REGISTER FEHLGESCHLAGEN von ' + ip + ' (' + username + '): Passwort zu kurz'); return res.status(400).json({ ok:false, error:'Passwort muss mindestens 6 Zeichen haben' }); }
   const coord = [Number(galaxy), Number(system), Number(position)];
@@ -151,6 +176,10 @@ app.post('/api/login', (req, res) => {
   const uname = String((req.body && req.body.username) || '').trim();
   const password = (req.body && req.body.password) || '';
   const ip = clientIp(req);
+  if(!checkRateLimit('login:' + ip, 15, 300000)){
+    logLine('LOGIN RATE-LIMIT: zu viele Versuche von ' + ip);
+    return res.status(429).json({ ok:false, error:'Zu viele Loginversuche. Bitte kurz warten.' });
+  }
   const account = universe.accounts[uname];
   if(!account || !auth.verifyPassword(password, account.salt, account.hash)){
     logLine('LOGIN FEHLGESCHLAGEN: "' + uname + '" von ' + ip);

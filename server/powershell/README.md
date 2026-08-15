@@ -86,7 +86,53 @@ Get-StellareServerLog -Lines 200
 Backup-StellareUniverse -Destination "~/meine-sicherung.json"
 ```
 
-## 5. Fernsteuerung von einem Windows-PC aus
+## 5. Fernzugriff ohne gleiches Netzwerk (Cloudflare Tunnel)
+
+Standardmäßig ist der Server nur im selben WLAN/Netzwerk wie der Pi
+erreichbar (LAN-IP wie `http://192.168.1.50:3000`). Damit das Handy von
+**überall** – auch über Mobilfunk, ein anderes WLAN usw. – auf den Server
+zugreifen kann, ohne Portweiterleitung am Router einzurichten:
+
+```powershell
+./stellare.ps1 tunnel-install
+```
+
+Das lädt `cloudflared` (Cloudflares Tunnel-Client), richtet einen weiteren
+systemd-Dienst (`stellare-tunnel`) ein und zeigt am Ende eine öffentliche
+Adresse wie `https://zufaellige-woerter-1234.trycloudflare.com`. Diese
+Adresse in der App unter „Server ändern“ eintragen (inklusive `https://`) –
+fertig, das Handy muss dann in keinem bestimmten Netzwerk mehr sein.
+
+**Wichtiger Hinweis:** Da hierfür kein eigener Domainname verwendet wird
+(„Quick Tunnel“), ändert sich diese Adresse bei jedem Neustart des Tunnels
+(Reboot des Pi, Absturz, manueller Neustart). Die aktuelle Adresse jederzeit
+erneut abrufen mit:
+```powershell
+./stellare.ps1 tunnel-address
+```
+
+Weitere Befehle:
+```powershell
+./stellare.ps1 tunnel-start        # Tunnel starten
+./stellare.ps1 tunnel-stop         # Tunnel stoppen (dann nur noch lokal erreichbar)
+./stellare.ps1 tunnel-restart      # Tunnel neu starten (Adresse ändert sich!)
+./stellare.ps1 tunnel-status       # Dienststatus
+./stellare.ps1 tunnel-logs -Follow # Tunnel-Logs live verfolgen
+./stellare.ps1 tunnel-uninstall    # Tunnel-Dienst entfernen
+```
+
+Da der Server über den Tunnel öffentlich erreichbar ist, sind Login und
+Registrierung serverseitig zusätzlich gegen Brute-Force-Versuche
+ratenbegrenzt (15 Loginversuche/5 Min., 8 Registrierungen/Std. pro
+IP-Adresse) – normale Nutzung ist davon nicht betroffen.
+
+*Für eine dauerhaft gleichbleibende Adresse* (praktisch, wenn man sie sich
+merken oder fest in der App eintragen möchte, ohne sie nach jedem Neustart
+zu aktualisieren) braucht es eine eigene, bei Cloudflare hinterlegte Domain
+und einen sogenannten „Named Tunnel“ statt des Quick Tunnels hier. Bei
+Bedarf gerne jederzeit nachrüstbar, sobald eine Domain vorhanden ist.
+
+## 6. Fernsteuerung von einem Windows-PC aus
 
 Auch von einem Windows-Rechner mit PowerShell lässt sich der Pi rein über
 PowerShell steuern, per SSH (Raspberry Pi OS hat den SSH-Server standardmäßig

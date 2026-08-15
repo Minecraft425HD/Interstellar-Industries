@@ -9,10 +9,18 @@
     ./stellare.ps1 status
 .EXAMPLE
     ./stellare.ps1 logs -Follow
+.EXAMPLE
+    ./stellare.ps1 tunnel-install
 #>
 param(
     [Parameter(Position=0)]
-    [ValidateSet('install','start','stop','restart','status','logs','backup','update','uninstall','enable-autostart','disable-autostart','address','help')]
+    [ValidateSet(
+        'install','start','stop','restart','status','logs','backup','update','uninstall',
+        'enable-autostart','disable-autostart','address',
+        'tunnel-install','tunnel-start','tunnel-stop','tunnel-restart','tunnel-address',
+        'tunnel-status','tunnel-logs','tunnel-uninstall',
+        'help'
+    )]
     [string]$Command = 'help',
 
     [int]$Port = 3000,
@@ -36,13 +44,21 @@ switch ($Command) {
     'enable-autostart'  { Enable-StellareAutostart }
     'disable-autostart' { Disable-StellareAutostart }
     'address'           { Get-StellarePiAddress | ForEach-Object { Write-Host $_ } }
+    'tunnel-install'    { Install-StellareTunnel -Port $Port }
+    'tunnel-start'      { Start-StellareTunnel }
+    'tunnel-stop'       { Stop-StellareTunnel }
+    'tunnel-restart'    { Restart-StellareTunnel }
+    'tunnel-address'    { Get-StellareTunnelAddress -MaxWaitSeconds 5 | Out-Null }
+    'tunnel-status'     { Get-StellareTunnelStatus }
+    'tunnel-logs'       { Get-StellareTunnelLog -Lines $Lines -Follow:$Follow }
+    'tunnel-uninstall'  { Uninstall-StellareTunnel }
     default {
         @'
 Stellare Industrien Server - Steuerung (PowerShell)
 
 Verwendung: ./stellare.ps1 <Befehl> [Optionen]
 
-Befehle:
+Server-Befehle:
   install                     Node.js pruefen/installieren, Abhaengigkeiten
                                installieren, systemd-Dienst einrichten und starten
   start                       Server starten
@@ -58,10 +74,23 @@ Befehle:
   disable-autostart           Autostart beim Booten deaktivieren
   address                     LAN-IP-Adresse(n) des Pi anzeigen
 
+Fernzugriff-Befehle (Cloudflare Tunnel, ohne Portweiterleitung):
+  tunnel-install               cloudflared installieren + Tunnel-Dienst einrichten/starten,
+                                zeigt die oeffentliche https://...trycloudflare.com-Adresse
+  tunnel-start                 Tunnel starten
+  tunnel-stop                  Tunnel stoppen (Server dann nur noch lokal erreichbar)
+  tunnel-restart                Tunnel neu starten (Adresse aendert sich dabei!)
+  tunnel-address                aktuelle oeffentliche Adresse erneut anzeigen
+  tunnel-status                 Tunnel-Dienststatus anzeigen
+  tunnel-logs [-Lines n] [-Follow]  Tunnel-Logs anzeigen
+  tunnel-uninstall               Tunnel-Dienst entfernen
+
 Beispiele:
   ./stellare.ps1 install -Port 3000
   ./stellare.ps1 status
   ./stellare.ps1 logs -Follow
+  ./stellare.ps1 tunnel-install
+  ./stellare.ps1 tunnel-address
 '@ | Write-Host
     }
 }
