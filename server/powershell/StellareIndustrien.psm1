@@ -25,10 +25,17 @@ function Invoke-Native {
         Parameterbindung interpretiert werden (z.B. wuerde "-f" sonst als
         Praefix von "-FilePath" fehlinterpretiert und dem eigentlichen Befehl
         entzogen). $args faengt hier daher wirklich jedes Token roh ab.
+
+        Wichtig: $args[1..($args.Count-1)] wird NICHT verwendet, weil PowerShell
+        bei genau einem verbleibenden Element einen einzelnen String statt eines
+        1-Element-Arrays zurueckgibt - "& $filePath @rest" wuerde diesen String
+        dann zeichenweise aufsplitten (z.B. "pull" -> p,u,l,l als vier einzelne
+        Argumente, siehe git-pull-Bug). "Select-Object -Skip 1", in @() gehuellt,
+        liefert garantiert immer ein echtes Array, auch bei 0 oder 1 Elementen.
     #>
     if($args.Count -eq 0){ throw "Invoke-Native: kein Programm angegeben." }
     $filePath = $args[0]
-    $rest = if($args.Count -gt 1){ $args[1..($args.Count-1)] } else { @() }
+    $rest = @($args | Select-Object -Skip 1)
     & $filePath @rest
     if($LASTEXITCODE -ne 0){
         throw "Befehl fehlgeschlagen: $filePath $($rest -join ' ') (Exit-Code $LASTEXITCODE)"
