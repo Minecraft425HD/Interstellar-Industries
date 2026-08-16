@@ -406,6 +406,14 @@ function sidePower(shipMap, table){
   return {attack, shield, hull};
 }
 function extractDefense(buildings){ const result={}; for(const [k,d] of Object.entries(defs.buildings)){ if(d.isDefense && buildings[k]) result[k]=buildings[k]; } return result; }
+// Aggregierte Angriffs-/Schild-/Huellenwerte aus Flotte + Verteidigung kombiniert, fuer den
+// Kampfsimulator im Spionagebericht - bewusst nur die Summe, keine Aufschluesselung nach
+// Einheitentyp, damit kein zusaetzliches Detail ueber die Spionageabwehr-Mechanik hinaus preisgegeben wird.
+function combinedDefenderPower(fleetShips, defenseShips){
+  const f = sidePower(fleetShips, defs.ships);
+  const d = sidePower(defenseShips, defs.buildings);
+  return {attack: f.attack+d.attack, shield: f.shield+d.shield, hull: f.hull+d.hull};
+}
 function simulateBattle(attackerShips, defenderShips, defenderDefenseShips){
   const att0 = sidePower(attackerShips, defs.ships);
   const defFleet0 = sidePower(defenderShips, defs.ships);
@@ -944,7 +952,7 @@ function resolveArrival(universe, username, f){
         log(state, 'Spionage bei '+f.npcSlot.name+' gescheitert');
       } else {
         const defPower = sidePower(f.npcSlot.defenseShips, defs.buildings).attack;
-        state.reports.unshift({time:new Date().toLocaleTimeString('de-DE'), target:f.npcSlot.name, coords:coordStr(f.toCoord), coordArr:f.toCoord, resources:{metal:f.npcSlot.metal, crystal:f.npcSlot.crystal, deut:f.npcSlot.deut}, defense:defPower, fleet:f.npcSlot.fleet, buildings:f.npcSlot.buildings, research:f.npcSlot.research});
+        state.reports.unshift({time:new Date().toLocaleTimeString('de-DE'), target:f.npcSlot.name, coords:coordStr(f.toCoord), coordArr:f.toCoord, resources:{metal:f.npcSlot.metal, crystal:f.npcSlot.crystal, deut:f.npcSlot.deut}, defense:defPower, fleet:f.npcSlot.fleet, buildings:f.npcSlot.buildings, research:f.npcSlot.research, defenderPower:combinedDefenderPower(f.npcSlot.fleet, f.npcSlot.defenseShips)});
         log(state, 'Spionagebericht über '+f.npcSlot.name+' erhalten');
         if(f.ships.researchProbe>0) attemptResearchTheft(state, state.planets[f.from], f.npcSlot);
       }
@@ -958,7 +966,7 @@ function resolveArrival(universe, username, f){
           message(targetState, 'Ein Spionageversuch von '+username+' auf '+t.name+' wurde von deiner Spionageabwehr vereitelt.');
           log(targetState, 'Spionageversuch von '+username+' abgewehrt');
         } else {
-          state.reports.unshift({time:new Date().toLocaleTimeString('de-DE'), target:t.name+' ('+f.toOwner+')', coords:coordStr(t.coords), coordArr:t.coords, resources:{...t.resources}, defense:sidePower(extractDefense(t.buildings), defs.buildings).attack, fleet:t.ships});
+          state.reports.unshift({time:new Date().toLocaleTimeString('de-DE'), target:t.name+' ('+f.toOwner+')', coords:coordStr(t.coords), coordArr:t.coords, resources:{...t.resources}, defense:sidePower(extractDefense(t.buildings), defs.buildings).attack, fleet:t.ships, defenderPower:combinedDefenderPower(t.ships, extractDefense(t.buildings))});
           log(state, 'Spionagebericht über '+t.name+' ('+f.toOwner+') erhalten');
           message(targetState, 'Dein Planet '+t.name+' wurde von '+username+' ausspioniert.');
           log(targetState, 'Spionage durch '+username+' entdeckt');
@@ -966,7 +974,7 @@ function resolveArrival(universe, username, f){
       }
     } else if(f.toPlanetIndex!=null){
       const t = state.planets[f.toPlanetIndex];
-      state.reports.unshift({time:new Date().toLocaleTimeString('de-DE'), target:t.name, coords:coordStr(t.coords), coordArr:t.coords, resources:{...t.resources}, defense:sidePower(extractDefense(t.buildings), defs.buildings).attack, fleet:t.ships});
+      state.reports.unshift({time:new Date().toLocaleTimeString('de-DE'), target:t.name, coords:coordStr(t.coords), coordArr:t.coords, resources:{...t.resources}, defense:sidePower(extractDefense(t.buildings), defs.buildings).attack, fleet:t.ships, defenderPower:combinedDefenderPower(t.ships, extractDefense(t.buildings))});
       log(state, 'Spionagebericht über '+t.name+' erhalten');
     }
     f.phase='return';

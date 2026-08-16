@@ -206,15 +206,76 @@ function openInfoModal(type, key, level){
   </div>`;
   document.body.appendChild(modal);
 }
+function closeBattleSimModal(){ const m=document.getElementById('battleSimModal'); if(m) m.remove(); }
+// Monte-Carlo-Vorschau: repliziert die serverseitige simulateBattle()-Rundenlogik client-
+// seitig auf Basis der im Spionagebericht gespeicherten aggregierten Verteidigungsmacht -
+// keine erneute Serveranfrage, kein zusätzliches Informationsleck ueber die einzelnen
+// Verteidigungseinheiten hinaus (nur Summenwerte, wie sie der Bericht ohnehin schon zeigt).
+function simulateBattlePreviewClient(attAgg, defAgg, trials){
+  trials = trials || 50;
+  let wins=0, totalAttLoss=0, totalDefLoss=0, totalRounds=0;
+  for(let t=0; t<trials; t++){
+    let attHull=attAgg.hull, defHull=defAgg.hull, rounds=0;
+    const variance=()=>0.9+Math.random()*0.2;
+    while(rounds<6 && attHull>0 && defHull>0){
+      rounds++;
+      const dmgToDef = Math.max(0, attAgg.attack*variance() - defAgg.shield);
+      const dmgToAtt = Math.max(0, defAgg.attack*variance() - attAgg.shield);
+      defHull -= dmgToDef; attHull -= dmgToAtt;
+    }
+    const attackerWon = defHull<=0 && attHull>0;
+    if(attackerWon) wins++;
+    totalAttLoss += attAgg.hull>0 ? Math.min(1,Math.max(0,(attAgg.hull-Math.max(0,attHull))/attAgg.hull)) : 0;
+    totalDefLoss += defAgg.hull>0 ? Math.min(1,Math.max(0,(defAgg.hull-Math.max(0,defHull))/defAgg.hull)) : 1;
+    totalRounds += rounds;
+  }
+  return { winRate: wins/trials, avgAttackerLoss: totalAttLoss/trials, avgDefenderLoss: totalDefLoss/trials, avgRounds: totalRounds/trials };
+}
+function openBattleSimulator(reportIndex){
+  closeBattleSimModal();
+  const r = state.reports[reportIndex];
+  if(!r || !r.defenderPower) return;
+  const sendableShips = Object.entries(defs.ships).filter(([,d])=>d.role!=='power');
+  const modal = document.createElement('div');
+  modal.id = 'battleSimModal';
+  modal.className = 'info-modal';
+  modal.innerHTML = `<div class="info-modal-box" style="max-width:480px">
+    <div class="info-modal-head"><strong>Kampfsimulator: ${r.target}</strong><button type="button" class="info-modal-close" data-info-close="1">&times;</button></div>
+    <div class="info-modal-body">
+      <p>Basierend auf dem Spionagebericht von ${r.time}. Die tatsächliche Verteidigung kann sich seitdem geändert haben.</p>
+      <div class="small" style="margin-bottom:10px">Verteidigungsmacht laut Bericht: Angriff ${fmt(r.defenderPower.attack)} · Schild ${fmt(r.defenderPower.shield)} · Hülle ${fmt(r.defenderPower.hull)}</div>
+      <div class="info-modal-subhead">Eigene Angriffsflotte (Anzahl)</div>
+      <div class="grid3" id="battleSimShips">${sendableShips.map(([k,d])=>`<label>${d.name}<input type="number" min="0" value="0" data-sim-ship="${k}"></label>`).join('')}</div>
+      <div style="height:10px"></div>
+      <button type="button" class="btn good" id="battleSimRunBtn" style="width:100%">Simulieren (50 Durchläufe)</button>
+      <div id="battleSimResult" style="margin-top:12px"></div>
+    </div>
+  </div>`;
+  document.body.appendChild(modal);
+  document.getElementById('battleSimRunBtn').onclick = ()=>{
+    const ships = {};
+    document.querySelectorAll('#battleSimShips [data-sim-ship]').forEach(inp=>{ ships[inp.dataset.simShip]=Number(inp.value)||0; });
+    const attAgg = sidePower(ships, defs.ships);
+    const resultBox = document.getElementById('battleSimResult');
+    if(attAgg.hull<=0){ resultBox.innerHTML = '<div class="small warn-text">Bitte mindestens ein Schiff angeben.</div>'; return; }
+    const result = simulateBattlePreviewClient(attAgg, r.defenderPower, 50);
+    resultBox.innerHTML = `<table class="info-modal-table">
+      <tr><td>Siegchance</td><td>${Math.round(result.winRate*100)}%</td></tr>
+      <tr><td>Ø eigene Verluste</td><td>${Math.round(result.avgAttackerLoss*100)}%</td></tr>
+      <tr><td>Ø gegnerische Verluste</td><td>${Math.round(result.avgDefenderLoss*100)}%</td></tr>
+      <tr><td>Ø Kampfrunden</td><td>${result.avgRounds.toFixed(1)}</td></tr>
+    </table>`;
+  };
+}
 document.addEventListener('click', (e)=>{
   const link = e.target.closest('.coord-link');
   if(link){ e.stopPropagation(); openCoordMenu(link); return; }
   const infoBtn = e.target.closest('.info-btn');
   if(infoBtn){ e.stopPropagation(); openInfoModal(infoBtn.dataset.infoType, infoBtn.dataset.infoKey, Number(infoBtn.dataset.infoLevel)||0); return; }
-  if(e.target.closest('[data-info-close]')){ closeInfoModal(); return; }
+  if(e.target.closest('[data-info-close]')){ closeInfoModal(); closeBattleSimModal(); return; }
   const modalBox = e.target.closest('.info-modal-box');
   const modalOverlay = e.target.closest('.info-modal');
-  if(modalOverlay && !modalBox){ closeInfoModal(); return; }
+  if(modalOverlay && !modalBox){ closeInfoModal(); closeBattleSimModal(); return; }
   const menu = document.getElementById('coordMenu');
   if(menu && !menu.contains(e.target)){ closeCoordMenu(); }
 });
@@ -1032,10 +1093,11 @@ function viewMarket(){ const r=state.marketRate; const initialAmount=1000; const
 
 function viewReports(){
   if(state.reports.length===0) return `<h2>Berichte</h2><div class="small">Noch keine Spionageberichte vorhanden.</div>`;
-  return `<h2>Spionageberichte</h2>${state.reports.map(r=>{
+  return `<h2>Spionageberichte</h2>${state.reports.map((r,i)=>{
     const buildingsHtml = r.buildings ? `<div class="small" style="margin-top:6px">Gebäude: ${Object.entries(r.buildings).map(([k,v])=>v && defs.buildings[k] ? defs.buildings[k].name+' '+v : null).filter(Boolean).join(', ')||'keine'}</div>` : '';
     const researchHtml = r.research ? `<div class="small" style="margin-top:4px">Forschung: ${Object.entries(r.research).map(([k,v])=>v && defs.research[k] ? defs.research[k].name+' '+v : null).filter(Boolean).join(', ')||'keine'}</div>` : '';
-    return `<div class="report"><div class="row" style="border:none;background:none;padding:0"><strong>${r.target}</strong><span class="small">${r.time}</span></div><div class="small">${r.coordArr?coordLinkHtml(r.coordArr):r.coords}</div><div class="grid3" style="margin-top:8px"><div class="card"><div class="label">Metall</div><div class="value">${fmt(r.resources.metal)}</div></div><div class="card"><div class="label">Kristall</div><div class="value">${fmt(r.resources.crystal)}</div></div><div class="card"><div class="label">Deuterium</div><div class="value">${fmt(r.resources.deut)}</div></div></div><div class="small" style="margin-top:8px">Verteidigung: ${fmt(r.defense)} · Flotte: ${Object.entries(r.fleet||{}).map(([k,v])=>v?defs.ships[k].name+' x'+v:null).filter(Boolean).join(', ')||'unbekannt'}</div>${buildingsHtml}${researchHtml}</div>`;
+    const simBtn = r.defenderPower ? `<button type="button" class="btn alt" data-battle-sim="${i}" style="margin-top:8px">Kampf simulieren</button>` : '';
+    return `<div class="report"><div class="row" style="border:none;background:none;padding:0"><strong>${r.target}</strong><span class="small">${r.time}</span></div><div class="small">${r.coordArr?coordLinkHtml(r.coordArr):r.coords}</div><div class="grid3" style="margin-top:8px"><div class="card"><div class="label">Metall</div><div class="value">${fmt(r.resources.metal)}</div></div><div class="card"><div class="label">Kristall</div><div class="value">${fmt(r.resources.crystal)}</div></div><div class="card"><div class="label">Deuterium</div><div class="value">${fmt(r.resources.deut)}</div></div></div><div class="small" style="margin-top:8px">Verteidigung: ${fmt(r.defense)} · Flotte: ${Object.entries(r.fleet||{}).map(([k,v])=>v?defs.ships[k].name+' x'+v:null).filter(Boolean).join(', ')||'unbekannt'}</div>${buildingsHtml}${researchHtml}${simBtn}</div>`;
   }).join('')}`;
 }
 
@@ -1105,6 +1167,7 @@ function renderView(bind=true){
     document.querySelectorAll('[data-lifeform]').forEach(b=>b.onclick=()=>postAction('setLifeform', {species:b.dataset.lifeform}));
     document.querySelectorAll('[data-lifeform-build]').forEach(b=>b.onclick=()=>postAction('enqueueLifeformBuilding', {planetIndex: state.activePlanet, key:b.dataset.lifeformBuild}));
     document.querySelectorAll('[data-highscore-cat]').forEach(b=>b.onclick=()=>{ highscoreCategory=b.dataset.highscoreCat; renderView(); });
+    document.querySelectorAll('[data-battle-sim]').forEach(b=>b.onclick=()=>openBattleSimulator(Number(b.dataset.battleSim)));
     document.querySelectorAll('[data-moon-select]').forEach(b=>b.onclick=()=>{ state.activeMoonIndex=Number(b.dataset.moonSelect); renderView(true); });
     document.querySelectorAll('[data-moon-build]').forEach(b=>b.onclick=()=>enqueueMoonBuild(b.dataset.moonBuild));
     const jgf=$('#jumpGateForm'); if(jgf) jgf.onsubmit=e=>{e.preventDefault(); const toIdx=Number(jgf.targetMoon.value); const ships={lightFighter:Number(jgf.lightFighter.value)||0, cruiser:Number(jgf.cruiser.value)||0}; jumpGateTransfer(state.activeMoonIndex, toIdx, {}, ships); };
