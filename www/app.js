@@ -380,7 +380,10 @@ function applyServerState(serverState, opts){
   state.logs = serverState.logs || [];
   const wasEverConnected = everConnected;
   everConnected = true;
-  if(state.activePlanet >= state.planets.length) state.activePlanet = 0;
+  if(state.activePlanet >= state.planets.length || (state.planets[state.activePlanet] && state.planets[state.activePlanet].destroyed)){
+    const firstAlive = state.planets.findIndex(p=>!p.destroyed);
+    state.activePlanet = firstAlive>=0 ? firstAlive : 0;
+  }
   if(state.activeMoonIndex!=null && state.activeMoonIndex >= state.moons.length) state.activeMoonIndex = state.moons.length ? 0 : null;
   if(opts.forceRender || !wasEverConnected || !viewInteractionActive()){
     render();
@@ -824,7 +827,7 @@ const navItems = [['overview','Übersicht'],['buildings','Gebäude'],['facilitie
 function renderNav(){ $('#nav').innerHTML = navItems.map(([id,label])=>`<button class="${state.view===id?'active':''}" data-view="${id}">${label}</button>`).join(''); document.querySelectorAll('[data-view]').forEach(b=>b.onclick=()=>{ if(b.dataset.view!=='fleet') state.fleetPrefill=null; if(b.dataset.view==='highscore') highscoreCache=null; if(b.dataset.view==='galaxy') galaxyCache={}; state.view=b.dataset.view; render(); }); }
 function renderTop(){ const p=active(); if(!p) return; const inc=hourly(p), e=energyStats(p); $('#planetName').textContent=p.name; $('#planetCoords').innerHTML=coordLinkHtml(p.coords); $('#metalTop').textContent=fmt(p.resources.metal); $('#crystalTop').textContent=fmt(p.resources.crystal); $('#deutTop').textContent=fmt(p.resources.deut); $('#metalRate').textContent=fmt1(inc.metal)+'/h'; $('#crystalRate').textContent=fmt1(inc.crystal)+'/h'; $('#deutRate').textContent=fmt1(inc.deut)+'/h'; $('#energyTop').textContent=fmt(e.prod); $('#energyUse').textContent=fmt(e.use)+' genutzt'; }
 function renderSide(){
-  $('#planetTabs').innerHTML = state.planets.map((p,i)=>`<button class="pill ${state.activePlanet===i?'active':''}" data-planet="${i}">${p.name}</button>`).join('');
+  $('#planetTabs').innerHTML = state.planets.map((p,i)=>p.destroyed?'':`<button class="pill ${state.activePlanet===i?'active':''}" data-planet="${i}">${p.name}</button>`).join('');
   document.querySelectorAll('[data-planet]').forEach(b=>b.onclick=()=>{state.activePlanet=Number(b.dataset.planet); render();});
   const p=active(); if(!p) return; const qs=[];
   p.buildQueue.forEach(q=>qs.push(`<div class="queue-item">Bau · ${q.name}<br><span class="small">${secsLeft(q.done)} s</span></div>`));
@@ -1035,7 +1038,7 @@ function viewReports(){
   }).join('')}`;
 }
 
-function viewEmpire(){ return `<h2>Imperium</h2><div class="small">Gesamtpunkte: ${fmt(totalPlayerPoints())}</div><div style="height:10px"></div><table><thead><tr><th>Planet</th><th>Koordinaten</th><th>Metall/h</th><th>Kristall/h</th><th>Deut/h</th><th>Energie</th><th>Punkte</th></tr></thead><tbody>${state.planets.map(p=>{ const inc=hourly(p), e=energyStats(p), pts=Math.floor(computePoints(p)/1000); return `<tr><td>${p.name}</td><td>${coordLinkHtml(p.coords)}</td><td>${fmt1(inc.metal)}</td><td>${fmt1(inc.crystal)}</td><td>${fmt1(inc.deut)}</td><td>${fmt(e.prod)}/${fmt(e.use)}</td><td>${fmt(pts)}</td></tr>`; }).join('')}</tbody></table>`; }
+function viewEmpire(){ return `<h2>Imperium</h2><div class="small">Gesamtpunkte: ${fmt(totalPlayerPoints())}</div><div style="height:10px"></div><table><thead><tr><th>Planet</th><th>Koordinaten</th><th>Metall/h</th><th>Kristall/h</th><th>Deut/h</th><th>Energie</th><th>Punkte</th></tr></thead><tbody>${state.planets.filter(p=>!p.destroyed).map(p=>{ const inc=hourly(p), e=energyStats(p), pts=Math.floor(computePoints(p)/1000); return `<tr><td>${p.name}</td><td>${coordLinkHtml(p.coords)}</td><td>${fmt1(inc.metal)}</td><td>${fmt1(inc.crystal)}</td><td>${fmt1(inc.deut)}</td><td>${fmt(e.prod)}/${fmt(e.use)}</td><td>${fmt(pts)}</td></tr>`; }).join('')}</tbody></table>`; }
 
 function viewHighscore(){
   if(highscoreCache===null && !highscoreLoading){ fetchHighscore(); }

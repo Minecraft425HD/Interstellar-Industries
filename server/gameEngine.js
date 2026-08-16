@@ -174,7 +174,7 @@ function createStarterEmpire(coord, name){
 function findPlanetOwner(universe, coord, excludeUsername){
   for(const [username, state] of Object.entries(universe.players)){
     if(username === excludeUsername) continue;
-    const idx = state.planets.findIndex(pl=>pl.coords[0]===coord[0] && pl.coords[1]===coord[1] && pl.coords[2]===coord[2]);
+    const idx = state.planets.findIndex(pl=>!pl.destroyed && pl.coords[0]===coord[0] && pl.coords[1]===coord[1] && pl.coords[2]===coord[2]);
     if(idx>=0) return { username, planetIndex: idx };
   }
   return null;
@@ -252,7 +252,7 @@ function seedGalaxy(universe, galaxy, system, viewerUsername){
   const occupied = {};
   for(const [username, state] of Object.entries(universe.players)){
     state.planets.forEach((pl, idx)=>{
-      if(pl.coords[0]===galaxy && pl.coords[1]===system) occupied[pl.coords[2]] = {username, planetIndex:idx, planet:pl};
+      if(!pl.destroyed && pl.coords[0]===galaxy && pl.coords[1]===system) occupied[pl.coords[2]] = {username, planetIndex:idx, planet:pl};
     });
   }
   // Presence/level roll kept on the ORIGINAL single-seed formula so which positions
@@ -372,6 +372,24 @@ function maybeCreateMoon(state, coord, debrisTotal){
   }
 }
 function allianceRank(points){ if(points>=2000000) return 'Elite-Kommandant'; if(points>=500000) return 'Kommandeur'; if(points>=100000) return 'Veteran'; if(points>=10000) return 'Krieger'; return 'Rekrut'; }
+function deathStarDestroyChance(count){ return Math.min(0.7, count*0.01); }
+// Markiert den Planeten als zerstoert, OHNE ihn aus dem planets-Array zu entfernen - viele
+// Stellen im Code (in transit befindliche Flotten, activePlanet, planetIndex in Aktionen)
+// adressieren Planeten ueber ihren rohen Array-Index; ein echtes Herausloeschen wuerde alle
+// nachfolgenden Indizes verschieben und bestehende Referenzen korrumpieren. Koordinate und
+// Feld werden dadurch wieder frei fuer eine Neukolonisierung (siehe findPlanetOwner/seedGalaxy).
+function destroyPlanet(state, planetIndex){
+  const p = state.planets[planetIndex];
+  if(!p || p.destroyed) return;
+  const coord = p.coords;
+  p.destroyed = true;
+  p.resources = {metal:0, crystal:0, deut:0};
+  Object.keys(p.buildings).forEach(k=>{ p.buildings[k]=0; });
+  Object.keys(p.research).forEach(k=>{ p.research[k]=0; });
+  Object.keys(p.ships).forEach(k=>{ p.ships[k]=0; });
+  p.buildQueue = []; p.researchQueue = []; p.shipQueue = [];
+  state.moons = state.moons.filter(m=>!(m.coord[0]===coord[0] && m.coord[1]===coord[1] && m.coord[2]===coord[2]));
+}
 
 function sidePower(shipMap, table){
   let attack=0, shield=0, hull=0;
@@ -468,7 +486,7 @@ function computePoints(p){
   for(const [k,v] of Object.entries(p.ships)){ if(defs.ships[k] && v) total += (defs.ships[k].cost.metal+defs.ships[k].cost.crystal+defs.ships[k].cost.deut)*v; }
   return total;
 }
-function totalPlayerPoints(state){ return Math.floor(state.planets.reduce((s,p)=>s+computePoints(p),0)/1000); }
+function totalPlayerPoints(state){ return Math.floor(state.planets.filter(p=>!p.destroyed).reduce((s,p)=>s+computePoints(p),0)/1000); }
 
 // Alte Schluessel (aus frueheren Umbenennungen von Schiffstypen), die noch in
 // gespeicherten Daten vorkommen koennen, obwohl defs.ships sie nicht mehr kennt.
@@ -881,7 +899,7 @@ function resolveArrival(universe, username, f){
   const targetState = f.toOwner ? universe.players[f.toOwner] : null;
   if(f.mission==='transport'){
     const target = targetState ? targetState.planets[f.toPlanetIndex] : (f.toPlanetIndex!=null ? state.planets[f.toPlanetIndex] : null);
-    if(target){
+    if(target && !target.destroyed){
       addRes(target,f.cargo);
       log(state, 'Transport hat '+target.name+' erreicht und entladen');
       if(targetState){ message(targetState, 'Eingehender Transport von '+username+' bei '+coordLinkHtml(target.coords)+' erhalten.'); log(targetState, 'Transport von '+username+' erhalten'); }
@@ -895,7 +913,7 @@ function resolveArrival(universe, username, f){
       if(f.ships.researchProbe>0) attemptResearchTheft(state, state.planets[f.from], f.npcSlot);
     } else if(targetState){
       const t = targetState.planets[f.toPlanetIndex];
-      if(t){
+      if(t && !t.destroyed){
         state.reports.unshift({time:new Date().toLocaleTimeString('de-DE'), target:t.name+' ('+f.toOwner+')', coords:coordStr(t.coords), coordArr:t.coords, resources:{...t.resources}, defense:sidePower(extractDefense(t.buildings), defs.buildings).attack, fleet:t.ships});
         log(state, 'Spionagebericht über '+t.name+' ('+f.toOwner+') erhalten');
         message(targetState, 'Dein Planet '+t.name+' wurde von '+username+' ausspioniert.');
@@ -1000,7 +1018,7 @@ function resolveAttackGroup(universe, participants){
   const targetState = first.toOwner ? universe.players[first.toOwner] : null;
   if(targetState){
     const t = targetState.planets[first.toPlanetIndex];
-    if(!t){
+    if(!t || t.destroyed){
       for(const {state, fleet} of participants){ log(state, 'Angriff nicht möglich: Ziel existiert nicht mehr'); fleet.cargo={metal:0,crystal:0,deut:0}; fleet.phase='return'; }
       return;
     }
@@ -1018,6 +1036,25 @@ function resolveAttackGroup(universe, participants){
     if(outcome.won){
       message(targetState, 'Dein Planet '+t.name+' wurde von '+attackerNames+waveNote+' angegriffen und geplündert! Verlust: '+(outcome.takenMetal+outcome.takenCrystal+outcome.takenDeut)+'.');
       log(targetState, 'Angriff von '+attackerNames+' erlitten · Verluste');
+      // Planetenzerstörung: nur moeglich, wenn der Verteidiger nach der Schlacht komplett
+      // schutzlos ist (weder Flotte noch Verteidigungsanlagen uebrig) UND die angreifende
+      // Streitmacht Todessterne enthielt. Chance skaliert mit der Anzahl Todessterne, das
+      // Ziel darf nicht sein letzter verbleibender Planet sein.
+      const deathstars = combinedShips.deathstar||0;
+      const fullyUndefended = Object.values(survivingDefenderFleet).every(v=>!v) && Object.values(survivingDef).every(v=>!v);
+      const targetHasOtherPlanets = targetState.planets.filter(pl=>!pl.destroyed).length>1;
+      if(deathstars>0 && fullyUndefended && targetHasOtherPlanets){
+        const chance = deathStarDestroyChance(deathstars);
+        if(Math.random()<chance){
+          destroyPlanet(targetState, first.toPlanetIndex);
+          message(targetState, 'KATASTROPHE: Dein Planet '+t.name+' wurde durch '+deathstars+' Todesstern(e) vollständig zerstört!');
+          log(targetState, t.name+' durch Todessterne zerstört');
+          for(const {state:atkState} of participants){
+            message(atkState, 'Todesstern-Bombardement erfolgreich: '+t.name+' bei '+coordLinkHtml(first.toCoord)+' wurde vollständig zerstört!');
+            log(atkState, t.name+' zerstört');
+          }
+        }
+      }
     } else {
       message(targetState, 'Dein Planet '+t.name+' wurde von '+attackerNames+waveNote+' angegriffen – Verteidigung erfolgreich!');
       log(targetState, 'Angriff von '+attackerNames+' abgewehrt');
