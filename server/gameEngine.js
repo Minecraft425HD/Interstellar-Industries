@@ -167,6 +167,7 @@ function createStarterEmpire(coord, name){
     lifeform: {active:'humans', points:0, buildings:{}, research:{}},
     marketRate: { metal:1, crystal:1.5, deut:3 },
     logs: ['Imperium gegründet.'],
+    mail: [],
   };
 }
 
@@ -553,6 +554,7 @@ function ensureAllDefaults(state){
   if(!state.alliance) state.alliance={name:'Unabhängig',tag:'-',members:[],points:0,depot:{metal:0,crystal:0,deut:0}};
   if(!state.logs) state.logs=[];
   if(!state.messages) state.messages=[];
+  if(!state.mail) state.mail=[];
   if(!state.reports) state.reports=[];
   if(!state.fleets) state.fleets=[];
   if(!state.debrisFields) state.debrisFields={};
@@ -832,6 +834,31 @@ function scanSystem(universe, username, payload){
   state.reports.unshift({type:'phalanx', time:new Date().toLocaleTimeString('de-DE'), target:coordStr([gal,sys,pos]), coordArr:[gal,sys,pos], movements});
   log(state, 'Sensorphalanx-Scan bei '+coordStr([gal,sys,pos])+' durchgeführt ('+movements.length+' Flottenbewegung(en) entdeckt)');
   return ok(state, 'Scan abgeschlossen: '+movements.length+' Flottenbewegung(en) gefunden');
+}
+const MAIL_MAX_LEN = 1000;
+const MAIL_MAX_ENTRIES = 50;
+function sendDirectMessage(universe, username, payload){
+  const state = universe.players[username];
+  const toUsername = String(payload.toUsername||'').trim();
+  if(!toUsername) return fail(state, 'Kein Empfänger angegeben');
+  if(toUsername===username) return fail(state, 'Du kannst dir selbst keine Nachricht senden');
+  const recipient = universe.players[toUsername];
+  if(!recipient) return fail(state, 'Spieler "'+toUsername+'" wurde nicht gefunden');
+  const text = String(payload.text||'').trim();
+  if(!text) return fail(state, 'Nachricht darf nicht leer sein');
+  if(text.length>MAIL_MAX_LEN) return fail(state, 'Nachricht zu lang (max. '+MAIL_MAX_LEN+' Zeichen)');
+  const time = new Date().toLocaleTimeString('de-DE');
+  if(!recipient.mail) recipient.mail=[];
+  if(!state.mail) state.mail=[];
+  recipient.mail.unshift({from:username, to:toUsername, text, time, direction:'in', read:false});
+  recipient.mail = recipient.mail.slice(0, MAIL_MAX_ENTRIES);
+  state.mail.unshift({from:username, to:toUsername, text, time, direction:'out', read:true});
+  state.mail = state.mail.slice(0, MAIL_MAX_ENTRIES);
+  return ok(state, 'Nachricht an '+toUsername+' gesendet');
+}
+function markMailRead(state){
+  (state.mail||[]).forEach(m=>{ if(m.direction==='in') m.read=true; });
+  return ok(state);
 }
 function depositAlliance(state, planetIndex){
   const p = requirePlanet(state, planetIndex);
@@ -1219,6 +1246,8 @@ function applyAction(universe, username, type, payload){
     case 'enqueueMoonBuild': return enqueueMoonBuild(state, payload.planetIndex, payload.moonIndex, payload.key);
     case 'jumpGateTransfer': return jumpGateTransfer(state, payload.fromMoonIndex, payload.toMoonIndex, payload.ships);
     case 'scanSystem': return scanSystem(universe, username, payload);
+    case 'sendDirectMessage': return sendDirectMessage(universe, username, payload);
+    case 'markMailRead': return markMailRead(state);
     case 'depositAlliance': return depositAlliance(state, payload.planetIndex);
     case 'marketTrade': return marketTrade(state, payload.planetIndex, payload.give, payload.want, payload.amount);
     case 'merchantBuy': return merchantBuy(state, payload.planetIndex, payload.resourceType, payload.amount);

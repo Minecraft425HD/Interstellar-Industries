@@ -92,6 +92,7 @@ const state = {
   fleets: [],
   reports: [],
   messages: [],
+  mail: [],
   debrisFields: {},
   moons: [],
   activeMoonIndex: null,
@@ -429,6 +430,7 @@ function applyServerState(serverState, opts){
   state.fleets = serverState.fleets || [];
   state.reports = serverState.reports || [];
   state.messages = serverState.messages || [];
+  state.mail = serverState.mail || [];
   state.debrisFields = serverState.debrisFields || {};
   state.moons = serverState.moons || [];
   state.alliance = serverState.alliance || state.alliance;
@@ -886,7 +888,8 @@ function totalPlayerPoints(){ return Math.floor(state.planets.reduce((s,p)=>s+co
 
 const navItems = [['overview','Übersicht'],['buildings','Gebäude'],['facilities','Anlagen'],['defense','Verteidigung'],['resources','Ressourcen'],['research','Forschung'],['shipyard','Werft'],['fleet','Flotte'],['expeditions','Expeditionen'],['galaxy','Galaxie'],['moons','Monde'],['alliance','Allianz'],['officers','Offiziere'],['lifeform','Lebensform'],['market','Markt'],['reports','Berichte'],['messages','Nachrichten'],['empire','Imperium'],['highscore','Rangliste'],['settings','Einstellungen']];
 
-function renderNav(){ $('#nav').innerHTML = navItems.map(([id,label])=>`<button class="${state.view===id?'active':''}" data-view="${id}">${label}</button>`).join(''); document.querySelectorAll('[data-view]').forEach(b=>b.onclick=()=>{ if(b.dataset.view!=='fleet') state.fleetPrefill=null; if(b.dataset.view==='highscore') highscoreCache=null; if(b.dataset.view==='galaxy') galaxyCache={}; state.view=b.dataset.view; render(); }); }
+function unreadMailCount(){ return (state.mail||[]).filter(m=>m.direction==='in' && !m.read).length; }
+function renderNav(){ const unread=unreadMailCount(); $('#nav').innerHTML = navItems.map(([id,label])=>`<button class="${state.view===id?'active':''}" data-view="${id}">${label}${id==='messages'&&unread>0?` <span class="pill active" style="padding:1px 6px;font-size:11px">${unread}</span>`:''}</button>`).join(''); document.querySelectorAll('[data-view]').forEach(b=>b.onclick=()=>{ if(b.dataset.view!=='fleet') state.fleetPrefill=null; if(b.dataset.view==='highscore') highscoreCache=null; if(b.dataset.view==='galaxy') galaxyCache={}; state.view=b.dataset.view; if(b.dataset.view==='messages' && unreadMailCount()>0) postAction('markMailRead', {}); render(); }); }
 function renderTop(){ const p=active(); if(!p) return; const inc=hourly(p), e=energyStats(p); $('#planetName').textContent=p.name; $('#planetCoords').innerHTML=coordLinkHtml(p.coords); $('#metalTop').textContent=fmt(p.resources.metal); $('#crystalTop').textContent=fmt(p.resources.crystal); $('#deutTop').textContent=fmt(p.resources.deut); $('#metalRate').textContent=fmt1(inc.metal)+'/h'; $('#crystalRate').textContent=fmt1(inc.crystal)+'/h'; $('#deutRate').textContent=fmt1(inc.deut)+'/h'; $('#energyTop').textContent=fmt(e.prod); $('#energyUse').textContent=fmt(e.use)+' genutzt'; }
 function renderSide(){
   $('#planetTabs').innerHTML = state.planets.map((p,i)=>p.destroyed?'':`<button class="pill ${state.activePlanet===i?'active':''}" data-planet="${i}">${p.name}</button>`).join('');
@@ -1000,7 +1003,26 @@ function viewDefense(){
   return `<h2>Verteidigung</h2><div class="list">${rows}</div><div style="height:16px"></div>${missileForm}`;
 }
 
-function viewMessages(){ if(state.messages.length===0) return `<h2>Nachrichten</h2><div class="small">Keine Nachrichten.</div>`; return `<h2>Nachrichten</h2><div class="list">${state.messages.map(m=>`<div class="report">${m}</div>`).join('')}</div>`; }
+function viewMessages(){
+  const mail = state.mail||[];
+  const unreadCount = mail.filter(m=>m.direction==='in' && !m.read).length;
+  const mailRows = mail.length ? mail.map(m=>{
+    const who = m.direction==='in' ? ('Von '+escapeHtml(m.from)) : ('An '+escapeHtml(m.to));
+    const unread = m.direction==='in' && !m.read;
+    return `<div class="report"${unread?' style="border-color:var(--accent2)"':''}><div class="row" style="border:none;background:none;padding:0"><strong>${who}</strong><span class="small">${m.time}</span></div><div class="small" style="margin-top:6px;white-space:pre-wrap">${escapeHtml(m.text)}</div></div>`;
+  }).join('') : '<div class="small">Noch keine Spielernachrichten.</div>';
+  const systemHtml = state.messages.length ? `<div class="list">${state.messages.map(m=>`<div class="report">${m}</div>`).join('')}</div>` : '<div class="small">Keine Systemnachrichten.</div>';
+  return `<h2>Nachrichten</h2><div class="grid2">
+  <div class="card"><h3>Neue Nachricht</h3><div class="small">Sende eine Direktnachricht an einen anderen Spieler (per genauem Benutzernamen).</div><div style="height:10px"></div><form class="fleet-form" id="mailForm">
+    <label>Empfänger (Benutzername)<input type="text" name="toUsername" maxlength="20" required></label>
+    <label>Nachricht<textarea name="text" rows="4" maxlength="1000" required></textarea></label>
+    <button class="btn good" type="submit">Senden</button>
+  </form></div>
+  <div class="card"><h3>Spielernachrichten${unreadCount>0?` <span class="pill active" style="padding:2px 8px">${unreadCount} neu</span>`:''}</h3><div class="list" style="max-height:420px;overflow-y:auto">${mailRows}</div></div>
+  </div>
+  <div style="height:16px"></div>
+  <h3>Systemnachrichten</h3>${systemHtml}`;
+}
 
 function viewSettings(){
   const native = !!(window.Android && window.Android.saveGame);
@@ -1187,6 +1209,7 @@ function renderView(bind=true){
     document.querySelectorAll('[data-moon-build]').forEach(b=>b.onclick=()=>enqueueMoonBuild(b.dataset.moonBuild));
     const jgf=$('#jumpGateForm'); if(jgf) jgf.onsubmit=e=>{e.preventDefault(); const toIdx=Number(jgf.targetMoon.value); const ships={lightFighter:Number(jgf.lightFighter.value)||0, cruiser:Number(jgf.cruiser.value)||0}; jumpGateTransfer(state.activeMoonIndex, toIdx, {}, ships); };
     const phf=$('#phalanxForm'); if(phf) phf.onsubmit=e=>{e.preventDefault(); postAction('scanSystem', {moonIndex: state.activeMoonIndex, planetIndex: state.activePlanet, gal: Number(phf.galaxy.value), sys: Number(phf.system.value), pos: Number(phf.position.value)}).then(()=>{ state.view='reports'; render(); }); };
+    const mailForm=$('#mailForm'); if(mailForm) mailForm.onsubmit=e=>{e.preventDefault(); postAction('sendDirectMessage', {toUsername: mailForm.toUsername.value.trim(), text: mailForm.text.value}).then(()=>{ renderView(true); }); };
   }
 }
 
