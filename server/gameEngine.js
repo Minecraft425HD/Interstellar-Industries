@@ -235,6 +235,15 @@ const EVENT_GAP_MAX_MS = 45*60*1000;
 
 function pickRandomItemKey(){ const keys=Object.keys(defs.items); return keys[Math.floor(Math.random()*keys.length)]; }
 function ensureAuction(universe){
+  if(universe.auction && !defs.items[universe.auction.itemKey]){
+    // Auktion referenziert einen Item-Key aus einer frueheren Wirtschaftsversion (z.B. vor
+    // der Rohstoffreform umbenannt) - Gebot zurueckerstatten und Auktion sauber neu ziehen,
+    // statt mit einem crashenden defs.items[...]-Zugriff die gesamte API-Antwort zu killen.
+    if(universe.auction.currentBidder && universe.players[universe.auction.currentBidder]){
+      universe.players[universe.auction.currentBidder].darkMatter += universe.auction.currentBid;
+    }
+    universe.auction = null;
+  }
   if(!universe.auction){ universe.auction = { itemKey: pickRandomItemKey(), currentBid: 0, currentBidder: null, endsAt: Date.now()+AUCTION_DURATION_MS }; }
 }
 function getPublicAuctionView(universe){
