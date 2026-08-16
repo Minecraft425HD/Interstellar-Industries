@@ -1010,6 +1010,30 @@ function enqueueLifeformBuilding(state, planetIndex, key){
 // Success chance shifts with the attacker's espionage tech advantage over the NPC's;
 // on success, one random research field jumps to the NPC's level if it's higher.
 function espionageSuccessChance(atkEsp, defEsp){ return Math.min(0.95, Math.max(0.05, 0.5 + 0.05*(atkEsp-defEsp))); }
+// Gestaffelte Spionageberichte (wie im echten OGame): je hoeher die eigene Spionagetechnik
+// im Vergleich zur gegnerischen, desto mehr Kategorien werden im Bericht aufgedeckt.
+// Ressourcen sind bei jedem erfolgreichen Spionageversuch sichtbar; Flotte, Verteidigung,
+// Gebaeude und Forschung erfordern zunehmend groessere Technik-Vorspruenge.
+function espionageReportTiers(atkEsp, defEsp){
+  const diff = atkEsp - defEsp;
+  return {
+    resources: true,
+    fleet: diff >= 0,
+    defense: diff >= 3,
+    buildings: diff >= 6,
+    research: diff >= 9,
+  };
+}
+function espionageTierCount(tiers){ return Object.values(tiers).filter(Boolean).length; }
+function buildEspionageReport(opts){
+  const tiers = opts.tiers;
+  const report = { time:new Date().toLocaleTimeString('de-DE'), target:opts.target, coords:opts.coords, coordArr:opts.coordArr, resources:opts.resources, tier:espionageTierCount(tiers), tiers };
+  if(tiers.fleet) report.fleet = opts.fleetShips;
+  if(tiers.defense){ report.defense = sidePower(opts.defenseShips, defs.buildings).attack; report.defenderPower = combinedDefenderPower(opts.fleetShips, opts.defenseShips); }
+  if(tiers.buildings) report.buildings = opts.buildings;
+  if(tiers.research) report.research = opts.research;
+  return report;
+}
 function attemptResearchTheft(state, p, npcSlot){
   if(!p || !npcSlot || !npcSlot.research) return;
   const atkEsp = p.research.espionageTech || 0;
@@ -1054,9 +1078,13 @@ function resolveArrival(universe, username, f){
         message(state, 'Spionage bei '+f.npcSlot.name+' gescheitert - die Spionageabwehr hat die Sonde entdeckt (Erfolgschance war '+Math.round(chance*100)+'%).');
         log(state, 'Spionage bei '+f.npcSlot.name+' gescheitert');
       } else {
-        const defPower = sidePower(f.npcSlot.defenseShips, defs.buildings).attack;
-        state.reports.unshift({time:new Date().toLocaleTimeString('de-DE'), target:f.npcSlot.name, coords:coordStr(f.toCoord), coordArr:f.toCoord, resources:{metal:f.npcSlot.metal, crystal:f.npcSlot.crystal, deut:f.npcSlot.deut}, defense:defPower, fleet:f.npcSlot.fleet, buildings:f.npcSlot.buildings, research:f.npcSlot.research, defenderPower:combinedDefenderPower(f.npcSlot.fleet, f.npcSlot.defenseShips)});
-        log(state, 'Spionagebericht über '+f.npcSlot.name+' erhalten');
+        const tiers = espionageReportTiers(atkEsp, defEsp);
+        state.reports.unshift(buildEspionageReport({
+          target:f.npcSlot.name, coords:coordStr(f.toCoord), coordArr:f.toCoord,
+          resources:{metal:f.npcSlot.metal, crystal:f.npcSlot.crystal, deut:f.npcSlot.deut},
+          fleetShips:f.npcSlot.fleet, defenseShips:f.npcSlot.defenseShips, buildings:f.npcSlot.buildings, research:f.npcSlot.research, tiers,
+        }));
+        log(state, 'Spionagebericht über '+f.npcSlot.name+' erhalten (Stufe '+espionageTierCount(tiers)+'/5)');
         if(f.ships.researchProbe>0) attemptResearchTheft(state, state.planets[f.from], f.npcSlot);
       }
     } else if(targetState){
@@ -1069,16 +1097,24 @@ function resolveArrival(universe, username, f){
           message(targetState, 'Ein Spionageversuch von '+username+' auf '+t.name+' wurde von deiner Spionageabwehr vereitelt.');
           log(targetState, 'Spionageversuch von '+username+' abgewehrt');
         } else {
-          state.reports.unshift({time:new Date().toLocaleTimeString('de-DE'), target:t.name+' ('+f.toOwner+')', coords:coordStr(t.coords), coordArr:t.coords, resources:{...t.resources}, defense:sidePower(extractDefense(t.buildings), defs.buildings).attack, fleet:t.ships, defenderPower:combinedDefenderPower(t.ships, extractDefense(t.buildings))});
-          log(state, 'Spionagebericht über '+t.name+' ('+f.toOwner+') erhalten');
+          const tiers = espionageReportTiers(atkEsp, defEsp);
+          state.reports.unshift(buildEspionageReport({
+            target:t.name+' ('+f.toOwner+')', coords:coordStr(t.coords), coordArr:t.coords,
+            resources:{...t.resources}, fleetShips:t.ships, defenseShips:extractDefense(t.buildings), buildings:t.buildings, research:t.research, tiers,
+          }));
+          log(state, 'Spionagebericht über '+t.name+' ('+f.toOwner+') erhalten (Stufe '+espionageTierCount(tiers)+'/5)');
           message(targetState, 'Dein Planet '+t.name+' wurde von '+username+' ausspioniert.');
           log(targetState, 'Spionage durch '+username+' entdeckt');
         }
       }
     } else if(f.toPlanetIndex!=null){
       const t = state.planets[f.toPlanetIndex];
-      state.reports.unshift({time:new Date().toLocaleTimeString('de-DE'), target:t.name, coords:coordStr(t.coords), coordArr:t.coords, resources:{...t.resources}, defense:sidePower(extractDefense(t.buildings), defs.buildings).attack, fleet:t.ships, defenderPower:combinedDefenderPower(t.ships, extractDefense(t.buildings))});
-      log(state, 'Spionagebericht über '+t.name+' erhalten');
+      const tiers = espionageReportTiers(atkEsp, t.research.espionageTech || 0);
+      state.reports.unshift(buildEspionageReport({
+        target:t.name, coords:coordStr(t.coords), coordArr:t.coords,
+        resources:{...t.resources}, fleetShips:t.ships, defenseShips:extractDefense(t.buildings), buildings:t.buildings, research:t.research, tiers,
+      }));
+      log(state, 'Spionagebericht über '+t.name+' erhalten (Stufe '+espionageTierCount(tiers)+'/5)');
     }
     f.phase='return';
   } else if(f.mission==='harvest'){
