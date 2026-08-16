@@ -435,7 +435,12 @@ function applyServerState(serverState, opts){
   state.mail = serverState.mail || [];
   state.debrisFields = serverState.debrisFields || {};
   state.moons = serverState.moons || [];
-  if(serverState.alliance !== undefined) state.alliance = serverState.alliance;
+  // Guard against an old, not-yet-updated server: its /api/state still sends a legacy
+  // alliance:{name:'Unabhängig', tag:'-', ...} placeholder object (truthy!) under the same
+  // field name. Only the new server shape always includes "founder" - a placeholder never
+  // does - so use that to tell a real membership apart from the stale placeholder and avoid
+  // showing a brand-new/independent player as if they were already in an alliance.
+  if(serverState.alliance !== undefined) state.alliance = (serverState.alliance && serverState.alliance.founder) ? serverState.alliance : null;
   state.alliancesList = serverState.alliancesList || state.alliancesList;
   state.officerExpiry = serverState.officerExpiry || {};
   state.darkMatter = serverState.darkMatter || 0;
