@@ -400,10 +400,28 @@ function renderConnectScreen(){
 function renderLoadingScreen(){
   const view = $('#view');
   if(!view) return;
+  const showError = connectionStatus==='error' && connectionError;
+  const url = getServerUrl();
   view.innerHTML = `<div class="card" style="max-width:440px;margin:8vh auto;text-align:center">
     <h2>Verbinde…</h2>
     <div class="small">Lade Daten vom Server.</div>
+    ${showError ? `
+    <div class="small" style="margin-top:14px;color:var(--danger);text-align:left">⚠ Server nicht erreichbar (${connectionError}). Hat sich die Serveradresse geändert (z.B. neue Tunnel-Adresse nach einem Neustart)?</div>
+    <form id="loadingReconnectForm" class="fleet-form" style="margin-top:10px;text-align:left">
+      <label>Server-Adresse<input type="text" name="url" value="${url}" placeholder="https://dein-tunnel.trycloudflare.com" autocapitalize="none" autocorrect="off" spellcheck="false" inputmode="url"></label>
+      <button class="btn good" type="submit">Adresse übernehmen &amp; erneut verbinden</button>
+    </form>` : ''}
   </div>`;
+  const rf = $('#loadingReconnectForm');
+  if(rf) rf.onsubmit = e=>{
+    e.preventDefault();
+    const u = rf.url.value.trim().replace(/\/$/,'');
+    if(!u) return;
+    setServerUrl(u);
+    connectionStatus='connecting'; connectionError='';
+    render();
+    pollState();
+  };
 }
 
 // ---- Login / Registration ----
