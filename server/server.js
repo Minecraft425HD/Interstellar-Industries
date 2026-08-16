@@ -258,8 +258,8 @@ app.post('/api/admin/deletePlayer', requireAuth, requireAdmin, (req, res) => {
   res.status(result.ok?200:400).json(result);
 });
 app.post('/api/admin/grantResources', requireAuth, requireAdmin, (req, res) => {
-  const { username, metal, crystal, deut } = req.body || {};
-  const result = engine.adminGrantResources(universe, username, { metal, crystal, deut });
+  const { username, ...res_ } = req.body || {};
+  const result = engine.adminGrantResources(universe, username, res_);
   if(result.ok){ dirty=true; saveUniverse(); }
   logLine('ADMIN ' + req.username + (result.ok ? ' gab Ressourcen an ' : ' konnte KEINE Ressourcen geben an ') + username + (result.error ? (' :: ' + result.error) : ''));
   res.status(result.ok?200:400).json(result);
