@@ -74,6 +74,20 @@ const defs = {
     deutBooster:{name:'Deuterium-Produktionsbooster', desc:'Erhöht die Deuteriumproduktion für 24 Stunden um 50%.', effect:'deutBoost', durationHours:24},
     speedBooster:{name:'Flottengeschwindigkeitsbooster', desc:'Erhöht die Fluggeschwindigkeit aller Flotten für 24 Stunden um 30%.', effect:'speedBoost', durationHours:24},
   },
+  lifeformBuildings: {
+    humanResidence:{name:'Wohnkomplex', desc:'Menschliche Siedlungen, die effizienter Metall fördern. +2% Metallproduktion pro Stufe.', species:'humans', boosts:'metal', base:{metal:4800, crystal:2400, deut:0}},
+    humanFarm:{name:'Nahrungsfarm', desc:'Versorgt die wachsende Bevölkerung und steigert nebenbei die Kristallgewinnung. +2% Kristallproduktion pro Stufe.', species:'humans', boosts:'crystal', base:{metal:3600, crystal:4800, deut:0}},
+    humanBank:{name:'Handelszentrum', desc:'Effizientere Deuterium-Logistik durch florierenden Handel. +2% Deuteriumproduktion pro Stufe.', species:'humans', boosts:'deut', base:{metal:2400, crystal:2400, deut:1200}},
+    rocktalMeditation:{name:'Meditationshalle', desc:"Rock'tal-Weisheit steigert die Effizienz der Metallförderung. +2% Metallproduktion pro Stufe.", species:'rocktal', boosts:'metal', base:{metal:5200, crystal:2000, deut:0}},
+    rocktalCrystalFarm:{name:'Kristallfarm', desc:"Von Rock'tal-Mönchen gepflegte Kristallgärten. +2% Kristallproduktion pro Stufe.", species:'rocktal', boosts:'crystal', base:{metal:3200, crystal:5200, deut:0}},
+    rocktalRefinery:{name:'Deuterium-Raffinerie', desc:"Traditionelle Rock'tal-Destillation. +2% Deuteriumproduktion pro Stufe.", species:'rocktal', boosts:'deut', base:{metal:2600, crystal:2200, deut:1400}},
+    mechasAssembly:{name:'Montagehalle', desc:'Mechas-Automatisierung optimiert den Metallabbau. +2% Metallproduktion pro Stufe.', species:'mechas', boosts:'metal', base:{metal:6000, crystal:1800, deut:0}},
+    mechasProcessor:{name:'Kristallprozessor', desc:'Mechanische Präzision bei der Kristallverarbeitung. +2% Kristallproduktion pro Stufe.', species:'mechas', boosts:'crystal', base:{metal:3400, crystal:5600, deut:0}},
+    mechasReactor:{name:'Reaktorkern', desc:'Hocheffiziente Mechas-Reaktoren steigern die Deuteriumausbeute. +2% Deuteriumproduktion pro Stufe.', species:'mechas', boosts:'deut', base:{metal:2800, crystal:2400, deut:1600}},
+    kaeleshShrine:{name:'Schrein', desc:'Kaelesh-Rituale segnen die Metallförderung. +2% Metallproduktion pro Stufe.', species:'kaelesh', boosts:'metal', base:{metal:5000, crystal:2600, deut:0}},
+    kaeleshMonastery:{name:'Kloster', desc:'Kaelesh-Mönche verfeinern die Kristallgewinnung. +2% Kristallproduktion pro Stufe.', species:'kaelesh', boosts:'crystal', base:{metal:3000, crystal:5400, deut:0}},
+    kaeleshOracle:{name:'Orakel', desc:'Prophetische Voraussicht optimiert den Deuteriumabbau. +2% Deuteriumproduktion pro Stufe.', species:'kaelesh', boosts:'deut', base:{metal:2600, crystal:2600, deut:1500}},
+  },
 };
 const missionLabels = {transport:'Transport', spy:'Spionage', attack:'Angriff', colonize:'Kolonisierung', harvest:'Trümmerfeld-Bergung'};
 const UNIVERSE = { galaxies: 9, systems: 499, positions: 15 };
@@ -418,11 +432,23 @@ function energyStats(state, p){
   const use=defs.buildings.metalMine.powerUse(p.buildings.metalMine)+defs.buildings.crystalMine.powerUse(p.buildings.crystalMine)+defs.buildings.deutSynth.powerUse(p.buildings.deutSynth);
   return {prod,use,ratio: use? Math.min(1,prod/use):1};
 }
+function lifeformBoost(state, resource){
+  let mult = 1;
+  const lf = state.lifeform;
+  if(!lf) return mult;
+  for(const [key,def] of Object.entries(defs.lifeformBuildings)){
+    if(def.species===lf.active && def.boosts===resource){
+      const lvl = (lf.buildings && lf.buildings[key]) || 0;
+      mult += lvl*0.02;
+    }
+  }
+  return mult;
+}
 function hourly(state, p){
   const e=energyStats(state, p).ratio; const bonus=officerBonus(state);
-  const metalBoost = itemActive(state,'metalBooster') ? 1.5 : 1;
-  const crystalBoost = itemActive(state,'crystalBooster') ? 1.5 : 1;
-  const deutBoost = itemActive(state,'deutBooster') ? 1.5 : 1;
+  const metalBoost = (itemActive(state,'metalBooster') ? 1.5 : 1) * lifeformBoost(state,'metal');
+  const crystalBoost = (itemActive(state,'crystalBooster') ? 1.5 : 1) * lifeformBoost(state,'crystal');
+  const deutBoost = (itemActive(state,'deutBooster') ? 1.5 : 1) * lifeformBoost(state,'deut');
   return {
     metal: defs.buildings.metalMine.prod(p.buildings.metalMine)*e*bonus*metalBoost,
     crystal: defs.buildings.crystalMine.prod(p.buildings.crystalMine)*e*bonus*crystalBoost,
@@ -808,6 +834,20 @@ function setLifeform(state, species){
   state.lifeform.active = species;
   return ok(state, 'Lebensform gewechselt');
 }
+function enqueueLifeformBuilding(state, planetIndex, key){
+  const p = requirePlanet(state, planetIndex);
+  const def = defs.lifeformBuildings[key];
+  if(!def) return fail(state, 'Unbekanntes Lebensform-Gebäude');
+  if(def.species!==state.lifeform.active) return fail(state, def.name+' gehört zu einer anderen Lebensform');
+  if(!state.lifeform.buildings) state.lifeform.buildings = {};
+  const lvl = (state.lifeform.buildings[key]||0)+1;
+  const cost = scaledCost(def.base, lvl);
+  if(!hasRes(p,cost)) return fail(state, 'Nicht genug Ressourcen für '+def.name);
+  spend(p,cost);
+  state.lifeform.buildings[key] = lvl;
+  state.lifeform.points = (state.lifeform.points||0) + cost.metal+cost.crystal+cost.deut;
+  return ok(state, def.name+' Stufe '+lvl+' fertiggestellt');
+}
 
 // Spy mission with a research ship present: chance-based tech steal from an NPC.
 // Success chance shifts with the attacker's espionage tech advantage over the NPC's;
@@ -1060,6 +1100,7 @@ function applyAction(universe, username, type, payload){
     case 'launchMissiles': return launchMissiles(universe, username, payload.planetIndex, payload.targetPos, payload.count);
     case 'activateOfficer': return activateOfficer(state, payload.key);
     case 'setLifeform': return setLifeform(state, payload.species);
+    case 'enqueueLifeformBuilding': return enqueueLifeformBuilding(state, payload.planetIndex, payload.key);
     default: throw new Error('Unbekannte Aktion: '+type);
   }
 }

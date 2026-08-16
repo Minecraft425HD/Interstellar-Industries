@@ -65,7 +65,21 @@ const defs = {
     solarSatellite:{name:'Solarsatellit', desc:'Liefert zusätzliche Energie, kann sich nicht bewegen oder kämpfen.', cost:{metal:0, crystal:2000, deut:500}, cargo:0, speed:0, fuel:0, attack:1, shield:1, hull:2000, role:'power', requires:{}},
     recycler:{name:'Recycler', desc:'Sammelt Trümmerfelder nach Schlachten ein.', cost:{metal:10000, crystal:6000, deut:2000}, cargo:20000, speed:0.7, fuel:30, attack:1, shield:10, hull:16000, role:'recycler', requires:{shipyard:4, combustion:6}},
     researchProbe:{name:'Forschungssonde', desc:'Baugleich mit der Spionagesonde, ermöglicht aber bei Spionage gegen NPC-Kolonien den Diebstahl fremder Forschung.', cost:{metal:0, crystal:1000, deut:0}, cargo:5, speed:3, fuel:1, attack:0, shield:0, hull:1000, role:'research', requires:{shipyard:3, combustion:3}},
-  }
+  },
+  lifeformBuildings: {
+    humanResidence:{name:'Wohnkomplex', desc:'Menschliche Siedlungen, die effizienter Metall fördern. +2% Metallproduktion pro Stufe.', species:'humans', boosts:'metal', base:{metal:4800, crystal:2400, deut:0}},
+    humanFarm:{name:'Nahrungsfarm', desc:'Versorgt die wachsende Bevölkerung und steigert nebenbei die Kristallgewinnung. +2% Kristallproduktion pro Stufe.', species:'humans', boosts:'crystal', base:{metal:3600, crystal:4800, deut:0}},
+    humanBank:{name:'Handelszentrum', desc:'Effizientere Deuterium-Logistik durch florierenden Handel. +2% Deuteriumproduktion pro Stufe.', species:'humans', boosts:'deut', base:{metal:2400, crystal:2400, deut:1200}},
+    rocktalMeditation:{name:'Meditationshalle', desc:"Rock'tal-Weisheit steigert die Effizienz der Metallförderung. +2% Metallproduktion pro Stufe.", species:'rocktal', boosts:'metal', base:{metal:5200, crystal:2000, deut:0}},
+    rocktalCrystalFarm:{name:'Kristallfarm', desc:"Von Rock'tal-Mönchen gepflegte Kristallgärten. +2% Kristallproduktion pro Stufe.", species:'rocktal', boosts:'crystal', base:{metal:3200, crystal:5200, deut:0}},
+    rocktalRefinery:{name:'Deuterium-Raffinerie', desc:"Traditionelle Rock'tal-Destillation. +2% Deuteriumproduktion pro Stufe.", species:'rocktal', boosts:'deut', base:{metal:2600, crystal:2200, deut:1400}},
+    mechasAssembly:{name:'Montagehalle', desc:'Mechas-Automatisierung optimiert den Metallabbau. +2% Metallproduktion pro Stufe.', species:'mechas', boosts:'metal', base:{metal:6000, crystal:1800, deut:0}},
+    mechasProcessor:{name:'Kristallprozessor', desc:'Mechanische Präzision bei der Kristallverarbeitung. +2% Kristallproduktion pro Stufe.', species:'mechas', boosts:'crystal', base:{metal:3400, crystal:5600, deut:0}},
+    mechasReactor:{name:'Reaktorkern', desc:'Hocheffiziente Mechas-Reaktoren steigern die Deuteriumausbeute. +2% Deuteriumproduktion pro Stufe.', species:'mechas', boosts:'deut', base:{metal:2800, crystal:2400, deut:1600}},
+    kaeleshShrine:{name:'Schrein', desc:'Kaelesh-Rituale segnen die Metallförderung. +2% Metallproduktion pro Stufe.', species:'kaelesh', boosts:'metal', base:{metal:5000, crystal:2600, deut:0}},
+    kaeleshMonastery:{name:'Kloster', desc:'Kaelesh-Mönche verfeinern die Kristallgewinnung. +2% Kristallproduktion pro Stufe.', species:'kaelesh', boosts:'crystal', base:{metal:3000, crystal:5400, deut:0}},
+    kaeleshOracle:{name:'Orakel', desc:'Prophetische Voraussicht optimiert den Deuteriumabbau. +2% Deuteriumproduktion pro Stufe.', species:'kaelesh', boosts:'deut', base:{metal:2600, crystal:2600, deut:1500}},
+  },
 };
 const missionLabels = {transport:'Transport', spy:'Spionage', attack:'Angriff', colonize:'Kolonisierung', harvest:'Trümmerfeld-Bergung'};
 
@@ -142,14 +156,15 @@ function levelEffectText(d, key, lvl){
   if(d.powerUse) parts.push('Verbrauch -'+fmt(Math.floor(d.powerUse(lvl)))+' Energie');
   if(d.deutUse) parts.push('Deuterium '+fmt(Math.floor(d.deutUse(lvl)))+'/h');
   if(key==='metalStorage'||key==='crystalStorage'||key==='deutTank') parts.push('Kapazität '+fmt(Math.max(5000,5000*lvl)));
+  if(d.boosts){ const resLabel={metal:'Metall',crystal:'Kristall',deut:'Deuterium'}[d.boosts]||d.boosts; parts.push('+'+(lvl*2)+'% '+resLabel+'produktion'); }
   return parts.length ? parts.join(' · ') : null;
 }
 function openInfoModal(type, key, level){
   closeInfoModal();
-  const table = type==='building' ? defs.buildings : (type==='research' ? defs.research : defs.ships);
+  const table = type==='building' ? defs.buildings : (type==='research' ? defs.research : (type==='lifeformBuilding' ? defs.lifeformBuildings : defs.ships));
   const d = table && table[key];
   if(!d) return;
-  const isLeveled = type==='research' || (type==='building' && !d.isDefense);
+  const isLeveled = type==='research' || type==='lifeformBuilding' || (type==='building' && !d.isDefense);
   const statsRows = [];
   let levelTableHtml = '';
   if(isLeveled){
@@ -157,7 +172,7 @@ function openInfoModal(type, key, level){
     const hasEffect = levelEffectText(d, key, curLevel+1)!=null;
     const rows = [];
     for(let lvl=curLevel+1; lvl<=curLevel+10; lvl++){
-      const cost = type==='research' ? scaledCost(d.base, lvl) : buildingCost(d.base, lvl);
+      const cost = (type==='research'||type==='lifeformBuilding') ? scaledCost(d.base, lvl) : buildingCost(d.base, lvl);
       const effect = levelEffectText(d, key, lvl);
       rows.push(`<tr><td>${lvl}</td><td>${fmt(cost.metal)}</td><td>${fmt(cost.crystal)}</td><td>${fmt(cost.deut)}</td>${hasEffect?`<td class="info-modal-effect">${effect||''}</td>`:''}</tr>`);
     }
@@ -992,8 +1007,15 @@ function viewOfficers(){
     return `<div class="row"><div><strong>${name}</strong><div class="sub">${desc}</div>${active?`<div class="sub">Noch aktiv: ${formatDuration(officerTimeLeft(k))}</div>`:''}</div><button class="btn ${active?'good':'alt'}" data-officer="${k}" ${disabled?'disabled':''}>${label}</button></div>`;
   }).join('')}</div>`; }
 
-function viewLifeform(){ const lf=state.lifeform; const species=[['humans','Menschen'],['rocktal',"Rock'tal"],['mechas','Mechas'],['kaelesh','Kaelesh']];
-  return `<h2>Lebensform</h2><div class="small">Aktive Spezies: ${species.find(s=>s[0]===lf.active)[1]}. Jede Lebensform bringt eigene Gebäude und Technologien mit eigenem Bevölkerungs- und Nahrungssystem.</div><div style="height:10px"></div><div class="grid2">${species.map(([k,name])=>`<div class="card"><h3>${name}</h3><button class="btn ${lf.active===k?'good':'alt'}" data-lifeform="${k}">${lf.active===k?'Ausgewählt':'Wählen'}</button></div>`).join('')}</div>`; }
+function viewLifeform(){
+  const lf=state.lifeform; const species=[['humans','Menschen'],['rocktal',"Rock'tal"],['mechas','Mechas'],['kaelesh','Kaelesh']];
+  const ownBuildings = Object.entries(defs.lifeformBuildings).filter(([,d])=>d.species===lf.active);
+  const rows = ownBuildings.map(([k,d])=>{
+    const lvl = (lf.buildings&&lf.buildings[k])||0;
+    const c = scaledCost(d.base, lvl+1);
+    return `<div class="row"><div><strong>${d.name}</strong><div class="sub">Stufe ${lvl}</div><div class="sub">Kosten: M ${fmt(c.metal)} · K ${fmt(c.crystal)} · D ${fmt(c.deut)}</div></div><div style="display:flex;gap:6px;align-items:center">${infoIconHtml('lifeformBuilding',k,lvl)}<button class="btn good" data-lifeform-build="${k}">Ausbauen</button></div></div>`;
+  }).join('');
+  return `<h2>Lebensform</h2><div class="small">Aktive Spezies: ${species.find(s=>s[0]===lf.active)[1]}. Jede Lebensform bringt eigene Gebäude mit, die zur aktiven Spezies passende Rohstoffproduktion dauerhaft steigern. Beim Wechsel bleiben bereits erreichte Stufen erhalten, wirken aber nur, solange die jeweilige Spezies aktiv ist.</div><div style="height:10px"></div><div class="grid2">${species.map(([k,name])=>`<div class="card"><h3>${name}</h3><button class="btn ${lf.active===k?'good':'alt'}" data-lifeform="${k}">${lf.active===k?'Ausgewählt':'Wählen'}</button></div>`).join('')}</div><div style="height:16px"></div><h3>Gebäude von ${species.find(s=>s[0]===lf.active)[1]}</h3><div class="list">${rows}</div>`; }
 
 function merchantCost(amount){ return Math.ceil((Number(amount)||0)/5); }
 function viewMarket(){ const r=state.marketRate; const initialAmount=1000; const initialCost=merchantCost(initialAmount); const initialAffordable = initialCost>0 && initialCost<=state.darkMatter;
@@ -1073,6 +1095,7 @@ function renderView(bind=true){
     const depositBtn=$('#depositBtn'); if(depositBtn) depositBtn.onclick=()=>depositAlliance();
     document.querySelectorAll('[data-officer]').forEach(b=>b.onclick=()=>{ if(officerActive(b.dataset.officer)) return; postAction('activateOfficer', {key:b.dataset.officer}); });
     document.querySelectorAll('[data-lifeform]').forEach(b=>b.onclick=()=>postAction('setLifeform', {species:b.dataset.lifeform}));
+    document.querySelectorAll('[data-lifeform-build]').forEach(b=>b.onclick=()=>postAction('enqueueLifeformBuilding', {planetIndex: state.activePlanet, key:b.dataset.lifeformBuild}));
     document.querySelectorAll('[data-moon-select]').forEach(b=>b.onclick=()=>{ state.activeMoonIndex=Number(b.dataset.moonSelect); renderView(true); });
     document.querySelectorAll('[data-moon-build]').forEach(b=>b.onclick=()=>enqueueMoonBuild(b.dataset.moonBuild));
     const jgf=$('#jumpGateForm'); if(jgf) jgf.onsubmit=e=>{e.preventDefault(); const toIdx=Number(jgf.targetMoon.value); const ships={lightFighter:Number(jgf.lightFighter.value)||0, cruiser:Number(jgf.cruiser.value)||0}; jumpGateTransfer(state.activeMoonIndex, toIdx, {}, ships); };
