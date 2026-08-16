@@ -93,6 +93,7 @@ const state = {
   reports: [],
   messages: [],
   mail: [],
+  event: null,
   debrisFields: {},
   moons: [],
   activeMoonIndex: null,
@@ -440,6 +441,7 @@ function applyServerState(serverState, opts){
   state.lifeform = serverState.lifeform || state.lifeform;
   state.marketRate = serverState.marketRate || state.marketRate;
   state.auction = serverState.auction || state.auction;
+  if(serverState.event !== undefined) state.event = serverState.event;
   state.logs = serverState.logs || [];
   const wasEverConnected = everConnected;
   everConnected = true;
@@ -903,7 +905,9 @@ function renderSide(){
   $('#logs').innerHTML = state.logs.map(x=>`<div class="log">${x}</div>`).join('');
 }
 
-function viewOverview(){ const p=active(), e=energyStats(p), inc=hourly(p), cap=maxStorage(p); return `
+function viewOverview(){ const p=active(), e=energyStats(p), inc=hourly(p), cap=maxStorage(p); const ev=state.event;
+  const eventBanner = ev ? `<div class="card" style="margin-bottom:16px;border-color:var(--accent2)"><h3>🌟 Server-Event: ${ev.name}</h3><div class="small">${ev.desc}</div><div class="small" style="margin-top:6px">Endet in ${formatDuration(ev.endsAt-Date.now())}</div></div>` : '';
+  return `${eventBanner}
   <div class="hero">
     <div class="card"><h2>Planetenübersicht</h2><p>Vollständiger Loop: Ressourcen, Energie, Forschung, Werft, Galaxie mit Spionage/Angriff/Kolonisierung, Kampfsimulation, Rangliste und Markt sind aktiv. Läuft server-seitig weiter, auch wenn die App geschlossen ist.</p>
       <div class="grid3"><div class="card"><div class="label">Speicher Metall</div><div class="value">${fmt(cap.metal)}</div></div><div class="card"><div class="label">Speicher Kristall</div><div class="value">${fmt(cap.crystal)}</div></div><div class="card"><div class="label">Speicher Deuterium</div><div class="value">${fmt(cap.deut)}</div></div></div>

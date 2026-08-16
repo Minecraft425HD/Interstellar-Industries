@@ -88,10 +88,19 @@ const defs = {
     kaeleshMonastery:{name:'Kloster', desc:'Kaelesh-Mönche verfeinern die Kristallgewinnung. +2% Kristallproduktion pro Stufe.', species:'kaelesh', boosts:'crystal', base:{metal:3000, crystal:5400, deut:0}},
     kaeleshOracle:{name:'Orakel', desc:'Prophetische Voraussicht optimiert den Deuteriumabbau. +2% Deuteriumproduktion pro Stufe.', species:'kaelesh', boosts:'deut', base:{metal:2600, crystal:2600, deut:1500}},
   },
+  events: {
+    metalRush:{name:'Metallrausch', desc:'Die Metallproduktion aller Spieler ist um 50% erhöht.', resource:'metal', multiplier:1.5},
+    crystalRush:{name:'Kristallrausch', desc:'Die Kristallproduktion aller Spieler ist um 50% erhöht.', resource:'crystal', multiplier:1.5},
+    deutRush:{name:'Deuteriumrausch', desc:'Die Deuteriumproduktion aller Spieler ist um 50% erhöht.', resource:'deut', multiplier:1.5},
+    galacticBoom:{name:'Galaktischer Boom', desc:'Die Produktion aller Rohstoffe ist für jeden Spieler um 25% erhöht.', resource:'all', multiplier:1.25},
+  },
 };
 const missionLabels = {transport:'Transport', spy:'Spionage', attack:'Angriff', colonize:'Kolonisierung', harvest:'Trümmerfeld-Bergung'};
 const UNIVERSE = { galaxies: 9, systems: 499, positions: 15 };
 const AUCTION_DURATION_MS = 20*60*1000;
+const EVENT_DURATION_MS = 30*60*1000;
+const EVENT_GAP_MIN_MS = 20*60*1000;
+const EVENT_GAP_MAX_MS = 45*60*1000;
 
 // ---- Universe / accounts ----
 
@@ -133,6 +142,39 @@ function bidAuction(universe, username, amount){
   return ok(state, 'Gebot über '+bid+' Dunkle Materie auf '+defs.items[a.itemKey].name+' abgegeben');
 }
 function itemActive(state, key){ return !!(state.itemExpiry && state.itemExpiry[key] && state.itemExpiry[key] > Date.now()); }
+
+function randomEventGap(){ return EVENT_GAP_MIN_MS + Math.random()*(EVENT_GAP_MAX_MS-EVENT_GAP_MIN_MS); }
+function pickRandomEventKey(){ const keys=Object.keys(defs.events); return keys[Math.floor(Math.random()*keys.length)]; }
+// Zeitlich begrenzte Server-Events (Rohstoffrausch-Wochenenden, wie im echten OGame):
+// ein universumsweiter Boost, der fuer alle Spieler gleichzeitig gilt, in unregelmaessigen
+// Abstaenden auftritt und nach EVENT_DURATION_MS wieder endet.
+function resolveEventIfDue(universe){
+  const now = Date.now();
+  if(universe.event){
+    if(now >= universe.event.endsAt){
+      universe.event = null;
+      universe.nextEventAt = now + randomEventGap();
+    }
+    return;
+  }
+  if(universe.nextEventAt == null) universe.nextEventAt = now + randomEventGap();
+  if(now >= universe.nextEventAt){
+    const key = pickRandomEventKey();
+    const def = defs.events[key];
+    universe.event = { key, name:def.name, desc:def.desc, resource:def.resource, multiplier:def.multiplier, startedAt:now, endsAt:now+EVENT_DURATION_MS };
+    universe.nextEventAt = null;
+  }
+}
+function getPublicEventView(universe){
+  if(!universe.event) return null;
+  const e = universe.event;
+  return { key:e.key, name:e.name, desc:e.desc, resource:e.resource, multiplier:e.multiplier, endsAt:e.endsAt };
+}
+function eventResourceMultiplier(universe, resource){
+  if(!universe || !universe.event) return 1;
+  const e = universe.event;
+  return (e.resource===resource || e.resource==='all') ? e.multiplier : 1;
+}
 
 function createUniverse(){ const u = { accounts: {}, players: {} }; ensureAuction(u); return u; }
 
@@ -475,11 +517,11 @@ function lifeformBoost(state, resource){
   }
   return mult;
 }
-function hourly(state, p){
+function hourly(state, p, universe){
   const e=energyStats(state, p).ratio; const bonus=officerBonus(state);
-  const metalBoost = (itemActive(state,'metalBooster') ? 1.5 : 1) * lifeformBoost(state,'metal');
-  const crystalBoost = (itemActive(state,'crystalBooster') ? 1.5 : 1) * lifeformBoost(state,'crystal');
-  const deutBoost = (itemActive(state,'deutBooster') ? 1.5 : 1) * lifeformBoost(state,'deut');
+  const metalBoost = (itemActive(state,'metalBooster') ? 1.5 : 1) * lifeformBoost(state,'metal') * eventResourceMultiplier(universe,'metal');
+  const crystalBoost = (itemActive(state,'crystalBooster') ? 1.5 : 1) * lifeformBoost(state,'crystal') * eventResourceMultiplier(universe,'crystal');
+  const deutBoost = (itemActive(state,'deutBooster') ? 1.5 : 1) * lifeformBoost(state,'deut') * eventResourceMultiplier(universe,'deut');
   return {
     metal: defs.buildings.metalMine.prod(p.buildings.metalMine)*e*bonus*metalBoost,
     crystal: defs.buildings.crystalMine.prod(p.buildings.crystalMine)*e*bonus*crystalBoost,
@@ -590,7 +632,7 @@ function normalizePlayerState(data){
 }
 
 function normalizeUniverse(data){
-  const universe = { accounts: (data && data.accounts) || {}, players: {}, auction: (data && data.auction) || null };
+  const universe = { accounts: (data && data.accounts) || {}, players: {}, auction: (data && data.auction) || null, event: (data && data.event) || null, nextEventAt: (data && data.nextEventAt) || null };
   const playersData = (data && data.players) || {};
   for(const [username, pstate] of Object.entries(playersData)){
     ensureAllDefaults(pstate);
@@ -1182,11 +1224,12 @@ function resolveAttackGroup(universe, participants){
 function tick(universe){
   const now = Date.now();
   resolveAuctionIfDue(universe);
+  resolveEventIfDue(universe);
   for(const state of Object.values(universe.players)){
     const dt = (now-state.now)/1000; state.now = now;
     const hours = (dt*state.timeScale)/3600;
     state.planets.forEach(p=>{
-      const inc = hourly(state, p); const cap = maxStorage(p);
+      const inc = hourly(state, p, universe); const cap = maxStorage(p);
       p.resources.metal = Math.max(0, Math.min(cap.metal, p.resources.metal+inc.metal*hours));
       p.resources.crystal = Math.max(0, Math.min(cap.crystal, p.resources.crystal+inc.crystal*hours));
       p.resources.deut = Math.max(0, Math.min(cap.deut, p.resources.deut+inc.deut*hours));
@@ -1265,5 +1308,5 @@ module.exports = {
   registerAccount, findPlanetOwner, isPositionFree,
   seedGalaxy, validCoord, coordStr, coordLinkHtml, debrisKey,
   computeHighscore, adminListPlayers, adminDeletePlayer, adminGrantResources,
-  applyAction, tick, getPublicAuctionView,
+  applyAction, tick, getPublicAuctionView, getPublicEventView,
 };

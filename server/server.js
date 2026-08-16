@@ -204,7 +204,7 @@ app.post('/api/logout', requireAuth, (req, res) => {
 app.get('/api/state', requireAuth, (req, res) => {
   const empire = universe.players[req.username];
   if(!empire) return res.json({ ok:true, isAdmin: req.isAdmin, username: req.username, planets: null });
-  res.json(Object.assign({ ok:true, isAdmin: req.isAdmin, username: req.username, auction: engine.getPublicAuctionView(universe) }, empire));
+  res.json(Object.assign({ ok:true, isAdmin: req.isAdmin, username: req.username, auction: engine.getPublicAuctionView(universe), event: engine.getPublicEventView(universe) }, empire));
 });
 
 app.post('/api/action', requireAuth, (req, res) => {
