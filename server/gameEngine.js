@@ -799,6 +799,40 @@ function jumpGateTransfer(state, fromMoonIdx, toMoonIdx, shipsMap){
   for(const [k,v] of Object.entries(ships)){ from.ships[k]-=v; to.ships[k]=(to.ships[k]||0)+v; }
   return ok(state, 'Sprungtor-Transfer nach '+coordLinkHtml(to.coord)+' abgeschlossen (sofort)');
 }
+const PHALANX_SCAN_DEUT_COST = 5000;
+function scanSystem(universe, username, payload){
+  const state = universe.players[username];
+  const moon = state.moons[Number(payload.moonIndex)];
+  if(!moon) return fail(state, 'Kein Mond ausgewählt');
+  const level = moon.buildings.sensorPhalanx||0;
+  if(level<1) return fail(state, 'Die Sensorphalanx muss mindestens Stufe 1 haben');
+  const gal=Number(payload.gal), sys=Number(payload.sys), pos=Number(payload.pos);
+  if(!validCoord(gal,sys,pos)) return fail(state, 'Ungültiges Ziel');
+  const range = level*3;
+  if(gal!==moon.coord[0] || Math.abs(sys-moon.coord[1])>range) return fail(state, 'Ziel außerhalb der Reichweite (max. '+range+' Systeme, gleiche Galaxie wie der Mond)');
+  const p = requirePlanet(state, Number(payload.planetIndex));
+  const cost = {metal:0, crystal:0, deut:PHALANX_SCAN_DEUT_COST};
+  if(!hasRes(p,cost)) return fail(state, 'Nicht genug Deuterium für den Scan ('+PHALANX_SCAN_DEUT_COST+' benötigt)');
+  spend(p,cost);
+  const now = Date.now();
+  const movements = [];
+  for(const [otherUsername, otherState] of Object.entries(universe.players)){
+    for(const f of otherState.fleets){
+      if(f.phase!=='outbound') continue;
+      const shipTotal = Object.values(f.ships).reduce((a,b)=>a+b,0);
+      if(f.toCoord[0]===gal && f.toCoord[1]===sys && f.toCoord[2]===pos){
+        movements.push({username:otherUsername, mission:f.mission, direction:'incoming', etaSeconds:Math.max(0,Math.round((f.arrive-now)/1000)), shipTotal});
+      }
+      const originPlanet = otherState.planets[f.from];
+      if(originPlanet && originPlanet.coords[0]===gal && originPlanet.coords[1]===sys && originPlanet.coords[2]===pos){
+        movements.push({username:otherUsername, mission:f.mission, direction:'outgoing', etaSeconds:Math.max(0,Math.round((f.arrive-now)/1000)), shipTotal, toCoordArr:f.toCoord});
+      }
+    }
+  }
+  state.reports.unshift({type:'phalanx', time:new Date().toLocaleTimeString('de-DE'), target:coordStr([gal,sys,pos]), coordArr:[gal,sys,pos], movements});
+  log(state, 'Sensorphalanx-Scan bei '+coordStr([gal,sys,pos])+' durchgeführt ('+movements.length+' Flottenbewegung(en) entdeckt)');
+  return ok(state, 'Scan abgeschlossen: '+movements.length+' Flottenbewegung(en) gefunden');
+}
 function depositAlliance(state, planetIndex){
   const p = requirePlanet(state, planetIndex);
   const amt = {metal:Math.min(1000,p.resources.metal), crystal:Math.min(1000,p.resources.crystal), deut:Math.min(1000,p.resources.deut)};
@@ -1184,6 +1218,7 @@ function applyAction(universe, username, type, payload){
     case 'sendExpedition': return sendExpedition(state, payload.planetIndex, payload.ships, payload.durationSlot);
     case 'enqueueMoonBuild': return enqueueMoonBuild(state, payload.planetIndex, payload.moonIndex, payload.key);
     case 'jumpGateTransfer': return jumpGateTransfer(state, payload.fromMoonIndex, payload.toMoonIndex, payload.ships);
+    case 'scanSystem': return scanSystem(universe, username, payload);
     case 'depositAlliance': return depositAlliance(state, payload.planetIndex);
     case 'marketTrade': return marketTrade(state, payload.planetIndex, payload.give, payload.want, payload.amount);
     case 'merchantBuy': return merchantBuy(state, payload.planetIndex, payload.resourceType, payload.amount);

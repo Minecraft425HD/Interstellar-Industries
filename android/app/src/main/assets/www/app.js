@@ -1045,12 +1045,23 @@ function viewMoons(){
       <label>Kreuzer<select name="cruiser">${Array.from({length:(m.ships.cruiser||0)+1},(_,i)=>`<option>${i}</option>`).join('')}</select></label>
       <button class="btn good" type="submit">Sofort transferieren</button>
     </form>` : '<div class="small">Es gibt noch keinen zweiten Mond für einen Transfer.</div>';
+    const phalanxLevel = m.buildings.sensorPhalanx||0;
+    const phalanxRange = phalanxLevel*3;
+    const phalanxCard = phalanxLevel>=1 ? `<div class="card"><h3>Sensorphalanx-Scan</h3><div class="small">Zeigt Flottenbewegungen zu/von einem Zielplaneten in Reichweite (max. ${phalanxRange} Systeme, gleiche Galaxie wie der Mond). Kosten: 5.000 Deuterium pro Scan.</div><div style="height:10px"></div><form class="fleet-form" id="phalanxForm">
+      <label>Zielgalaxie<input type="number" name="galaxy" min="1" max="${UNIVERSE.galaxies}" value="${m.coord[0]}"></label>
+      <label>Zielsystem<input type="number" name="system" min="1" max="${UNIVERSE.systems}" value="${m.coord[1]}"></label>
+      <label>Zielposition<input type="number" name="position" min="1" max="${UNIVERSE.positions}" value="1"></label>
+      <button class="btn good" type="submit">Scannen</button>
+    </form></div>` : `<div class="card"><h3>Sensorphalanx-Scan</h3><div class="small">Baue die Sensorphalanx (mindestens Stufe 1) aus, um Flottenbewegungen fremder Planeten einsehen zu können.</div></div>`;
     detail = `<div class="small" style="margin-bottom:10px">Koordinaten: ${coordLinkHtml(m.coord)}</div><div class="grid2">
       <div class="card"><h3>Mondgebäude</h3><div class="list">${buildRows}</div></div>
       <div class="card"><h3>Baustatus</h3><div class="queue">${queueRows}</div></div>
     </div>
     <div style="height:16px"></div>
-    <div class="card"><h3>Sprungtor-Transfer</h3><div class="small">Sprungtore verbinden zwei Monde und transferieren Flotten verzögerungsfrei, sofern beide ein Sprungtor der Stufe 1 besitzen.</div><div style="height:10px"></div>${jumpForm}</div>`;
+    <div class="grid2">
+      <div class="card"><h3>Sprungtor-Transfer</h3><div class="small">Sprungtore verbinden zwei Monde und transferieren Flotten verzögerungsfrei, sofern beide ein Sprungtor der Stufe 1 besitzen.</div><div style="height:10px"></div>${jumpForm}</div>
+      ${phalanxCard}
+    </div>`;
   }
   return `<h2>Monde</h2><div class="planet-tabs">${tabs}</div><div style="height:14px"></div>${detail}`;
 }
@@ -1093,7 +1104,11 @@ function viewMarket(){ const r=state.marketRate; const initialAmount=1000; const
 
 function viewReports(){
   if(state.reports.length===0) return `<h2>Berichte</h2><div class="small">Noch keine Spionageberichte vorhanden.</div>`;
-  return `<h2>Spionageberichte</h2>${state.reports.map((r,i)=>{
+  return `<h2>Berichte</h2>${state.reports.map((r,i)=>{
+    if(r.type==='phalanx'){
+      const rows = r.movements.length ? r.movements.map(m=>`<div class="row"><div><strong>${m.username}</strong><div class="sub">${missionLabels[m.mission]||m.mission} · ${m.direction==='incoming'?'kommend':'gehend'}</div></div><div><div>${m.shipTotal} Schiff(e)</div><div class="sub">Ankunft in ${formatDuration(m.etaSeconds*1000)}</div></div></div>`).join('') : '<div class="small">Keine Flottenbewegungen entdeckt.</div>';
+      return `<div class="report"><div class="row" style="border:none;background:none;padding:0"><strong>Sensorphalanx-Scan: ${r.target}</strong><span class="small">${r.time}</span></div><div class="small">${r.coordArr?coordLinkHtml(r.coordArr):r.target}</div><div style="height:8px"></div><div class="list">${rows}</div></div>`;
+    }
     const buildingsHtml = r.buildings ? `<div class="small" style="margin-top:6px">Gebäude: ${Object.entries(r.buildings).map(([k,v])=>v && defs.buildings[k] ? defs.buildings[k].name+' '+v : null).filter(Boolean).join(', ')||'keine'}</div>` : '';
     const researchHtml = r.research ? `<div class="small" style="margin-top:4px">Forschung: ${Object.entries(r.research).map(([k,v])=>v && defs.research[k] ? defs.research[k].name+' '+v : null).filter(Boolean).join(', ')||'keine'}</div>` : '';
     const simBtn = r.defenderPower ? `<button type="button" class="btn alt" data-battle-sim="${i}" style="margin-top:8px">Kampf simulieren</button>` : '';
@@ -1171,6 +1186,7 @@ function renderView(bind=true){
     document.querySelectorAll('[data-moon-select]').forEach(b=>b.onclick=()=>{ state.activeMoonIndex=Number(b.dataset.moonSelect); renderView(true); });
     document.querySelectorAll('[data-moon-build]').forEach(b=>b.onclick=()=>enqueueMoonBuild(b.dataset.moonBuild));
     const jgf=$('#jumpGateForm'); if(jgf) jgf.onsubmit=e=>{e.preventDefault(); const toIdx=Number(jgf.targetMoon.value); const ships={lightFighter:Number(jgf.lightFighter.value)||0, cruiser:Number(jgf.cruiser.value)||0}; jumpGateTransfer(state.activeMoonIndex, toIdx, {}, ships); };
+    const phf=$('#phalanxForm'); if(phf) phf.onsubmit=e=>{e.preventDefault(); postAction('scanSystem', {moonIndex: state.activeMoonIndex, planetIndex: state.activePlanet, gal: Number(phf.galaxy.value), sys: Number(phf.system.value), pos: Number(phf.position.value)}).then(()=>{ state.view='reports'; render(); }); };
   }
 }
 
