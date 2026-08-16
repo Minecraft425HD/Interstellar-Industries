@@ -382,11 +382,26 @@ function computePoints(p){
 }
 function totalPlayerPoints(state){ return Math.floor(state.planets.reduce((s,p)=>s+computePoints(p),0)/1000); }
 
-function ensurePlanetDefaults(p){ Object.keys(defs.buildings).forEach(k=>{ if(p.buildings[k]==null) p.buildings[k]=0; }); Object.keys(defs.research).forEach(k=>{ if(p.research[k]==null) p.research[k]=0; }); Object.keys(defs.ships).forEach(k=>{ if(p.ships[k]==null) p.ships[k]=0; }); if(!p.buildQueue) p.buildQueue=[]; if(!p.researchQueue) p.researchQueue=[]; if(!p.shipQueue) p.shipQueue=[]; }
-function ensureMoonDefaults(m){ ['lunarBase','sensorPhalanx','jumpGate'].forEach(k=>{ if(m.buildings[k]==null) m.buildings[k]=0; }); Object.keys(defs.ships).forEach(k=>{ if(m.ships[k]==null) m.ships[k]=0; }); if(!m.buildQueue) m.buildQueue=[]; }
+// Alte Schluessel (aus frueheren Umbenennungen von Schiffstypen), die noch in
+// gespeicherten Daten vorkommen koennen, obwohl defs.ships sie nicht mehr kennt.
+// Ohne diese Migration wuerde jeder Client-Code, der ueber Object.entries(ships)
+// iteriert und defs.ships[key].name nachschlaegt, mit einer stehengebliebenen
+// alten Stueckzahl abstuerzen ("Cannot read properties of undefined").
+const LEGACY_SHIP_KEY_MIGRATIONS = { researchShip: 'researchProbe' };
+function migrateShipKeys(ships){
+  if(!ships) return;
+  for(const [oldKey, newKey] of Object.entries(LEGACY_SHIP_KEY_MIGRATIONS)){
+    if(ships[oldKey]!=null){
+      ships[newKey] = (ships[newKey]||0) + ships[oldKey];
+      delete ships[oldKey];
+    }
+  }
+}
+function ensurePlanetDefaults(p){ migrateShipKeys(p.ships); Object.keys(defs.buildings).forEach(k=>{ if(p.buildings[k]==null) p.buildings[k]=0; }); Object.keys(defs.research).forEach(k=>{ if(p.research[k]==null) p.research[k]=0; }); Object.keys(defs.ships).forEach(k=>{ if(p.ships[k]==null) p.ships[k]=0; }); if(!p.buildQueue) p.buildQueue=[]; if(!p.researchQueue) p.researchQueue=[]; if(!p.shipQueue) p.shipQueue=[]; }
+function ensureMoonDefaults(m){ migrateShipKeys(m.ships); ['lunarBase','sensorPhalanx','jumpGate'].forEach(k=>{ if(m.buildings[k]==null) m.buildings[k]=0; }); Object.keys(defs.ships).forEach(k=>{ if(m.ships[k]==null) m.ships[k]=0; }); if(!m.buildQueue) m.buildQueue=[]; }
 function ensureAllDefaults(state){
-  state.planets.forEach(ensurePlanetDefaults);
-  state.moons.forEach(ensureMoonDefaults);
+  if(!state.planets) state.planets=[];
+  if(!state.moons) state.moons=[];
   if(!state.officerExpiry) state.officerExpiry={};
   if(!state.marketRate) state.marketRate={metal:1,crystal:1.5,deut:3};
   if(state.darkMatter==null) state.darkMatter=0;
@@ -397,10 +412,13 @@ function ensureAllDefaults(state){
   if(!state.messages) state.messages=[];
   if(!state.reports) state.reports=[];
   if(!state.fleets) state.fleets=[];
-  if(!state.moons) state.moons=[];
   if(!state.debrisFields) state.debrisFields={};
   if(state.now==null) state.now=Date.now();
   if(state.timeScale==null) state.timeScale=20;
+  state.planets.forEach(ensurePlanetDefaults);
+  state.moons.forEach(ensureMoonDefaults);
+  state.fleets.forEach(f=>migrateShipKeys(f.ships));
+  state.expeditions.forEach(e=>migrateShipKeys(e.ships));
 }
 
 function normalizePlayerState(data){

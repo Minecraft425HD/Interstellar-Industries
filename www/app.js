@@ -309,8 +309,9 @@ function applyServerState(serverState, opts){
   state.isAdmin = !!serverState.isAdmin;
   if(serverState.planets === null){
     state.adminMode = true;
+    const wasEverConnected = everConnected;
     everConnected = true;
-    if(opts.forceRender || !viewInteractionActive()) render();
+    if(opts.forceRender || !wasEverConnected || !viewInteractionActive()) render();
     return;
   }
   if(!Array.isArray(serverState.planets)) return;
@@ -328,10 +329,11 @@ function applyServerState(serverState, opts){
   state.lifeform = serverState.lifeform || state.lifeform;
   state.marketRate = serverState.marketRate || state.marketRate;
   state.logs = serverState.logs || [];
+  const wasEverConnected = everConnected;
   everConnected = true;
   if(state.activePlanet >= state.planets.length) state.activePlanet = 0;
   if(state.activeMoonIndex!=null && state.activeMoonIndex >= state.moons.length) state.activeMoonIndex = state.moons.length ? 0 : null;
-  if(opts.forceRender || !viewInteractionActive()){
+  if(opts.forceRender || !wasEverConnected || !viewInteractionActive()){
     render();
   } else {
     renderTop(); renderSide(); renderConnectionBanner();
@@ -752,9 +754,9 @@ function fusionDeutUse(p){ return (p.buildings.fusionReactor) ? defs.buildings.f
 function energyStats(p){const solar=defs.buildings.solarPlant.power(p.buildings.solarPlant); const fusion=defs.buildings.fusionReactor.power(p.buildings.fusionReactor||0); const satellites=(p.ships.solarSatellite||0)*20; const prod=(solar+fusion+satellites)*engineerBonus(); const use=defs.buildings.metalMine.powerUse(p.buildings.metalMine)+defs.buildings.crystalMine.powerUse(p.buildings.crystalMine)+defs.buildings.deutSynth.powerUse(p.buildings.deutSynth); return {prod,use,ratio: use? Math.min(1,prod/use):1};}
 function hourly(p){const e=energyStats(p).ratio; const bonus=officerBonus(); return {metal: defs.buildings.metalMine.prod(p.buildings.metalMine)*e*bonus, crystal: defs.buildings.crystalMine.prod(p.buildings.crystalMine)*e*bonus, deut: defs.buildings.deutSynth.prod(p.buildings.deutSynth)*e*bonus - fusionDeutUse(p)}}
 function maxStorage(p){return {metal:Math.max(5000,5000*p.buildings.metalStorage), crystal:Math.max(5000,5000*p.buildings.crystalStorage), deut:Math.max(5000,5000*p.buildings.deutTank)}}
-function capacityForShips(shipMap){let total=0; for(const [k,v] of Object.entries(shipMap)){ total += defs.ships[k].cargo*v; } return total }
-function fuelForShips(shipMap){let total=0; for(const [k,v] of Object.entries(shipMap)){ total += defs.ships[k].fuel*v; } return total }
-function fleetSpeed(shipMap){const vals=Object.entries(shipMap).filter(([,v])=>v>0).map(([k])=>defs.ships[k].speed); return vals.length?Math.min(...vals):1}
+function capacityForShips(shipMap){let total=0; for(const [k,v] of Object.entries(shipMap)){ if(defs.ships[k]) total += defs.ships[k].cargo*v; } return total }
+function fuelForShips(shipMap){let total=0; for(const [k,v] of Object.entries(shipMap)){ if(defs.ships[k]) total += defs.ships[k].fuel*v; } return total }
+function fleetSpeed(shipMap){const vals=Object.entries(shipMap).filter(([k,v])=>v>0 && defs.ships[k]).map(([k])=>defs.ships[k].speed); return vals.length?Math.min(...vals):1}
 function distanceBetween(a,b){return Math.abs(a[0]-b[0])*15000 + Math.abs(a[1]-b[1])*20 + Math.abs(a[2]-b[2]) + 5}
 function fleetDuration(fromCoord,toCoord,shipMap){const speed=fleetSpeed(shipMap)*fleetSpeedBonus()*pathfinderBonus(shipMap); const distance=distanceBetween(fromCoord,toCoord); return Math.max(10, Math.round((distance*3)/speed)); }
 function secsLeft(t){return Math.max(0, Math.ceil((t-Date.now())/1000))}
@@ -796,7 +798,7 @@ function viewOverview(){ const p=active(), e=energyStats(p), inc=hourly(p), cap=
       <div class="row"><div><strong>Kristall</strong></div><div>${fmt1(inc.crystal)}/h</div></div>
       <div class="row"><div><strong>Deuterium</strong></div><div>${fmt1(inc.deut)}/h</div></div>
     </div></div>
-    <div class="card"><h3>Flottenstatus</h3><div class="list">${Object.entries(p.ships).map(([k,v])=>`<div class="row"><div><strong>${defs.ships[k].name}</strong></div><div>${fmt(v)}</div></div>`).join('')}</div></div>
+    <div class="card"><h3>Flottenstatus</h3><div class="list">${Object.entries(p.ships).filter(([k])=>defs.ships[k]).map(([k,v])=>`<div class="row"><div><strong>${defs.ships[k].name}</strong></div><div>${fmt(v)}</div></div>`).join('')}</div></div>
   </div>`; }
 
 function viewBuildings(){ const p=active(); return `<h2>Gebäude</h2><div class="list">${Object.entries(defs.buildings).filter(([,d])=>!d.isDefense && !d.facility).map(([k,d])=>{ const lvl=(p.buildings[k]||0)+1; const c=buildingCost(d.base,lvl); const ok=meetsRequirements(p,d.requires); return `<div class="row"><div><strong>${d.name}</strong><div class="sub">Stufe ${p.buildings[k]||0}</div><div class="sub">Kosten: M ${fmt(c.metal)} · K ${fmt(c.crystal)} · D ${fmt(c.deut)}</div>${!ok?`<div class="sub warn-text">Benötigt: ${requirementText(d.requires)}</div>`:''}</div><div style="display:flex;gap:6px;align-items:center">${infoIconHtml('building',k)}<button class="btn" data-build="${k}" ${ok?'':'disabled'}>Ausbauen</button></div></div>`; }).join('')}</div>`; }
