@@ -201,12 +201,19 @@ h3{ margin:0 0 10px; font-size:14px; color:var(--accent2); }
 .info-modal-table td:last-child{ text-align:right; font-weight:700; color:var(--text); }
 .info-modal-subhead{ margin:14px 0 6px 0; font-size:11.5px; font-weight:700; letter-spacing:.03em; text-transform:uppercase; color:var(--muted); }
 .info-modal-scroll{ overflow-x:auto; border:1px solid var(--border); border-radius:6px; }
-.info-modal-leveltable{ min-width:420px; }
+.info-modal-leveltable{ min-width:320px; }
 .info-modal-leveltable th{ position:sticky; top:0; background:var(--panel2); text-align:left; padding:6px 8px; font-size:11px; color:var(--muted); border-bottom:1px solid var(--border); white-space:nowrap; }
 .info-modal-leveltable td{ padding:5px 8px; border-top:1px solid var(--border); white-space:nowrap; font-size:12px; }
 .info-modal-leveltable td{ text-align:right; }
 .info-modal-leveltable td:first-child{ text-align:left; color:var(--accent2); font-weight:700; }
 .info-modal-leveltable td.info-modal-effect{ text-align:left; color:var(--muted); font-weight:400; white-space:normal; }
+.info-modal-leveltable td.info-modal-cost{ text-align:left; white-space:normal; }
+
+/* Kosten-Chips: je Rohstoff eine eigene kleine Pille statt einer einzigen langen
+   " · "-getrennten Textzeile - bleibt auch bei mehreren Rohstoffen lesbar und bricht
+   sauber um, statt die Tabelle horizontal zu sprengen. */
+.cost-chip{ display:inline-block; background:var(--panel2); border:1px solid var(--border); border-radius:5px; padding:2px 7px; margin:2px 4px 2px 0; font-size:11.5px; white-space:nowrap; color:var(--text); }
+.cost-chip-free{ color:var(--good); border-color:var(--good); }
 
 .btn{
   border:none; border-radius:3px; padding:9px 16px; font-size:12.5px; font-weight:700;

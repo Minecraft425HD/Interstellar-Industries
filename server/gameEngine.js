@@ -57,7 +57,7 @@ function resTotal(c){ return RESOURCE_KEYS.reduce((s,k)=>s+(c[k]||0),0); }
 // Rohstoffe, die der BAUENDE Planet(entyp) selbst hervorbringt. Damit kann jeder
 // Planetentyp seine eigene Basis-Abbauinfrastruktur hochziehen, ohne von Anfang an auf
 // Handel angewiesen zu sein - Handel wird erst fuer Energie/Infrastruktur/Schiffe/
-// Forschung noetig, die bewusst Rohstoffe mehrerer Planetentypen kombinieren (siehe cv()).
+// Forschung noetig, die bewusst Rohstoffe mehrerer Planetentypen kombinieren.
 function mineBaseCost(planetType, magnitude){
   const pool = PLANET_TYPES[planetType] ? PLANET_TYPES[planetType].resources : [];
   const cost = zeroResources();
@@ -74,11 +74,11 @@ function costBaseFor(def, p){
   return def.base;
 }
 
-// Mechanischer, wertneutraler Umrechner: verteilt einen alten {metal,crystal,deut}-
-// Kostenwert (aus der urspruenglichen, bereits ausbalancierten OGame-Formel) auf die
-// neuen Rohstoffe, gruppiert nach thematischer Naehe. Die GESAMTSUMME bleibt gleich -
-// nur die Zusammensetzung aendert sich. Das ist ein erster, bewusst nachvollziehbarer
-// Entwurf: exakte Kosten pro Gebaeude lassen sich nach dem Anspielen gezielt verfeinern.
+// Nur noch fuer die Migration alter Spielstaende: verteilt ein Alt-{metal,crystal,deut}-
+// Guthaben (aus vor der Rohstoffreform gespeicherten Spielstaenden) grob auf die neuen
+// Rohstoffe, damit bestehende Bestaende beim Laden nicht auf 0 zurueckfallen. Fuer die
+// eigentlichen Gebaeude-/Forschungs-/Schiffskosten wird das NICHT mehr verwendet - die
+// sind direkt als kuratierte 2-4-Rohstoff-Kombination je nach Thema definiert.
 function cv(old){
   const m = old.metal||0, c = old.crystal||0, d = old.deut||0;
   const r = (x)=>Math.round(x);
@@ -88,7 +88,6 @@ function cv(old){
     crudeOil: r(d*0.30), naturalGas: r(d*0.20), coal: r(d*0.15), uranium: r(d*0.20), sulfur: r(d*0.15),
   };
 }
-function addCost(a, extra){ const r=Object.assign({}, a); for(const [k,v] of Object.entries(extra||{})){ r[k]=(r[k]||0)+v; } return r; }
 
 const defs = {
   buildings: {
@@ -112,7 +111,7 @@ const defs = {
     lithiumExtractor:{name:'Lithium-Solefeld', resource:'lithium', costMagnitude:76, powerUse:l=>11*l, prod:l=>13*l*Math.pow(1.1,l)},
     // Holz ist die einzige Ausnahme vom Planetentyp-System: keine natuerliche Quelle,
     // erfordert einen Terraformer (kuenstliche Biosphaere), dafuer auf JEDEM Typ danach baubar.
-    sawmill:{name:'Forstplantage', resource:'wood', base:cv({metal:80,crystal:40,deut:20}), powerUse:l=>10*l, prod:l=>15*l*Math.pow(1.1,l), requires:{terraformer:1}},
+    sawmill:{name:'Forstplantage', resource:'wood', base:{iron:100, freshwater:60}, powerUse:l=>10*l, prod:l=>15*l*Math.pow(1.1,l), requires:{terraformer:1}},
 
     // ---- Energie ----
     // Solarenergie ist ueberall nutzbar (Sonnenlicht statt planetentyp-spezifischer
@@ -120,77 +119,80 @@ const defs = {
     // DES EIGENEN Planeten finanziert, damit jeder neue Spieler ueberhaupt Energie
     // fuer seine ersten Minen bekommt, ohne von Anfang an auf Handel angewiesen zu sein.
     solarPlant:{name:'Solarkraftwerk', costMagnitude:105, power:l=>40*l*Math.pow(1.05,l)},
-    nuclearReactor:{name:'Kernreaktor', base:addCost(cv({metal:900,crystal:360,deut:0}),{uranium:60}), power:l=>30*l*Math.pow(1.05,l), uraniumUse:l=>Math.floor(10*l*Math.pow(1.1,l)), requires:{uraniumMine:5, energyTech:3}},
+    nuclearReactor:{name:'Kernreaktor', base:{iron:700, aluminium:300, uranium:120}, power:l=>30*l*Math.pow(1.05,l), uraniumUse:l=>Math.floor(10*l*Math.pow(1.1,l)), requires:{uraniumMine:5, energyTech:3}},
 
     // ---- Lager (gruppiert statt 18 Einzeltanks) ----
     // Selbstversorgend wie die Minen: das ERSTE Lager, das ein neuer Spieler braucht,
     // um seine eigene (Erz-)Produktion vor dem Ueberlauf zu bewahren, bevor ueberhaupt
     // Handel moeglich war.
     oreStorage:{name:'Erzlager', costMagnitude:1000},
-    techStorage:{name:'Technologielager', base:cv({metal:600,crystal:800,deut:0})},
-    fuelStorage:{name:'Energielager', base:cv({metal:800,crystal:200,deut:400})},
-    resourceStorage:{name:'Rohstofflager', base:addCost(cv({metal:700,crystal:300,deut:0}),{phosphate:100,freshwater:50})},
+    techStorage:{name:'Technologielager', base:{gold:700, silver:700}},
+    fuelStorage:{name:'Energielager', base:{iron:800, crudeOil:600}},
+    resourceStorage:{name:'Rohstofflager', base:{limestone:600, freshwater:300, phosphate:250}},
 
     // ---- Infrastruktur ----
-    robotFactory:{name:'Roboterfabrik', base:cv({metal:400,crystal:120,deut:200})},
-    shipyard:{name:'Raumschiffwerft', base:addCost(cv({metal:400,crystal:200,deut:100}),{nickel:50}), requires:{robotFactory:2}},
-    spaceDock:{name:'Raumstation', base:cv({metal:20000,crystal:40000,deut:0}), requires:{shipyard:3}},
-    researchLab:{name:'Forschungslabor', base:addCost(cv({metal:200,crystal:400,deut:200}),{silver:40}), },
-    naniteFactory:{name:'Nanitenfabrik', base:cv({metal:1000000,crystal:500000,deut:100000}), requires:{robotFactory:10, computerTech:10}, facility:true},
-    terraformer:{name:'Terraformer', base:addCost(cv({metal:0,crystal:50000,deut:100000}),{freshwater:20000,wood:5000}), requires:{naniteFactory:1, energyTech:12}, facility:true},
-    allianceDepot:{name:'Allianzdepot', base:addCost(cv({metal:20000,crystal:40000,deut:0}),{phosphate:5000}), requires:{shipyard:3}, facility:true},
-    missileSilo:{name:'Raketensilo', base:cv({metal:20000,crystal:20000,deut:1000}), requires:{shipyard:1}, facility:true},
-    sensorPhalanx:{name:'Sensorphalanx', base:cv({metal:20000,crystal:40000,deut:20000}), requires:{naniteFactory:1}, moonOnly:true, facility:true},
-    jumpGate:{name:'Sprungtor', base:cv({metal:2000000,crystal:4000000,deut:800000}), requires:{naniteFactory:1, hyperspaceTech:7}, moonOnly:true, facility:true},
-    lunarBase:{name:'Lunarbasis', base:cv({metal:20000,crystal:40000,deut:20000}), requires:{}, moonOnly:true, facility:true},
+    robotFactory:{name:'Roboterfabrik', base:{iron:500, copper:220}},
+    shipyard:{name:'Raumschiffwerft', base:{iron:400, aluminium:250, nickel:100}, requires:{robotFactory:2}},
+    spaceDock:{name:'Raumstation', base:{aluminium:35000, gold:25000}, requires:{shipyard:3}},
+    researchLab:{name:'Forschungslabor', base:{copper:400, silver:440}},
+    naniteFactory:{name:'Nanitenfabrik', base:{nickel:900000, rareEarths:500000, uranium:200000}, requires:{robotFactory:10, computerTech:10}, facility:true},
+    // Kostet bewusst KEIN Holz: Holz kann erst NACH dem Terraformer ueberhaupt produziert
+    // werden (Forstplantage erfordert terraformer:1) - sonst waere der erste Terraformer
+    // eines jeden Spielers ein unaufloesbarer Henne-Ei-Zirkelschluss.
+    terraformer:{name:'Terraformer', base:{lithium:90000, freshwater:85000}, requires:{naniteFactory:1, energyTech:12}, facility:true},
+    allianceDepot:{name:'Allianzdepot', base:{limestone:30000, gold:30000, phosphate:5000}, requires:{shipyard:3}, facility:true},
+    missileSilo:{name:'Raketensilo', base:{iron:30000, sulfur:11000}, requires:{shipyard:1}, facility:true},
+    sensorPhalanx:{name:'Sensorphalanx', base:{copper:30000, silver:35000, naturalGas:15000}, requires:{naniteFactory:1}, moonOnly:true, facility:true},
+    jumpGate:{name:'Sprungtor', base:{aluminium:2000000, lithium:3500000, uranium:1300000}, requires:{naniteFactory:1, hyperspaceTech:7}, moonOnly:true, facility:true},
+    lunarBase:{name:'Lunarbasis', base:{limestone:40000, aluminium:40000}, requires:{}, moonOnly:true, facility:true},
 
     // ---- Verteidigung ----
-    missileLauncher:{name:'Raketenwerfer', base:cv({metal:2000,crystal:0,deut:0}), isDefense:true, attack:80, shield:20, hull:2000, requires:{shipyard:1}},
-    lightLaser:{name:'Leichtes Laser-Geschütz', base:cv({metal:1500,crystal:500,deut:0}), isDefense:true, attack:100, shield:25, hull:2000, requires:{shipyard:2, energyTech:1}},
-    heavyLaser:{name:'Schweres Laser-Geschütz', base:cv({metal:6000,crystal:2000,deut:0}), isDefense:true, attack:250, shield:100, hull:8000, requires:{shipyard:4, energyTech:3}},
-    gaussCannon:{name:'Gauß-Kanone', base:cv({metal:20000,crystal:15000,deut:2000}), isDefense:true, attack:1100, shield:200, hull:35000, requires:{shipyard:6, weaponsTech:3, shieldingTech:1, energyTech:6}},
-    ionCannon:{name:'Ionenkanone', base:cv({metal:5000,crystal:3000,deut:0}), isDefense:true, attack:150, shield:500, hull:8000, requires:{shipyard:4, ionTech:4}},
-    plasmaTurret:{name:'Plasmawerfer', base:cv({metal:50000,crystal:50000,deut:30000}), isDefense:true, attack:3000, shield:300, hull:100000, requires:{shipyard:8, plasmaTech:7}},
-    smallShield:{name:'Kleine Schildkuppel', base:cv({metal:10000,crystal:10000,deut:0}), isDefense:true, unique:true, attack:1, shield:2000, hull:20000, requires:{shieldingTech:2}},
-    largeShield:{name:'Große Schildkuppel', base:cv({metal:50000,crystal:50000,deut:0}), isDefense:true, unique:true, attack:1, shield:10000, hull:100000, requires:{shipyard:6, shieldingTech:6}},
-    interplanetaryMissile:{name:'Interplanetare Rakete', base:cv({metal:12500,crystal:2500,deut:0}), isDefense:true, attack:12000, shield:0, hull:1, requires:{missileSilo:4}},
+    missileLauncher:{name:'Raketenwerfer', base:{iron:1400, sulfur:600}, isDefense:true, attack:80, shield:20, hull:2000, requires:{shipyard:1}},
+    lightLaser:{name:'Leichtes Laser-Geschütz', base:{iron:1300, silver:700}, isDefense:true, attack:100, shield:25, hull:2000, requires:{shipyard:2, energyTech:1}},
+    heavyLaser:{name:'Schweres Laser-Geschütz', base:{iron:5500, silver:2500}, isDefense:true, attack:250, shield:100, hull:8000, requires:{shipyard:4, energyTech:3}},
+    gaussCannon:{name:'Gauß-Kanone', base:{iron:22000, silver:11000, naturalGas:4000}, isDefense:true, attack:1100, shield:200, hull:35000, requires:{shipyard:6, weaponsTech:3, shieldingTech:1, energyTech:6}},
+    ionCannon:{name:'Ionenkanone', base:{aluminium:5000, lithium:3000}, isDefense:true, attack:150, shield:500, hull:8000, requires:{shipyard:4, ionTech:4}},
+    plasmaTurret:{name:'Plasmawerfer', base:{aluminium:60000, rareEarths:45000, uranium:25000}, isDefense:true, attack:3000, shield:300, hull:100000, requires:{shipyard:8, plasmaTech:7}},
+    smallShield:{name:'Kleine Schildkuppel', base:{aluminium:12000, silver:8000}, isDefense:true, unique:true, attack:1, shield:2000, hull:20000, requires:{shieldingTech:2}},
+    largeShield:{name:'Große Schildkuppel', base:{aluminium:60000, silver:40000}, isDefense:true, unique:true, attack:1, shield:10000, hull:100000, requires:{shipyard:6, shieldingTech:6}},
+    interplanetaryMissile:{name:'Interplanetare Rakete', base:{iron:10000, sulfur:5000}, isDefense:true, attack:12000, shield:0, hull:1, requires:{missileSilo:4}},
   },
   research: {
-    energyTech:{name:'Energietechnik', base:cv({metal:0,crystal:800,deut:400}), requires:{researchLab:1}},
-    combustion:{name:'Verbrennungstriebwerk', base:cv({metal:400,crystal:0,deut:600}), requires:{researchLab:1, energyTech:1}},
-    computerTech:{name:'Computertechnik', base:cv({metal:0,crystal:400,deut:600}), requires:{researchLab:1}},
-    weaponsTech:{name:'Waffentechnik', base:cv({metal:800,crystal:200,deut:0}), requires:{researchLab:4}},
-    shieldingTech:{name:'Schildtechnik', base:cv({metal:200,crystal:600,deut:0}), requires:{researchLab:6, energyTech:3}},
-    espionageTech:{name:'Spionagetechnik', base:cv({metal:200,crystal:1000,deut:200}), requires:{researchLab:3}},
-    impulseDrive:{name:'Impulstriebwerk', base:cv({metal:2000,crystal:4000,deut:600}), requires:{researchLab:2, energyTech:1}},
-    armourTech:{name:'Rumpfpanzerung', base:cv({metal:1000,crystal:0,deut:0}), requires:{researchLab:2}},
-    hyperspaceTech:{name:'Hyperraumtechnik', base:cv({metal:0,crystal:4000,deut:2000}), requires:{researchLab:7, energyTech:5, shieldingTech:5}},
-    hyperspaceDrive:{name:'Hyperraumantrieb', base:cv({metal:10000,crystal:20000,deut:6000}), requires:{researchLab:7, hyperspaceTech:3}},
-    laserTech:{name:'Lasertechnik', base:cv({metal:200,crystal:100,deut:0}), requires:{researchLab:1, energyTech:2}},
-    ionTech:{name:'Iontechnik', base:cv({metal:1000,crystal:300,deut:100}), requires:{researchLab:4, laserTech:5, energyTech:4}},
-    plasmaTech:{name:'Plasmatechnik', base:cv({metal:2000,crystal:4000,deut:1000}), requires:{researchLab:4, energyTech:8, laserTech:10, ionTech:5}},
-    gravitonTech:{name:'Gravitationstechnik', base:cv({metal:0,crystal:0,deut:0}), requires:{researchLab:12}},
-    astrophysics:{name:'Astrophysik', base:cv({metal:4000,crystal:8000,deut:4000}), requires:{researchLab:3, espionageTech:4, impulseDrive:3}},
-    intergalacticNetwork:{name:'Intergalaktisches Forschungsnetzwerk', base:cv({metal:240000,crystal:400000,deut:160000}), requires:{researchLab:10, computerTech:8}},
+    energyTech:{name:'Energietechnik', base:{silver:700, uranium:500}, requires:{researchLab:1}},
+    combustion:{name:'Verbrennungstriebwerk', base:{iron:400, crudeOil:600}, requires:{researchLab:1, energyTech:1}},
+    computerTech:{name:'Computertechnik', base:{lithium:600, naturalGas:400}, requires:{researchLab:1}},
+    weaponsTech:{name:'Waffentechnik', base:{iron:700, silver:300}, requires:{researchLab:4}},
+    shieldingTech:{name:'Schildtechnik', base:{aluminium:250, silver:550}, requires:{researchLab:6, energyTech:3}},
+    espionageTech:{name:'Spionagetechnik', base:{copper:300, lithium:800, naturalGas:300}, requires:{researchLab:3}},
+    impulseDrive:{name:'Impulstriebwerk', base:{aluminium:2000, lithium:3600, crudeOil:1000}, requires:{researchLab:2, energyTech:1}},
+    armourTech:{name:'Rumpfpanzerung', base:{iron:700, nickel:300}, requires:{researchLab:2}},
+    hyperspaceTech:{name:'Hyperraumtechnik', base:{rareEarths:4000, uranium:2000}, requires:{researchLab:7, energyTech:5, shieldingTech:5}},
+    hyperspaceDrive:{name:'Hyperraumantrieb', base:{aluminium:10000, rareEarths:18000, uranium:8000}, requires:{researchLab:7, hyperspaceTech:3}},
+    laserTech:{name:'Lasertechnik', base:{copper:180, silver:120}, requires:{researchLab:1, energyTech:2}},
+    ionTech:{name:'Iontechnik', base:{aluminium:800, lithium:400, naturalGas:200}, requires:{researchLab:4, laserTech:5, energyTech:4}},
+    plasmaTech:{name:'Plasmatechnik', base:{aluminium:2000, rareEarths:4200, uranium:800}, requires:{researchLab:4, energyTech:8, laserTech:10, ionTech:5}},
+    gravitonTech:{name:'Gravitationstechnik', base:{}, requires:{researchLab:12}},
+    astrophysics:{name:'Astrophysik', base:{aluminium:5000, lithium:7000, crudeOil:4000}, requires:{researchLab:3, espionageTech:4, impulseDrive:3}},
+    intergalacticNetwork:{name:'Intergalaktisches Forschungsnetzwerk', base:{aluminium:250000, rareEarths:400000, naturalGas:150000}, requires:{researchLab:10, computerTech:8}},
   },
   ships: {
-    smallCargo:{name:'Kleiner Transporter', cost:cv({metal:2000,crystal:2000,deut:0}), cargo:5000, speed:1, fuel:12, attack:5, shield:10, hull:4000, role:'cargo', requires:{shipyard:2}},
-    largeCargo:{name:'Großer Transporter', cost:cv({metal:6000,crystal:6000,deut:0}), cargo:25000, speed:0.8, fuel:28, attack:5, shield:25, hull:12000, role:'cargo', requires:{shipyard:4}},
-    colonyShip:{name:'Kolonieschiff', cost:cv({metal:10000,crystal:20000,deut:10000}), cargo:7500, speed:0.6, fuel:60, attack:0, shield:100, hull:30000, role:'colony', requires:{shipyard:4, combustion:3}},
-    espionageProbe:{name:'Spionagesonde', cost:cv({metal:0,crystal:1000,deut:0}), cargo:5, speed:3, fuel:1, attack:0, shield:0, hull:1000, role:'probe', requires:{shipyard:3, combustion:3}},
-    lightFighter:{name:'Leichter Jäger', cost:cv({metal:3000,crystal:1000,deut:0}), cargo:50, speed:1.4, fuel:20, attack:50, shield:10, hull:4000, role:'combat', requires:{shipyard:1, combustion:1}},
-    heavyFighter:{name:'Schwerer Jäger', cost:cv({metal:6000,crystal:4000,deut:0}), cargo:100, speed:1.0, fuel:25, attack:150, shield:25, hull:10000, role:'combat', requires:{shipyard:3, armourTech:2, impulseDrive:2}},
-    cruiser:{name:'Kreuzer', cost:cv({metal:20000,crystal:7000,deut:2000}), cargo:800, speed:1.1, fuel:40, attack:400, shield:50, hull:27000, role:'combat', requires:{shipyard:5, weaponsTech:2}},
-    battleship:{name:'Schlachtschiff', cost:cv({metal:45000,crystal:15000,deut:0}), cargo:1500, speed:0.8, fuel:50, attack:1000, shield:200, hull:60000, role:'combat', requires:{shipyard:7, hyperspaceDrive:4}},
-    battlecruiser:{name:'Großer Kreuzer', cost:cv({metal:30000,crystal:40000,deut:15000}), cargo:750, speed:0.9, fuel:250, attack:700, shield:400, hull:70000, role:'combat', requires:{shipyard:8, hyperspaceTech:5, laserTech:12}},
-    bomber:{name:'Bomber', cost:cv({metal:50000,crystal:25000,deut:15000}), cargo:500, speed:0.6, fuel:65, attack:1000, shield:500, hull:75000, role:'combat', requires:{shipyard:8, plasmaTech:5, impulseDrive:6}},
-    destroyer:{name:'Zerstörer', cost:cv({metal:60000,crystal:50000,deut:15000}), cargo:2000, speed:0.7, fuel:100, attack:2000, shield:500, hull:110000, role:'combat', requires:{shipyard:9, hyperspaceTech:5, hyperspaceDrive:6}},
-    reaper:{name:'Reaper', cost:cv({metal:85000,crystal:55000,deut:20000}), cargo:10000, speed:0.6, fuel:80, attack:2800, shield:700, hull:140000, role:'combat', requires:{shipyard:10, spaceDock:1, hyperspaceTech:6, hyperspaceDrive:7}},
-    pathfinder:{name:'Pfadfinder', cost:cv({metal:8000,crystal:15000,deut:8000}), cargo:10000, speed:1.6, fuel:20, attack:200, shield:100, hull:23000, role:'combat', requires:{shipyard:5, spaceDock:1, hyperspaceDrive:2, hyperspaceTech:3}},
-    deathstar:{name:'Todesstern', cost:cv({metal:5000000,crystal:4000000,deut:1000000}), cargo:1000000, speed:0.4, fuel:1, attack:200000, shield:50000, hull:9000000, role:'combat', requires:{shipyard:12, hyperspaceTech:6, gravitonTech:1}},
-    solarSatellite:{name:'Solarsatellit', cost:cv({metal:0,crystal:2000,deut:500}), cargo:0, speed:0, fuel:0, attack:1, shield:1, hull:2000, role:'power', requires:{}},
-    recycler:{name:'Recycler', cost:cv({metal:10000,crystal:6000,deut:2000}), cargo:20000, speed:0.7, fuel:30, attack:1, shield:10, hull:16000, role:'recycler', requires:{shipyard:4, combustion:6}},
-    researchProbe:{name:'Forschungssonde', cost:cv({metal:0,crystal:1000,deut:0}), cargo:5, speed:3, fuel:1, attack:0, shield:0, hull:1000, role:'research', requires:{shipyard:3, combustion:3}},
+    smallCargo:{name:'Kleiner Transporter', cost:{iron:2500, aluminium:1500}, cargo:5000, speed:1, fuel:12, attack:5, shield:10, hull:4000, role:'cargo', requires:{shipyard:2}},
+    largeCargo:{name:'Großer Transporter', cost:{iron:7500, aluminium:4500}, cargo:25000, speed:0.8, fuel:28, attack:5, shield:25, hull:12000, role:'cargo', requires:{shipyard:4}},
+    colonyShip:{name:'Kolonieschiff', cost:{aluminium:15000, lithium:15000, crudeOil:10000}, cargo:7500, speed:0.6, fuel:60, attack:0, shield:100, hull:30000, role:'colony', requires:{shipyard:4, combustion:3}},
+    espionageProbe:{name:'Spionagesonde', cost:{lithium:1000}, cargo:5, speed:3, fuel:1, attack:0, shield:0, hull:1000, role:'probe', requires:{shipyard:3, combustion:3}},
+    lightFighter:{name:'Leichter Jäger', cost:{iron:3000, aluminium:1000}, cargo:50, speed:1.4, fuel:20, attack:50, shield:10, hull:4000, role:'combat', requires:{shipyard:1, combustion:1}},
+    heavyFighter:{name:'Schwerer Jäger', cost:{iron:6000, aluminium:3000, copper:1000}, cargo:100, speed:1.0, fuel:25, attack:150, shield:25, hull:10000, role:'combat', requires:{shipyard:3, armourTech:2, impulseDrive:2}},
+    cruiser:{name:'Kreuzer', cost:{iron:18000, aluminium:8000, crudeOil:3000}, cargo:800, speed:1.1, fuel:40, attack:400, shield:50, hull:27000, role:'combat', requires:{shipyard:5, weaponsTech:2}},
+    battleship:{name:'Schlachtschiff', cost:{iron:42000, aluminium:18000}, cargo:1500, speed:0.8, fuel:50, attack:1000, shield:200, hull:60000, role:'combat', requires:{shipyard:7, hyperspaceDrive:4}},
+    battlecruiser:{name:'Großer Kreuzer', cost:{aluminium:35000, lithium:35000, crudeOil:15000}, cargo:750, speed:0.9, fuel:250, attack:700, shield:400, hull:70000, role:'combat', requires:{shipyard:8, hyperspaceTech:5, laserTech:12}},
+    bomber:{name:'Bomber', cost:{iron:50000, aluminium:25000, crudeOil:15000}, cargo:500, speed:0.6, fuel:65, attack:1000, shield:500, hull:75000, role:'combat', requires:{shipyard:8, plasmaTech:5, impulseDrive:6}},
+    destroyer:{name:'Zerstörer', cost:{iron:65000, aluminium:45000, crudeOil:15000}, cargo:2000, speed:0.7, fuel:100, attack:2000, shield:500, hull:110000, role:'combat', requires:{shipyard:9, hyperspaceTech:5, hyperspaceDrive:6}},
+    reaper:{name:'Reaper', cost:{iron:85000, aluminium:50000, rareEarths:25000}, cargo:10000, speed:0.6, fuel:80, attack:2800, shield:700, hull:140000, role:'combat', requires:{shipyard:10, spaceDock:1, hyperspaceTech:6, hyperspaceDrive:7}},
+    pathfinder:{name:'Pfadfinder', cost:{aluminium:10000, lithium:14000, crudeOil:7000}, cargo:10000, speed:1.6, fuel:20, attack:200, shield:100, hull:23000, role:'combat', requires:{shipyard:5, spaceDock:1, hyperspaceDrive:2, hyperspaceTech:3}},
+    deathstar:{name:'Todesstern', cost:{iron:4000000, aluminium:3000000, rareEarths:2000000, uranium:1000000}, cargo:1000000, speed:0.4, fuel:1, attack:200000, shield:50000, hull:9000000, role:'combat', requires:{shipyard:12, hyperspaceTech:6, gravitonTech:1}},
+    solarSatellite:{name:'Solarsatellit', cost:{silver:1800, crudeOil:700}, cargo:0, speed:0, fuel:0, attack:1, shield:1, hull:2000, role:'power', requires:{}},
+    recycler:{name:'Recycler', cost:{iron:11000, aluminium:5000, crudeOil:2000}, cargo:20000, speed:0.7, fuel:30, attack:1, shield:10, hull:16000, role:'recycler', requires:{shipyard:4, combustion:6}},
+    researchProbe:{name:'Forschungssonde', cost:{lithium:1000}, cargo:5, speed:3, fuel:1, attack:0, shield:0, hull:1000, role:'research', requires:{shipyard:3, combustion:3}},
   },
   items: {
     oreBooster:{name:'Erz-Produktionsbooster', desc:'Erhöht die Produktion aller Erze (Eisen, Kupfer, Aluminium, Nickel, Kalkstein) für 24 Stunden um 50%.', group:'ore', durationHours:24},
@@ -199,18 +201,18 @@ const defs = {
     speedBooster:{name:'Flottengeschwindigkeitsbooster', desc:'Erhöht die Fluggeschwindigkeit aller Flotten für 24 Stunden um 30%.', effect:'speedBoost', durationHours:24},
   },
   lifeformBuildings: {
-    humanResidence:{name:'Wohnkomplex', desc:'Menschliche Siedlungen, die effizienter Erze fördern. +2% Erzproduktion pro Stufe.', species:'humans', boostsGroup:'ore', base:cv({metal:4800,crystal:2400,deut:0})},
-    humanFarm:{name:'Nahrungsfarm', desc:'Versorgt die wachsende Bevölkerung und steigert nebenbei die Technologiemetall-Gewinnung. +2% pro Stufe.', species:'humans', boostsGroup:'tech', base:cv({metal:3600,crystal:4800,deut:0})},
-    humanBank:{name:'Handelszentrum', desc:'Effizientere Energielogistik durch florierenden Handel. +2% Energieträger-Produktion pro Stufe.', species:'humans', boostsGroup:'fuel', base:cv({metal:2400,crystal:2400,deut:1200})},
-    rocktalMeditation:{name:'Meditationshalle', desc:"Rock'tal-Weisheit steigert die Effizienz der Erzförderung. +2% Erzproduktion pro Stufe.", species:'rocktal', boostsGroup:'ore', base:cv({metal:5200,crystal:2000,deut:0})},
-    rocktalCrystalFarm:{name:'Edelmetallfarm', desc:"Von Rock'tal-Mönchen gepflegte Abbaustätten. +2% Technologiemetall-Produktion pro Stufe.", species:'rocktal', boostsGroup:'tech', base:cv({metal:3200,crystal:5200,deut:0})},
-    rocktalRefinery:{name:'Energie-Raffinerie', desc:"Traditionelle Rock'tal-Destillation. +2% Energieträger-Produktion pro Stufe.", species:'rocktal', boostsGroup:'fuel', base:cv({metal:2600,crystal:2200,deut:1400})},
-    mechasAssembly:{name:'Montagehalle', desc:'Mechas-Automatisierung optimiert den Erzabbau. +2% Erzproduktion pro Stufe.', species:'mechas', boostsGroup:'ore', base:cv({metal:6000,crystal:1800,deut:0})},
-    mechasProcessor:{name:'Metallprozessor', desc:'Mechanische Präzision bei der Technologiemetall-Verarbeitung. +2% pro Stufe.', species:'mechas', boostsGroup:'tech', base:cv({metal:3400,crystal:5600,deut:0})},
-    mechasReactor:{name:'Reaktorkern', desc:'Hocheffiziente Mechas-Reaktoren steigern die Energieträger-Ausbeute. +2% pro Stufe.', species:'mechas', boostsGroup:'fuel', base:cv({metal:2800,crystal:2400,deut:1600})},
-    kaeleshShrine:{name:'Schrein', desc:'Kaelesh-Rituale segnen die Erzförderung. +2% Erzproduktion pro Stufe.', species:'kaelesh', boostsGroup:'ore', base:cv({metal:5000,crystal:2600,deut:0})},
-    kaeleshMonastery:{name:'Kloster', desc:'Kaelesh-Mönche verfeinern die Technologiemetall-Gewinnung. +2% pro Stufe.', species:'kaelesh', boostsGroup:'tech', base:cv({metal:3000,crystal:5400,deut:0})},
-    kaeleshOracle:{name:'Orakel', desc:'Prophetische Voraussicht optimiert die Energieträger-Förderung. +2% pro Stufe.', species:'kaelesh', boostsGroup:'fuel', base:cv({metal:2600,crystal:2600,deut:1500})},
+    humanResidence:{name:'Wohnkomplex', desc:'Menschliche Siedlungen, die effizienter Erze fördern. +2% Erzproduktion pro Stufe.', species:'humans', boostsGroup:'ore', base:{iron:5000, copper:2200}},
+    humanFarm:{name:'Nahrungsfarm', desc:'Versorgt die wachsende Bevölkerung und steigert nebenbei die Technologiemetall-Gewinnung. +2% pro Stufe.', species:'humans', boostsGroup:'tech', base:{gold:4200, silver:4200}},
+    humanBank:{name:'Handelszentrum', desc:'Effizientere Energielogistik durch florierenden Handel. +2% Energieträger-Produktion pro Stufe.', species:'humans', boostsGroup:'fuel', base:{crudeOil:3500, naturalGas:2500}},
+    rocktalMeditation:{name:'Meditationshalle', desc:"Rock'tal-Weisheit steigert die Effizienz der Erzförderung. +2% Erzproduktion pro Stufe.", species:'rocktal', boostsGroup:'ore', base:{iron:5200, nickel:2000}},
+    rocktalCrystalFarm:{name:'Edelmetallfarm', desc:"Von Rock'tal-Mönchen gepflegte Abbaustätten. +2% Technologiemetall-Produktion pro Stufe.", species:'rocktal', boostsGroup:'tech', base:{silver:4400, lithium:4000}},
+    rocktalRefinery:{name:'Energie-Raffinerie', desc:"Traditionelle Rock'tal-Destillation. +2% Energieträger-Produktion pro Stufe.", species:'rocktal', boostsGroup:'fuel', base:{coal:3400, uranium:2800}},
+    mechasAssembly:{name:'Montagehalle', desc:'Mechas-Automatisierung optimiert den Erzabbau. +2% Erzproduktion pro Stufe.', species:'mechas', boostsGroup:'ore', base:{aluminium:5800, nickel:2000}},
+    mechasProcessor:{name:'Metallprozessor', desc:'Mechanische Präzision bei der Technologiemetall-Verarbeitung. +2% pro Stufe.', species:'mechas', boostsGroup:'tech', base:{gold:4600, rareEarths:4400}},
+    mechasReactor:{name:'Reaktorkern', desc:'Hocheffiziente Mechas-Reaktoren steigern die Energieträger-Ausbeute. +2% pro Stufe.', species:'mechas', boostsGroup:'fuel', base:{naturalGas:3600, uranium:3200}},
+    kaeleshShrine:{name:'Schrein', desc:'Kaelesh-Rituale segnen die Erzförderung. +2% Erzproduktion pro Stufe.', species:'kaelesh', boostsGroup:'ore', base:{copper:4400, limestone:3200}},
+    kaeleshMonastery:{name:'Kloster', desc:'Kaelesh-Mönche verfeinern die Technologiemetall-Gewinnung. +2% pro Stufe.', species:'kaelesh', boostsGroup:'tech', base:{lithium:4200, rareEarths:4200}},
+    kaeleshOracle:{name:'Orakel', desc:'Prophetische Voraussicht optimiert die Energieträger-Förderung. +2% pro Stufe.', species:'kaelesh', boostsGroup:'fuel', base:{crudeOil:3600, coal:3100}},
   },
   events: {
     oreRush:{name:'Erzrausch', desc:'Die Produktion aller Erze (Eisen, Kupfer, Aluminium, Nickel, Kalkstein) ist für alle Spieler um 50% erhöht.', group:'ore', multiplier:1.5},
@@ -1193,7 +1195,7 @@ function depositAlliance(universe, username, planetIndex){
 // universe.alliances ist eine Registry {tag: {tag, name, founder, members:[...], applications:[...], depot, createdAt}}.
 // state.allianceTag zeigt auf den Tag der eigenen Allianz (oder null, wenn unabhaengig).
 const ALLIANCE_MIN_POINTS = 1000;
-const ALLIANCE_FOUND_COST = addCost(cv({metal:5000,crystal:5000,deut:2000}),{});
+const ALLIANCE_FOUND_COST = {iron:6000, silver:4000, crudeOil:2000};
 const ALLIANCE_TAG_RE = /^[A-Za-z0-9]{2,5}$/;
 const ALLIANCE_NAME_MAX_LEN = 30;
 
