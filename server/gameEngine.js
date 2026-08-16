@@ -898,11 +898,12 @@ function enqueueLifeformBuilding(state, planetIndex, key){
 // Spy mission with a research ship present: chance-based tech steal from an NPC.
 // Success chance shifts with the attacker's espionage tech advantage over the NPC's;
 // on success, one random research field jumps to the NPC's level if it's higher.
+function espionageSuccessChance(atkEsp, defEsp){ return Math.min(0.95, Math.max(0.05, 0.5 + 0.05*(atkEsp-defEsp))); }
 function attemptResearchTheft(state, p, npcSlot){
   if(!p || !npcSlot || !npcSlot.research) return;
   const atkEsp = p.research.espionageTech || 0;
   const defEsp = npcSlot.research.espionageTech || 0;
-  const chance = Math.min(0.95, Math.max(0.05, 0.5 + 0.05*(atkEsp-defEsp)));
+  const chance = espionageSuccessChance(atkEsp, defEsp);
   if(Math.random() > chance){
     message(state, 'Forschungsdiebstahl bei '+npcSlot.name+' fehlgeschlagen (Erfolgschance war '+Math.round(chance*100)+'%).');
     log(state, 'Forschungsdiebstahl bei '+npcSlot.name+' fehlgeschlagen');
@@ -934,18 +935,34 @@ function resolveArrival(universe, username, f){
     }
     f.phase='return';
   } else if(f.mission==='spy'){
+    const atkEsp = (state.planets[f.from] && state.planets[f.from].research.espionageTech) || 0;
     if(f.npcSlot){
-      const defPower = sidePower(f.npcSlot.defenseShips, defs.buildings).attack;
-      state.reports.unshift({time:new Date().toLocaleTimeString('de-DE'), target:f.npcSlot.name, coords:coordStr(f.toCoord), coordArr:f.toCoord, resources:{metal:f.npcSlot.metal, crystal:f.npcSlot.crystal, deut:f.npcSlot.deut}, defense:defPower, fleet:f.npcSlot.fleet, buildings:f.npcSlot.buildings, research:f.npcSlot.research});
-      log(state, 'Spionagebericht über '+f.npcSlot.name+' erhalten');
-      if(f.ships.researchProbe>0) attemptResearchTheft(state, state.planets[f.from], f.npcSlot);
+      const defEsp = (f.npcSlot.research && f.npcSlot.research.espionageTech) || 0;
+      const chance = espionageSuccessChance(atkEsp, defEsp);
+      if(Math.random() > chance){
+        message(state, 'Spionage bei '+f.npcSlot.name+' gescheitert - die Spionageabwehr hat die Sonde entdeckt (Erfolgschance war '+Math.round(chance*100)+'%).');
+        log(state, 'Spionage bei '+f.npcSlot.name+' gescheitert');
+      } else {
+        const defPower = sidePower(f.npcSlot.defenseShips, defs.buildings).attack;
+        state.reports.unshift({time:new Date().toLocaleTimeString('de-DE'), target:f.npcSlot.name, coords:coordStr(f.toCoord), coordArr:f.toCoord, resources:{metal:f.npcSlot.metal, crystal:f.npcSlot.crystal, deut:f.npcSlot.deut}, defense:defPower, fleet:f.npcSlot.fleet, buildings:f.npcSlot.buildings, research:f.npcSlot.research});
+        log(state, 'Spionagebericht über '+f.npcSlot.name+' erhalten');
+        if(f.ships.researchProbe>0) attemptResearchTheft(state, state.planets[f.from], f.npcSlot);
+      }
     } else if(targetState){
       const t = targetState.planets[f.toPlanetIndex];
       if(t && !t.destroyed){
-        state.reports.unshift({time:new Date().toLocaleTimeString('de-DE'), target:t.name+' ('+f.toOwner+')', coords:coordStr(t.coords), coordArr:t.coords, resources:{...t.resources}, defense:sidePower(extractDefense(t.buildings), defs.buildings).attack, fleet:t.ships});
-        log(state, 'Spionagebericht über '+t.name+' ('+f.toOwner+') erhalten');
-        message(targetState, 'Dein Planet '+t.name+' wurde von '+username+' ausspioniert.');
-        log(targetState, 'Spionage durch '+username+' entdeckt');
+        const defEsp = t.research.espionageTech || 0;
+        const chance = espionageSuccessChance(atkEsp, defEsp);
+        if(Math.random() > chance){
+          log(state, 'Spionage bei '+t.name+' ('+f.toOwner+') gescheitert - Spionageabwehr hat die Sonde entdeckt');
+          message(targetState, 'Ein Spionageversuch von '+username+' auf '+t.name+' wurde von deiner Spionageabwehr vereitelt.');
+          log(targetState, 'Spionageversuch von '+username+' abgewehrt');
+        } else {
+          state.reports.unshift({time:new Date().toLocaleTimeString('de-DE'), target:t.name+' ('+f.toOwner+')', coords:coordStr(t.coords), coordArr:t.coords, resources:{...t.resources}, defense:sidePower(extractDefense(t.buildings), defs.buildings).attack, fleet:t.ships});
+          log(state, 'Spionagebericht über '+t.name+' ('+f.toOwner+') erhalten');
+          message(targetState, 'Dein Planet '+t.name+' wurde von '+username+' ausspioniert.');
+          log(targetState, 'Spionage durch '+username+' entdeckt');
+        }
       }
     } else if(f.toPlanetIndex!=null){
       const t = state.planets[f.toPlanetIndex];
