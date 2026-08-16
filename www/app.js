@@ -282,7 +282,7 @@ async function pollState(){
     }
     connectionStatus = 'error'; connectionError = err.message;
     renderConnectionBanner();
-    if(!everConnected) render();
+    if(!everConnected && !viewInteractionActive()) render();
   }
 }
 
