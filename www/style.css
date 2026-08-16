@@ -175,7 +175,7 @@ h3{ margin:0 0 10px; font-size:14px; color:var(--accent2); }
   padding:16px;
 }
 .info-modal-box{
-  width:100%; max-width:420px; max-height:80vh; overflow-y:auto;
+  width:100%; max-width:500px; max-height:80vh; overflow-y:auto;
   background-image: var(--tex-diagonal-soft), linear-gradient(180deg, var(--panel2), #0a1120);
   background-repeat: repeat, no-repeat;
   border:1px solid var(--border); border-radius:10px;
@@ -198,6 +198,14 @@ h3{ margin:0 0 10px; font-size:14px; color:var(--accent2); }
 .info-modal-table td{ padding:5px 4px; border-top:1px solid var(--border); }
 .info-modal-table td:first-child{ color:var(--muted); }
 .info-modal-table td:last-child{ text-align:right; font-weight:700; color:var(--text); }
+.info-modal-subhead{ margin:14px 0 6px 0; font-size:11.5px; font-weight:700; letter-spacing:.03em; text-transform:uppercase; color:var(--muted); }
+.info-modal-scroll{ overflow-x:auto; border:1px solid var(--border); border-radius:6px; }
+.info-modal-leveltable{ min-width:420px; }
+.info-modal-leveltable th{ position:sticky; top:0; background:var(--panel2); text-align:left; padding:6px 8px; font-size:11px; color:var(--muted); border-bottom:1px solid var(--border); white-space:nowrap; }
+.info-modal-leveltable td{ padding:5px 8px; border-top:1px solid var(--border); white-space:nowrap; font-size:12px; }
+.info-modal-leveltable td{ text-align:right; }
+.info-modal-leveltable td:first-child{ text-align:left; color:var(--accent2); font-weight:700; }
+.info-modal-leveltable td.info-modal-effect{ text-align:left; color:var(--muted); font-weight:400; white-space:normal; }
 
 .btn{
   border:none; border-radius:3px; padding:9px 16px; font-size:12.5px; font-weight:700;

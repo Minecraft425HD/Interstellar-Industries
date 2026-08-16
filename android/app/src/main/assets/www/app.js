@@ -132,20 +132,51 @@ function openCoordMenu(anchorEl){
     };
   });
 }
-function infoIconHtml(type, key){ return `<button type="button" class="info-btn" data-info-type="${type}" data-info-key="${key}" title="Info" aria-label="Info">ⓘ</button>`; }
+function infoIconHtml(type, key, level){ return `<button type="button" class="info-btn" data-info-type="${type}" data-info-key="${key}" data-info-level="${level!=null?level:0}" title="Info" aria-label="Info">ⓘ</button>`; }
 function closeInfoModal(){ const m=document.getElementById('infoModal'); if(m) m.remove(); }
-function openInfoModal(type, key){
+function levelEffectText(d, key, lvl){
+  const parts = [];
+  if(d.prod) parts.push('Produktion '+fmt(Math.floor(d.prod(lvl)))+'/h');
+  if(d.power) parts.push('Energie +'+fmt(Math.floor(d.power(lvl))));
+  if(d.powerUse) parts.push('Verbrauch -'+fmt(Math.floor(d.powerUse(lvl)))+' Energie');
+  if(d.deutUse) parts.push('Deuterium '+fmt(Math.floor(d.deutUse(lvl)))+'/h');
+  if(key==='metalStorage'||key==='crystalStorage'||key==='deutTank') parts.push('Kapazität '+fmt(Math.max(5000,5000*lvl)));
+  return parts.length ? parts.join(' · ') : null;
+}
+function openInfoModal(type, key, level){
   closeInfoModal();
   const table = type==='building' ? defs.buildings : (type==='research' ? defs.research : defs.ships);
   const d = table && table[key];
   if(!d) return;
+  const isLeveled = type==='research' || (type==='building' && !d.isDefense);
   const statsRows = [];
-  if(d.attack!=null) statsRows.push(['Angriff', fmt(d.attack)]);
-  if(d.shield!=null) statsRows.push(['Schild', fmt(d.shield)]);
-  if(d.hull!=null) statsRows.push(['Hülle', fmt(d.hull)]);
-  if(d.cargo!=null) statsRows.push(['Ladekapazität', fmt(d.cargo)]);
-  if(d.speed!=null) statsRows.push(['Geschwindigkeit', d.speed]);
-  if(d.requires && Object.keys(d.requires).length) statsRows.push(['Voraussetzung', requirementText(d.requires)]);
+  let levelTableHtml = '';
+  if(isLeveled){
+    const curLevel = level||0;
+    const hasEffect = levelEffectText(d, key, curLevel+1)!=null;
+    const rows = [];
+    for(let lvl=curLevel+1; lvl<=curLevel+10; lvl++){
+      const cost = type==='research' ? scaledCost(d.base, lvl) : buildingCost(d.base, lvl);
+      const effect = levelEffectText(d, key, lvl);
+      rows.push(`<tr><td>${lvl}</td><td>${fmt(cost.metal)}</td><td>${fmt(cost.crystal)}</td><td>${fmt(cost.deut)}</td>${hasEffect?`<td class="info-modal-effect">${effect||''}</td>`:''}</tr>`);
+    }
+    levelTableHtml = `<div class="info-modal-subhead">Aktuelle Stufe: ${curLevel} · Kosten &amp; Effekt nächste 10 Stufen</div>
+      <div class="info-modal-scroll"><table class="info-modal-table info-modal-leveltable">
+        <thead><tr><th>Stufe</th><th>Metall</th><th>Kristall</th><th>Deut.</th>${hasEffect?'<th>Effekt</th>':''}</tr></thead>
+        <tbody>${rows.join('')}</tbody>
+      </table></div>`;
+    if(d.requires && Object.keys(d.requires).length) statsRows.push(['Voraussetzung', requirementText(d.requires)]);
+  } else {
+    const cost = d.cost || d.base;
+    if(cost) statsRows.push(['Kosten', 'M '+fmt(cost.metal)+' · K '+fmt(cost.crystal)+' · D '+fmt(cost.deut)]);
+    if(d.attack!=null) statsRows.push(['Angriff', fmt(d.attack)]);
+    if(d.shield!=null) statsRows.push(['Schild', fmt(d.shield)]);
+    if(d.hull!=null) statsRows.push(['Hülle', fmt(d.hull)]);
+    if(d.cargo!=null) statsRows.push(['Ladekapazität', fmt(d.cargo)]);
+    if(d.speed!=null) statsRows.push(['Geschwindigkeit', d.speed]);
+    if(d.fuel!=null) statsRows.push(['Treibstoffverbrauch', fmt(d.fuel)]);
+    if(d.requires && Object.keys(d.requires).length) statsRows.push(['Voraussetzung', requirementText(d.requires)]);
+  }
   const modal = document.createElement('div');
   modal.id = 'infoModal';
   modal.className = 'info-modal';
@@ -154,6 +185,7 @@ function openInfoModal(type, key){
     <div class="info-modal-body">
       <p>${d.desc||'Keine Beschreibung verfügbar.'}</p>
       ${statsRows.length ? `<table class="info-modal-table">${statsRows.map(([k,v])=>`<tr><td>${k}</td><td>${v}</td></tr>`).join('')}</table>` : ''}
+      ${levelTableHtml}
     </div>
   </div>`;
   document.body.appendChild(modal);
@@ -162,7 +194,7 @@ document.addEventListener('click', (e)=>{
   const link = e.target.closest('.coord-link');
   if(link){ e.stopPropagation(); openCoordMenu(link); return; }
   const infoBtn = e.target.closest('.info-btn');
-  if(infoBtn){ e.stopPropagation(); openInfoModal(infoBtn.dataset.infoType, infoBtn.dataset.infoKey); return; }
+  if(infoBtn){ e.stopPropagation(); openInfoModal(infoBtn.dataset.infoType, infoBtn.dataset.infoKey, Number(infoBtn.dataset.infoLevel)||0); return; }
   if(e.target.closest('[data-info-close]')){ closeInfoModal(); return; }
   const modalBox = e.target.closest('.info-modal-box');
   const modalOverlay = e.target.closest('.info-modal');
@@ -801,11 +833,11 @@ function viewOverview(){ const p=active(), e=energyStats(p), inc=hourly(p), cap=
     <div class="card"><h3>Flottenstatus</h3><div class="list">${Object.entries(p.ships).filter(([k])=>defs.ships[k]).map(([k,v])=>`<div class="row"><div><strong>${defs.ships[k].name}</strong></div><div>${fmt(v)}</div></div>`).join('')}</div></div>
   </div>`; }
 
-function viewBuildings(){ const p=active(); return `<h2>Gebäude</h2><div class="list">${Object.entries(defs.buildings).filter(([,d])=>!d.isDefense && !d.facility).map(([k,d])=>{ const lvl=(p.buildings[k]||0)+1; const c=buildingCost(d.base,lvl); const ok=meetsRequirements(p,d.requires); return `<div class="row"><div><strong>${d.name}</strong><div class="sub">Stufe ${p.buildings[k]||0}</div><div class="sub">Kosten: M ${fmt(c.metal)} · K ${fmt(c.crystal)} · D ${fmt(c.deut)}</div>${!ok?`<div class="sub warn-text">Benötigt: ${requirementText(d.requires)}</div>`:''}</div><div style="display:flex;gap:6px;align-items:center">${infoIconHtml('building',k)}<button class="btn" data-build="${k}" ${ok?'':'disabled'}>Ausbauen</button></div></div>`; }).join('')}</div>`; }
+function viewBuildings(){ const p=active(); return `<h2>Gebäude</h2><div class="list">${Object.entries(defs.buildings).filter(([,d])=>!d.isDefense && !d.facility).map(([k,d])=>{ const lvl=(p.buildings[k]||0)+1; const c=buildingCost(d.base,lvl); const ok=meetsRequirements(p,d.requires); return `<div class="row"><div><strong>${d.name}</strong><div class="sub">Stufe ${p.buildings[k]||0}</div><div class="sub">Kosten: M ${fmt(c.metal)} · K ${fmt(c.crystal)} · D ${fmt(c.deut)}</div>${!ok?`<div class="sub warn-text">Benötigt: ${requirementText(d.requires)}</div>`:''}</div><div style="display:flex;gap:6px;align-items:center">${infoIconHtml('building',k,p.buildings[k]||0)}<button class="btn" data-build="${k}" ${ok?'':'disabled'}>Ausbauen</button></div></div>`; }).join('')}</div>`; }
 
-function viewFacilities(){ const p=active(); const facKeys = Object.entries(defs.buildings).filter(([,d])=>d.facility && !d.moonOnly); return `<h2>Anlagen</h2><div class="list">${facKeys.map(([k,d])=>{ const lvl=(p.buildings[k]||0)+1; const c=buildingCost(d.base,lvl); const ok=meetsRequirements(p,d.requires); return `<div class="row"><div><strong>${d.name}</strong><div class="sub">Stufe ${p.buildings[k]||0}</div><div class="sub">Kosten: M ${fmt(c.metal)} · K ${fmt(c.crystal)} · D ${fmt(c.deut)}</div>${!ok?`<div class="sub warn-text">Benötigt: ${requirementText(d.requires)}</div>`:''}</div><div style="display:flex;gap:6px;align-items:center">${infoIconHtml('building',k)}<button class="btn alt" data-build="${k}" ${ok?'':'disabled'}>Ausbauen</button></div></div>`; }).join('')}</div>`; }
+function viewFacilities(){ const p=active(); const facKeys = Object.entries(defs.buildings).filter(([,d])=>d.facility && !d.moonOnly); return `<h2>Anlagen</h2><div class="list">${facKeys.map(([k,d])=>{ const lvl=(p.buildings[k]||0)+1; const c=buildingCost(d.base,lvl); const ok=meetsRequirements(p,d.requires); return `<div class="row"><div><strong>${d.name}</strong><div class="sub">Stufe ${p.buildings[k]||0}</div><div class="sub">Kosten: M ${fmt(c.metal)} · K ${fmt(c.crystal)} · D ${fmt(c.deut)}</div>${!ok?`<div class="sub warn-text">Benötigt: ${requirementText(d.requires)}</div>`:''}</div><div style="display:flex;gap:6px;align-items:center">${infoIconHtml('building',k,p.buildings[k]||0)}<button class="btn alt" data-build="${k}" ${ok?'':'disabled'}>Ausbauen</button></div></div>`; }).join('')}</div>`; }
 function viewResources(){ const p=active(), inc=hourly(p), e=energyStats(p); return `<h2>Ressourcen</h2><div class="grid2"><div class="card"><h3>Produktion pro Stunde</h3><div class="list"><div class="row"><span>Metall</span><strong>${fmt1(inc.metal)}</strong></div><div class="row"><span>Kristall</span><strong>${fmt1(inc.crystal)}</strong></div><div class="row"><span>Deuterium</span><strong>${fmt1(inc.deut)}</strong></div></div></div><div class="card"><h3>Energieeffizienz</h3><div class="bar"><span style="width:${Math.min(100,e.ratio*100)}%"></span></div><div style="height:10px"></div><div class="small">${fmt(e.prod)} verfügbar · ${fmt(e.use)} benötigt</div></div></div>`; }
-function viewResearch(){ const p=active(); return `<h2>Forschung</h2><div class="small">Max. Kolonien: ${maxColonies(p)} · Max. gleichzeitige Expeditionen: ${maxExpeditions(p)} (abhängig von Astrophysik)</div><div style="height:10px"></div><div class="list">${Object.entries(defs.research).map(([k,d])=>{ const lvl=p.research[k]+1; const c=scaledCost(d.base,lvl); const ok=meetsRequirements(p,d.requires); return `<div class="row"><div><strong>${d.name}</strong><div class="sub">Stufe ${p.research[k]}</div><div class="sub">Kosten: M ${fmt(c.metal)} · K ${fmt(c.crystal)} · D ${fmt(c.deut)}</div>${!ok?`<div class="sub warn-text">Benötigt: ${requirementText(d.requires)}</div>`:''}</div><div style="display:flex;gap:6px;align-items:center">${infoIconHtml('research',k)}<button class="btn good" data-research="${k}" ${ok?'':'disabled'}>Forschen</button></div></div>`; }).join('')}</div>`; }
+function viewResearch(){ const p=active(); return `<h2>Forschung</h2><div class="small">Max. Kolonien: ${maxColonies(p)} · Max. gleichzeitige Expeditionen: ${maxExpeditions(p)} (abhängig von Astrophysik)</div><div style="height:10px"></div><div class="list">${Object.entries(defs.research).map(([k,d])=>{ const lvl=p.research[k]+1; const c=scaledCost(d.base,lvl); const ok=meetsRequirements(p,d.requires); return `<div class="row"><div><strong>${d.name}</strong><div class="sub">Stufe ${p.research[k]}</div><div class="sub">Kosten: M ${fmt(c.metal)} · K ${fmt(c.crystal)} · D ${fmt(c.deut)}</div>${!ok?`<div class="sub warn-text">Benötigt: ${requirementText(d.requires)}</div>`:''}</div><div style="display:flex;gap:6px;align-items:center">${infoIconHtml('research',k,p.research[k])}<button class="btn good" data-research="${k}" ${ok?'':'disabled'}>Forschen</button></div></div>`; }).join('')}</div>`; }
 function viewShipyard(){ const p=active(); return `<h2>Raumschiffwerft</h2><div class="list">${Object.entries(defs.ships).map(([k,d])=>{ const ok=meetsRequirements(p,d.requires); return `<div class="row"><div><strong>${d.name}</strong><div class="sub">Vorhanden ${fmt(p.ships[k]||0)} · Angriff ${d.attack} · Ladung ${fmt(d.cargo)}</div><div class="sub">Kosten: M ${fmt(d.cost.metal)} · K ${fmt(d.cost.crystal)} · D ${fmt(d.cost.deut)}</div>${!ok?`<div class="sub warn-text">Benötigt: ${requirementText(d.requires)}</div>`:''}</div><div style="display:flex;gap:6px;align-items:center">${infoIconHtml('ship',k)}<button class="btn warn" data-ship="${k}" ${ok?'':'disabled'}>Bauen</button></div></div>`; }).join('')}</div>`; }
 
 function viewFleet(){
