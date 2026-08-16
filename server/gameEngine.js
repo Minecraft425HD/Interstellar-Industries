@@ -178,7 +178,11 @@ const defs = {
   ships: {
     smallCargo:{name:'Kleiner Transporter', cost:{iron:2500, aluminium:1500}, cargo:5000, speed:1, fuel:12, attack:5, shield:10, hull:4000, role:'cargo', requires:{shipyard:2}},
     largeCargo:{name:'Großer Transporter', cost:{iron:7500, aluminium:4500}, cargo:25000, speed:0.8, fuel:28, attack:5, shield:25, hull:12000, role:'cargo', requires:{shipyard:4}},
-    colonyShip:{name:'Kolonieschiff', cost:{aluminium:15000, lithium:15000, crudeOil:10000}, cargo:7500, speed:0.6, fuel:60, attack:0, shield:100, hull:30000, role:'colony', requires:{shipyard:4, combustion:3}},
+    // Bewusst innerhalb der Standard-Lagerkapazitaet (5000 je Rohstoffgruppe ohne
+    // Lager-Ausbau) gehalten: Kolonisierung ist der Kern des Spiels (neue Planetentypen
+    // erschliessen) und soll fuer einen aktiv spielenden Neuling in vertretbarer Zeit
+    // erreichbar sein, nicht erst nach mehreren Lager-Ausbaustufen und wochenlangem Handel.
+    colonyShip:{name:'Kolonieschiff', cost:{aluminium:4000, lithium:4000, crudeOil:3000}, cargo:7500, speed:0.6, fuel:60, attack:0, shield:100, hull:30000, role:'colony', requires:{shipyard:4, combustion:3}},
     espionageProbe:{name:'Spionagesonde', cost:{lithium:1000}, cargo:5, speed:3, fuel:1, attack:0, shield:0, hull:1000, role:'probe', requires:{shipyard:3, combustion:3}},
     lightFighter:{name:'Leichter Jäger', cost:{iron:3000, aluminium:1000}, cargo:50, speed:1.4, fuel:20, attack:50, shield:10, hull:4000, role:'combat', requires:{shipyard:1, combustion:1}},
     heavyFighter:{name:'Schwerer Jäger', cost:{iron:6000, aluminium:3000, copper:1000}, cargo:100, speed:1.0, fuel:25, attack:150, shield:25, hull:10000, role:'combat', requires:{shipyard:3, armourTech:2, impulseDrive:2}},
