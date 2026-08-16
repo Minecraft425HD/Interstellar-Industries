@@ -1009,10 +1009,10 @@ function renderTop(){
   const inc=hourly(p), e=energyStats(p);
   $('#planetName').textContent=p.name;
   $('#planetCoords').innerHTML=coordLinkHtml(p.coords)+' · '+(PLANET_TYPES[p.planetType]||PLANET_TYPES.rocky).name;
-  // Zeigt nur die Rohstoffe, die zum Planetentyp passen (plus Holz, falls Forstplantage
-  // vorhanden) - ein Planet kann ohnehin nur diese abbauen, alle 18 anzuzeigen waere Rauschen.
-  const shown = (PLANET_TYPES[p.planetType]||PLANET_TYPES.rocky).resources.concat(p.buildings.sawmill?['wood']:[]);
-  const resHtml = shown.map(k=>`<div class="res-item"><span class="res-label">${RESOURCE_INFO[k].name}</span><span>${fmt(p.resources[k]||0)}</span><span class="rate">${fmt1(inc[k]||0)}/h</span></div>`).join('');
+  // Zeigt IMMER alle 18 Rohstoffe, unabhaengig vom Planetentyp - ein neuer Spieler startet
+  // mit einem Grundbestand jedes Rohstoffs und soll jederzeit seinen gesamten Vorrat auf
+  // einen Blick sehen, nicht nur das, was der aktuelle Planet selbst abbaut.
+  const resHtml = RESOURCE_KEYS.map(k=>`<div class="res-item"><span class="res-label">${RESOURCE_INFO[k].name}</span><span>${fmt(p.resources[k]||0)}</span><span class="rate">${fmt1(inc[k]||0)}/h</span></div>`).join('');
   $('#resourcesTop').innerHTML = resHtml + `<div class="res-item"><span class="res-label">Energie</span><span id="energyTop">${fmt(e.prod)}</span><span class="rate" id="energyUse">${fmt(e.use)} genutzt</span></div>`;
 }
 function renderSide(){

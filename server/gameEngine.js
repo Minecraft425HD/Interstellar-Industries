@@ -340,8 +340,14 @@ function planetTypeForCoord(galaxy, system, pos){
 
 function createStarterEmpire(coord, name){
   const planetType = 'rocky';
+  // Ein neuer Spieler bekommt von Anfang an Zugang zu ALLEN 18 Rohstoffen, nicht nur den
+  // zum Heimatplaneten passenden - sonst waere z.B. das Forschungslabor (braucht Silber,
+  // das ein Gesteinsplanet gar nicht abbaut) fuer einen brandneuen, noch handelslosen
+  // Spieler unerreichbar. Das ist ein EINMALIGER Anschubbestand: nur die heimischen
+  // Rohstoffe des Planetentyps werden laufend nachproduziert, alles andere muss nach
+  // Verbrauch ueber Handel/Kolonisierung nachbeschafft werden.
   const startRes = zeroResources();
-  for(const r of PLANET_TYPES[planetType].resources) startRes[r] = 500;
+  for(const k of RESOURCE_KEYS) startRes[k] = 500;
   const planet = {
     name: (name && String(name).trim()) || 'Heimatwelt',
     coords: coord,
