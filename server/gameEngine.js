@@ -67,14 +67,60 @@ const defs = {
     solarSatellite:{name:'Solarsatellit', cost:{metal:0, crystal:2000, deut:500}, cargo:0, speed:0, fuel:0, attack:1, shield:1, hull:2000, role:'power', requires:{}},
     recycler:{name:'Recycler', cost:{metal:10000, crystal:6000, deut:2000}, cargo:20000, speed:0.7, fuel:30, attack:1, shield:10, hull:16000, role:'recycler', requires:{shipyard:4, combustion:6}},
     researchProbe:{name:'Forschungssonde', cost:{metal:0, crystal:1000, deut:0}, cargo:5, speed:3, fuel:1, attack:0, shield:0, hull:1000, role:'research', requires:{shipyard:3, combustion:3}},
-  }
+  },
+  items: {
+    metalBooster:{name:'Metall-Produktionsbooster', desc:'Erhöht die Metallproduktion für 24 Stunden um 50%.', effect:'metalBoost', durationHours:24},
+    crystalBooster:{name:'Kristall-Produktionsbooster', desc:'Erhöht die Kristallproduktion für 24 Stunden um 50%.', effect:'crystalBoost', durationHours:24},
+    deutBooster:{name:'Deuterium-Produktionsbooster', desc:'Erhöht die Deuteriumproduktion für 24 Stunden um 50%.', effect:'deutBoost', durationHours:24},
+    speedBooster:{name:'Flottengeschwindigkeitsbooster', desc:'Erhöht die Fluggeschwindigkeit aller Flotten für 24 Stunden um 30%.', effect:'speedBoost', durationHours:24},
+  },
 };
 const missionLabels = {transport:'Transport', spy:'Spionage', attack:'Angriff', colonize:'Kolonisierung', harvest:'Trümmerfeld-Bergung'};
 const UNIVERSE = { galaxies: 9, systems: 499, positions: 15 };
+const AUCTION_DURATION_MS = 20*60*1000;
 
 // ---- Universe / accounts ----
 
-function createUniverse(){ return { accounts: {}, players: {} }; }
+function pickRandomItemKey(){ const keys=Object.keys(defs.items); return keys[Math.floor(Math.random()*keys.length)]; }
+function ensureAuction(universe){
+  if(!universe.auction){ universe.auction = { itemKey: pickRandomItemKey(), currentBid: 0, currentBidder: null, endsAt: Date.now()+AUCTION_DURATION_MS }; }
+}
+function getPublicAuctionView(universe){
+  ensureAuction(universe);
+  const a = universe.auction;
+  const def = defs.items[a.itemKey];
+  return { itemKey:a.itemKey, itemName:def.name, itemDesc:def.desc, currentBid:a.currentBid, currentBidder:a.currentBidder, endsAt:a.endsAt };
+}
+function resolveAuctionIfDue(universe){
+  ensureAuction(universe);
+  const a = universe.auction;
+  if(Date.now()<a.endsAt) return;
+  if(a.currentBidder && universe.players[a.currentBidder]){
+    const winner = universe.players[a.currentBidder];
+    const def = defs.items[a.itemKey];
+    if(!winner.itemExpiry) winner.itemExpiry = {};
+    const base = Math.max(Date.now(), winner.itemExpiry[a.itemKey]||0);
+    winner.itemExpiry[a.itemKey] = base + def.durationHours*3600*1000;
+    message(winner, 'Auktion gewonnen: '+def.name+' für '+a.currentBid+' Dunkle Materie ersteigert!');
+    log(winner, 'Auktion gewonnen: '+def.name);
+  }
+  universe.auction = { itemKey: pickRandomItemKey(), currentBid: 0, currentBidder: null, endsAt: Date.now()+AUCTION_DURATION_MS };
+}
+function bidAuction(universe, username, amount){
+  const state = universe.players[username];
+  ensureAuction(universe);
+  const a = universe.auction;
+  const bid = Math.floor(Number(amount)||0);
+  if(bid<=a.currentBid) return fail(state, 'Gebot muss höher als das aktuelle Höchstgebot ('+a.currentBid+' Dunkle Materie) sein');
+  if(bid>state.darkMatter) return fail(state, 'Nicht genug Dunkle Materie für dieses Gebot');
+  if(a.currentBidder && universe.players[a.currentBidder]) universe.players[a.currentBidder].darkMatter += a.currentBid;
+  state.darkMatter -= bid;
+  a.currentBid = bid; a.currentBidder = username;
+  return ok(state, 'Gebot über '+bid+' Dunkle Materie auf '+defs.items[a.itemKey].name+' abgegeben');
+}
+function itemActive(state, key){ return !!(state.itemExpiry && state.itemExpiry[key] && state.itemExpiry[key] > Date.now()); }
+
+function createUniverse(){ const u = { accounts: {}, players: {} }; ensureAuction(u); return u; }
 
 function coordStr(c){ return '['+c[0]+':'+c[1]+':'+c[2]+']'; }
 function coordLinkHtml(coord, label){ return `<button type="button" class="coord-link" data-coord="${coord[0]}:${coord[1]}:${coord[2]}">${label!=null?label:coordStr(coord)}</button>`; }
@@ -101,6 +147,7 @@ function createStarterEmpire(coord, name){
     moons: [],
     alliance: {name:'Unabhängig', tag:'-', members:[], points:0, depot:{metal:0, crystal:0, deut:0}},
     officerExpiry: {},
+    itemExpiry: {},
     darkMatter: 500,
     expeditions: [],
     lifeform: {active:'humans', points:0, buildings:{}, research:{}},
@@ -290,7 +337,7 @@ function requirementText(req){ if(!req) return ''; return Object.entries(req).ma
 function addDebris(state, coord, metal, crystal){ const key=debrisKey(coord); const cur = state.debrisFields[key] || {coord, metal:0, crystal:0}; cur.metal += metal; cur.crystal += crystal; state.debrisFields[key]=cur; }
 function officerActive(state, key){ return !!(state.officerExpiry[key] && state.officerExpiry[key] > Date.now()); }
 function officerBonus(state){ return officerActive(state,'geologist') ? 1.10 : 1.0; }
-function fleetSpeedBonus(state){ return officerActive(state,'admiral') ? 1.1 : 1.0; }
+function fleetSpeedBonus(state){ let m=officerActive(state,'admiral') ? 1.1 : 1.0; if(itemActive(state,'speedBooster')) m*=1.3; return m; }
 function engineerBonus(state){ return officerActive(state,'engineer') ? 1.10 : 1.0; }
 function commanderDiscount(state){ return officerActive(state,'commander') ? 0.95 : 1.0; }
 function technocratSpeed(state){ return officerActive(state,'technocrat') ? 0.85 : 1.0; }
@@ -373,10 +420,13 @@ function energyStats(state, p){
 }
 function hourly(state, p){
   const e=energyStats(state, p).ratio; const bonus=officerBonus(state);
+  const metalBoost = itemActive(state,'metalBooster') ? 1.5 : 1;
+  const crystalBoost = itemActive(state,'crystalBooster') ? 1.5 : 1;
+  const deutBoost = itemActive(state,'deutBooster') ? 1.5 : 1;
   return {
-    metal: defs.buildings.metalMine.prod(p.buildings.metalMine)*e*bonus,
-    crystal: defs.buildings.crystalMine.prod(p.buildings.crystalMine)*e*bonus,
-    deut: defs.buildings.deutSynth.prod(p.buildings.deutSynth)*e*bonus - fusionDeutUse(p)
+    metal: defs.buildings.metalMine.prod(p.buildings.metalMine)*e*bonus*metalBoost,
+    crystal: defs.buildings.crystalMine.prod(p.buildings.crystalMine)*e*bonus*crystalBoost,
+    deut: defs.buildings.deutSynth.prod(p.buildings.deutSynth)*e*bonus*deutBoost - fusionDeutUse(p)
   };
 }
 function maxStorage(p){ return {metal:Math.max(5000,5000*p.buildings.metalStorage), crystal:Math.max(5000,5000*p.buildings.crystalStorage), deut:Math.max(5000,5000*p.buildings.deutTank)}; }
@@ -415,6 +465,7 @@ function ensureAllDefaults(state){
   if(!state.planets) state.planets=[];
   if(!state.moons) state.moons=[];
   if(!state.officerExpiry) state.officerExpiry={};
+  if(!state.itemExpiry) state.itemExpiry={};
   if(!state.marketRate) state.marketRate={metal:1,crystal:1.5,deut:3};
   if(state.darkMatter==null) state.darkMatter=0;
   if(!state.expeditions) state.expeditions=[];
@@ -457,12 +508,13 @@ function normalizePlayerState(data){
 }
 
 function normalizeUniverse(data){
-  const universe = { accounts: (data && data.accounts) || {}, players: {} };
+  const universe = { accounts: (data && data.accounts) || {}, players: {}, auction: (data && data.auction) || null };
   const playersData = (data && data.players) || {};
   for(const [username, pstate] of Object.entries(playersData)){
     ensureAllDefaults(pstate);
     universe.players[username] = pstate;
   }
+  ensureAuction(universe);
   return universe;
 }
 
@@ -938,6 +990,7 @@ function resolveAttackGroup(universe, participants){
 
 function tick(universe){
   const now = Date.now();
+  resolveAuctionIfDue(universe);
   for(const state of Object.values(universe.players)){
     const dt = (now-state.now)/1000; state.now = now;
     const hours = (dt*state.timeScale)/3600;
@@ -997,6 +1050,7 @@ function applyAction(universe, username, type, payload){
     case 'enqueueShip': return enqueueShip(state, payload.planetIndex, payload.key);
     case 'enqueueDefense': return enqueueDefense(state, payload.planetIndex, payload.key);
     case 'sendFleet': return sendFleet(universe, username, payload.planetIndex, payload);
+    case 'bidAuction': return bidAuction(universe, username, payload.amount);
     case 'sendExpedition': return sendExpedition(state, payload.planetIndex, payload.ships, payload.durationSlot);
     case 'enqueueMoonBuild': return enqueueMoonBuild(state, payload.planetIndex, payload.moonIndex, payload.key);
     case 'jumpGateTransfer': return jumpGateTransfer(state, payload.fromMoonIndex, payload.toMoonIndex, payload.ships);
@@ -1016,5 +1070,5 @@ module.exports = {
   registerAccount, findPlanetOwner, isPositionFree,
   seedGalaxy, validCoord, coordStr, coordLinkHtml, debrisKey,
   computeHighscore, adminListPlayers, adminDeletePlayer, adminGrantResources,
-  applyAction, tick,
+  applyAction, tick, getPublicAuctionView,
 };

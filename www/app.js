@@ -87,6 +87,7 @@ const state = {
   expeditions: [],
   lifeform: {active:'humans', points:0, buildings:{}, research:{}},
   marketRate: { metal:1, crystal:1.5, deut:3 },
+  auction: null,
   logs: [],
   galaxyIndex: 1,
   galaxySystem: 145,
@@ -360,6 +361,7 @@ function applyServerState(serverState, opts){
   state.expeditions = serverState.expeditions || [];
   state.lifeform = serverState.lifeform || state.lifeform;
   state.marketRate = serverState.marketRate || state.marketRate;
+  state.auction = serverState.auction || state.auction;
   state.logs = serverState.logs || [];
   const wasEverConnected = everConnected;
   everConnected = true;
@@ -995,7 +997,12 @@ function viewLifeform(){ const lf=state.lifeform; const species=[['humans','Mens
 
 function merchantCost(amount){ return Math.ceil((Number(amount)||0)/5); }
 function viewMarket(){ const r=state.marketRate; const initialAmount=1000; const initialCost=merchantCost(initialAmount); const initialAffordable = initialCost>0 && initialCost<=state.darkMatter;
-  return `<h2>Markt</h2><div class="market-grid"><div class="card"><div class="label">Metall</div><div class="value">${fmt1(r.metal)}</div></div><div class="card"><div class="label">Kristall</div><div class="value">${fmt1(r.crystal)}</div></div><div class="card"><div class="label">Deuterium</div><div class="value">${fmt1(r.deut)}</div></div></div><div style="height:16px"></div><div class="grid2"><div class="card"><h3>Ressourcen handeln</h3><form class="market-form" id="marketForm"><label>Abgeben<select name="give"><option value="metal">Metall</option><option value="crystal">Kristall</option><option value="deut">Deuterium</option></select></label><label>Erhalten<select name="want"><option value="crystal">Kristall</option><option value="metal">Metall</option><option value="deut">Deuterium</option></select></label><label>Menge<input type="number" min="1" value="100" name="amount"></label><button class="btn good" type="submit">Am Markt tauschen</button></form></div><div class="card"><h3>Händler (Dunkle Materie)</h3><div class="small">Tausche Dunkle Materie sofort gegen Ressourcen. Kurs: 5 Einheiten pro 1 DM.</div><div style="height:10px"></div><form class="market-form" id="merchantForm"><label>Ressource<select name="resource"><option value="metal">Metall</option><option value="crystal">Kristall</option><option value="deut">Deuterium</option></select></label><label>Menge<input type="number" min="1" value="${initialAmount}" name="amount" id="merchantAmount"></label><div class="small" id="merchantCostHint">Kosten: ${fmt(initialCost)} Dunkle Materie</div><button class="btn warn" type="submit" id="merchantBuyBtn" ${initialAffordable?'':'disabled'}>Kaufen</button></form><div class="small" style="margin-top:8px">Dunkle Materie: ${fmt(state.darkMatter)}</div></div></div>`; }
+  const a = state.auction;
+  const secsLeft = a ? Math.max(0, Math.ceil((a.endsAt-Date.now())/1000)) : 0;
+  const mins = Math.floor(secsLeft/60), secs = secsLeft%60;
+  const minBid = a ? a.currentBid+1 : 1;
+  const auctionCard = a ? `<div class="card"><h3>Auktionshaus</h3><div class="small">${a.itemDesc}</div><div style="height:8px"></div><div><strong>${a.itemName}</strong></div><div class="sub">Höchstgebot: ${fmt(a.currentBid)} Dunkle Materie${a.currentBidder?(' · von '+a.currentBidder):''}</div><div class="sub">Restzeit: ${mins}m ${secs}s</div><div style="height:10px"></div><form class="market-form" id="auctionForm"><label>Gebot (Dunkle Materie)<input type="number" min="${minBid}" value="${minBid}" name="amount"></label><button class="btn good" type="submit">Bieten</button></form><div class="small" style="margin-top:8px">Dunkle Materie: ${fmt(state.darkMatter)}</div></div>` : '';
+  return `<h2>Markt</h2><div class="market-grid"><div class="card"><div class="label">Metall</div><div class="value">${fmt1(r.metal)}</div></div><div class="card"><div class="label">Kristall</div><div class="value">${fmt1(r.crystal)}</div></div><div class="card"><div class="label">Deuterium</div><div class="value">${fmt1(r.deut)}</div></div></div><div style="height:16px"></div><div class="grid2"><div class="card"><h3>Ressourcen handeln</h3><form class="market-form" id="marketForm"><label>Abgeben<select name="give"><option value="metal">Metall</option><option value="crystal">Kristall</option><option value="deut">Deuterium</option></select></label><label>Erhalten<select name="want"><option value="crystal">Kristall</option><option value="metal">Metall</option><option value="deut">Deuterium</option></select></label><label>Menge<input type="number" min="1" value="100" name="amount"></label><button class="btn good" type="submit">Am Markt tauschen</button></form></div><div class="card"><h3>Händler (Dunkle Materie)</h3><div class="small">Tausche Dunkle Materie sofort gegen Ressourcen. Kurs: 5 Einheiten pro 1 DM.</div><div style="height:10px"></div><form class="market-form" id="merchantForm"><label>Ressource<select name="resource"><option value="metal">Metall</option><option value="crystal">Kristall</option><option value="deut">Deuterium</option></select></label><label>Menge<input type="number" min="1" value="${initialAmount}" name="amount" id="merchantAmount"></label><div class="small" id="merchantCostHint">Kosten: ${fmt(initialCost)} Dunkle Materie</div><button class="btn warn" type="submit" id="merchantBuyBtn" ${initialAffordable?'':'disabled'}>Kaufen</button></form><div class="small" style="margin-top:8px">Dunkle Materie: ${fmt(state.darkMatter)}</div></div>${auctionCard}</div>`; }
 
 function viewReports(){
   if(state.reports.length===0) return `<h2>Berichte</h2><div class="small">Noch keine Spionageberichte vorhanden.</div>`;
@@ -1032,6 +1039,7 @@ function renderView(bind=true){
       ff.position.onchange=()=>{ state.fleetPrefill=null; };
     }
     const mf=$('#marketForm'); if(mf) mf.onsubmit=e=>{e.preventDefault(); marketTrade(mf.give.value,mf.want.value,mf.amount.value)};
+    const auctionForm=$('#auctionForm'); if(auctionForm) auctionForm.onsubmit=e=>{e.preventDefault(); postAction('bidAuction', {amount: Number(auctionForm.amount.value)||0});};
     const merchForm=$('#merchantForm'); if(merchForm){
       merchForm.onsubmit=e=>{e.preventDefault(); merchantBuy(merchForm.resource.value, merchForm.amount.value)};
       const merchAmountInput=$('#merchantAmount'), merchHint=$('#merchantCostHint'), merchBtn=$('#merchantBuyBtn');
