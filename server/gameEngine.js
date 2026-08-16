@@ -1005,6 +1005,16 @@ function enqueueLifeformBuilding(state, planetIndex, key){
   state.lifeform.points = (state.lifeform.points||0) + cost.metal+cost.crystal+cost.deut;
   return ok(state, def.name+' Stufe '+lvl+' fertiggestellt');
 }
+const PLANET_NAME_MAX_LEN = 30;
+function renamePlanet(state, planetIndex, name){
+  const p = requirePlanet(state, planetIndex);
+  const trimmed = String(name||'').trim();
+  if(!trimmed) return fail(state, 'Planetenname darf nicht leer sein');
+  if(trimmed.length>PLANET_NAME_MAX_LEN) return fail(state, 'Planetenname zu lang (max. '+PLANET_NAME_MAX_LEN+' Zeichen)');
+  const oldName = p.name;
+  p.name = trimmed;
+  return ok(state, 'Planet "'+oldName+'" wurde in "'+trimmed+'" umbenannt');
+}
 
 // Spy mission with a research ship present: chance-based tech steal from an NPC.
 // Success chance shifts with the attacker's espionage tech advantage over the NPC's;
@@ -1334,6 +1344,7 @@ function applyAction(universe, username, type, payload){
     case 'activateOfficer': return activateOfficer(state, payload.key);
     case 'setLifeform': return setLifeform(state, payload.species);
     case 'enqueueLifeformBuilding': return enqueueLifeformBuilding(state, payload.planetIndex, payload.key);
+    case 'renamePlanet': return renamePlanet(state, payload.planetIndex, payload.name);
     default: throw new Error('Unbekannte Aktion: '+type);
   }
 }

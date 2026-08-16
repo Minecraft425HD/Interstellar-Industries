@@ -910,6 +910,7 @@ function viewOverview(){ const p=active(), e=energyStats(p), inc=hourly(p), cap=
   return `${eventBanner}
   <div class="hero">
     <div class="card"><h2>Planetenübersicht</h2><p>Vollständiger Loop: Ressourcen, Energie, Forschung, Werft, Galaxie mit Spionage/Angriff/Kolonisierung, Kampfsimulation, Rangliste und Markt sind aktiv. Läuft server-seitig weiter, auch wenn die App geschlossen ist.</p>
+      <form id="renamePlanetForm" class="market-form" style="margin-top:4px"><label>Planet umbenennen<input type="text" name="name" maxlength="30" value="${escapeHtml(p.name)}"></label><button class="btn alt" type="submit">Speichern</button></form>
       <div class="grid3"><div class="card"><div class="label">Speicher Metall</div><div class="value">${fmt(cap.metal)}</div></div><div class="card"><div class="label">Speicher Kristall</div><div class="value">${fmt(cap.crystal)}</div></div><div class="card"><div class="label">Speicher Deuterium</div><div class="value">${fmt(cap.deut)}</div></div></div>
     </div>
     <div class="card"><h2>Energie</h2><div class="small">Ohne genug Energie sinkt die Produktion proportional.</div><div style="height:10px"></div><div class="bar"><span style="width:${Math.min(100,(e.prod/Math.max(1,e.use))*100)}%"></span></div><div style="height:10px"></div><div class="small">Produktion ${fmt(e.prod)} · Verbrauch ${fmt(e.use)} · Faktor ${fmt1(e.ratio*100)}%</div></div>
@@ -1217,6 +1218,7 @@ function renderView(bind=true){
     const jgf=$('#jumpGateForm'); if(jgf) jgf.onsubmit=e=>{e.preventDefault(); const toIdx=Number(jgf.targetMoon.value); const ships={lightFighter:Number(jgf.lightFighter.value)||0, cruiser:Number(jgf.cruiser.value)||0}; jumpGateTransfer(state.activeMoonIndex, toIdx, {}, ships); };
     const phf=$('#phalanxForm'); if(phf) phf.onsubmit=e=>{e.preventDefault(); postAction('scanSystem', {moonIndex: state.activeMoonIndex, planetIndex: state.activePlanet, gal: Number(phf.galaxy.value), sys: Number(phf.system.value), pos: Number(phf.position.value)}).then(()=>{ state.view='reports'; render(); }); };
     const mailForm=$('#mailForm'); if(mailForm) mailForm.onsubmit=e=>{e.preventDefault(); postAction('sendDirectMessage', {toUsername: mailForm.toUsername.value.trim(), text: mailForm.text.value}).then(()=>{ renderView(true); }); };
+    const renameForm=$('#renamePlanetForm'); if(renameForm) renameForm.onsubmit=e=>{e.preventDefault(); postAction('renamePlanet', {planetIndex: state.activePlanet, name: renameForm.name.value}); };
   }
 }
 
