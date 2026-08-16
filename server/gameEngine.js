@@ -176,7 +176,7 @@ function eventResourceMultiplier(universe, resource){
   return (e.resource===resource || e.resource==='all') ? e.multiplier : 1;
 }
 
-function createUniverse(){ const u = { accounts: {}, players: {} }; ensureAuction(u); return u; }
+function createUniverse(){ const u = { accounts: {}, players: {}, alliances: {} }; ensureAuction(u); return u; }
 
 function coordStr(c){ return '['+c[0]+':'+c[1]+':'+c[2]+']'; }
 function coordLinkHtml(coord, label){ return `<button type="button" class="coord-link" data-coord="${coord[0]}:${coord[1]}:${coord[2]}">${label!=null?label:coordStr(coord)}</button>`; }
@@ -201,7 +201,7 @@ function createStarterEmpire(coord, name){
     messages: ['Willkommen bei Stellare Industrien! Dein Heimatplanet wurde bei '+coordStr(coord)+' gegründet.'],
     debrisFields: {},
     moons: [],
-    alliance: {name:'Unabhängig', tag:'-', members:[], points:0, depot:{metal:0, crystal:0, deut:0}},
+    allianceTag: null,
     officerExpiry: {},
     itemExpiry: {},
     darkMatter: 500,
@@ -373,6 +373,7 @@ function adminDeletePlayer(universe, username){
   username = String(username||'').trim();
   if(universe.accounts[username] && universe.accounts[username].isAdmin) return { ok:false, error:'Admin-Konto kann nicht gelöscht werden' };
   if(!universe.players[username]) return { ok:false, error:'Spieler nicht gefunden' };
+  removePlayerFromAlliance(universe, username);
   delete universe.players[username];
   delete universe.accounts[username];
   return { ok:true };
@@ -593,7 +594,7 @@ function ensureAllDefaults(state){
   if(state.darkMatter==null) state.darkMatter=0;
   if(!state.expeditions) state.expeditions=[];
   if(!state.lifeform) state.lifeform={active:'humans',points:0,buildings:{},research:{}};
-  if(!state.alliance) state.alliance={name:'Unabhängig',tag:'-',members:[],points:0,depot:{metal:0,crystal:0,deut:0}};
+  if(state.allianceTag===undefined) state.allianceTag = null;
   if(!state.logs) state.logs=[];
   if(!state.messages) state.messages=[];
   if(!state.mail) state.mail=[];
@@ -619,7 +620,10 @@ function normalizePlayerState(data){
     messages: data.messages || fresh.messages,
     debrisFields: data.debrisFields || {},
     moons: data.moons || [],
-    alliance: data.alliance || fresh.alliance,
+    // Ein wiederhergestelltes Backup wird immer unabhängig: eine fremde/veraltete Allianz-
+    // Mitgliedschaft aus der Backup-Datei koennte nicht mehr zur universe.alliances-Registry
+    // passen (Allianz existiert nicht mehr, Konto ist bereits Mitglied einer anderen usw.).
+    allianceTag: null,
     officerExpiry: data.officerExpiry || {},
     darkMatter: data.darkMatter!=null ? data.darkMatter : fresh.darkMatter,
     expeditions: data.expeditions || [],
@@ -632,7 +636,7 @@ function normalizePlayerState(data){
 }
 
 function normalizeUniverse(data){
-  const universe = { accounts: (data && data.accounts) || {}, players: {}, auction: (data && data.auction) || null, event: (data && data.event) || null, nextEventAt: (data && data.nextEventAt) || null };
+  const universe = { accounts: (data && data.accounts) || {}, players: {}, alliances: (data && data.alliances) || {}, auction: (data && data.auction) || null, event: (data && data.event) || null, nextEventAt: (data && data.nextEventAt) || null };
   const playersData = (data && data.players) || {};
   for(const [username, pstate] of Object.entries(playersData)){
     ensureAllDefaults(pstate);
@@ -748,15 +752,14 @@ function sendFleet(universe, username, planetIndex, params){
 
   // ACS (Allianz-Kampfstärke): mehrere Angriffsflotten auf denselben ACS-Code + dasselbe
   // Ziel synchronisieren ihre Ankunft, damit sie gemeinsam als eine Streitmacht kämpfen.
-  // Beitritt erfordert denselben (selbst gesetzten) Allianz-Tag wie die Welle - ohne echte
-  // Mitgliederverwaltung ist das die einfachste faire Näherung an "gleiche Allianz".
+  // Beitritt erfordert dieselbe echte Allianzmitgliedschaft wie die Welle (state.allianceTag).
   let arrive = Date.now()+dur*1000;
   let acsId = null, acsAllianceTag = null;
   if(mission==='attack' && params.acsId){
     acsId = String(params.acsId).trim().slice(0,24);
     if(acsId){
       const existing = findAcsWave(universe, acsId, toCoord);
-      const myTag = (state.alliance && state.alliance.tag) || '-';
+      const myTag = state.allianceTag || '-';
       if(existing){
         if(myTag==='-' || existing.acsAllianceTag==='-' || existing.acsAllianceTag!==myTag){
           return fail(state, 'Beitritt zur ACS-Welle "'+acsId+'" nicht möglich: Allianz-Tag stimmt nicht mit dem der Welle überein.');
@@ -902,12 +905,130 @@ function markMailRead(state){
   (state.mail||[]).forEach(m=>{ if(m.direction==='in') m.read=true; });
   return ok(state);
 }
-function depositAlliance(state, planetIndex){
+function depositAlliance(universe, username, planetIndex){
+  const state = universe.players[username];
   const p = requirePlanet(state, planetIndex);
+  const tag = state.allianceTag;
+  if(!tag) return fail(state, 'Du bist in keiner Allianz');
+  const alliance = universe.alliances[tag];
+  if(!alliance) return fail(state, 'Allianz nicht gefunden');
   const amt = {metal:Math.min(1000,p.resources.metal), crystal:Math.min(1000,p.resources.crystal), deut:Math.min(1000,p.resources.deut)};
   p.resources.metal-=amt.metal; p.resources.crystal-=amt.crystal; p.resources.deut-=amt.deut;
-  state.alliance.depot.metal += amt.metal; state.alliance.depot.crystal += amt.crystal; state.alliance.depot.deut += amt.deut;
+  alliance.depot.metal += amt.metal; alliance.depot.crystal += amt.crystal; alliance.depot.deut += amt.deut;
   return ok(state, 'Ressourcen ins Allianzdepot eingezahlt');
+}
+
+// ---- Echte, universumsweite Allianzen (wie im echten OGame) ----
+// universe.alliances ist eine Registry {tag: {tag, name, founder, members:[...], applications:[...], depot, createdAt}}.
+// state.allianceTag zeigt auf den Tag der eigenen Allianz (oder null, wenn unabhaengig).
+const ALLIANCE_MIN_POINTS = 1000;
+const ALLIANCE_FOUND_COST = {metal:5000, crystal:5000, deut:2000};
+const ALLIANCE_TAG_RE = /^[A-Za-z0-9]{2,5}$/;
+const ALLIANCE_NAME_MAX_LEN = 30;
+
+function getAllianceView(universe, tag){
+  const a = universe.alliances[tag];
+  if(!a) return null;
+  const points = a.members.reduce((sum,m)=> sum + (universe.players[m] ? totalPlayerPoints(universe.players[m]) : 0), 0);
+  return { tag:a.tag, name:a.name, founder:a.founder, members:[...a.members], applications:[...a.applications], depot:{...a.depot}, points, createdAt:a.createdAt };
+}
+function getPlayerAllianceView(universe, username){
+  const state = universe.players[username];
+  if(!state || !state.allianceTag) return null;
+  const view = getAllianceView(universe, state.allianceTag);
+  if(!view) return null;
+  view.isFounder = view.founder===username;
+  return view;
+}
+function getAlliancesListView(universe){
+  return Object.values(universe.alliances).map(a=>({
+    tag:a.tag, name:a.name, memberCount:a.members.length,
+    points: a.members.reduce((sum,m)=> sum + (universe.players[m] ? totalPlayerPoints(universe.players[m]) : 0), 0),
+  })).sort((a,b)=>b.points-a.points);
+}
+// Entfernt einen Spieler aus seiner Allianz (Verlassen ODER Konto-Löschung durch Admin).
+// Verlässt der Gründer, wird das älteste verbleibende Mitglied automatisch neuer Gründer;
+// bleibt niemand übrig, wird die Allianz komplett aufgelöst.
+function removePlayerFromAlliance(universe, username){
+  const state = universe.players[username];
+  if(!state || !state.allianceTag) return;
+  const tag = state.allianceTag;
+  const alliance = universe.alliances[tag];
+  state.allianceTag = null;
+  if(!alliance) return;
+  alliance.members = alliance.members.filter(m=>m!==username);
+  alliance.applications = (alliance.applications||[]).filter(m=>m!==username);
+  if(alliance.founder===username){
+    if(alliance.members.length>0){
+      alliance.founder = alliance.members[0];
+      const newFounder = universe.players[alliance.founder];
+      if(newFounder) message(newFounder, 'Du bist jetzt Gründer der Allianz ['+tag+'] '+alliance.name+'.');
+    } else {
+      delete universe.alliances[tag];
+    }
+  }
+}
+function foundAlliance(universe, username, payload){
+  const state = universe.players[username];
+  if(state.allianceTag) return fail(state, 'Du bist bereits Mitglied einer Allianz. Verlasse sie zuerst.');
+  const name = String(payload.name||'').trim();
+  const tag = String(payload.tag||'').trim().toUpperCase();
+  if(!name) return fail(state, 'Allianzname darf nicht leer sein');
+  if(name.length>ALLIANCE_NAME_MAX_LEN) return fail(state, 'Allianzname zu lang (max. '+ALLIANCE_NAME_MAX_LEN+' Zeichen)');
+  if(!ALLIANCE_TAG_RE.test(tag)) return fail(state, 'Allianz-Tag muss 2-5 Buchstaben/Zahlen sein');
+  if(universe.alliances[tag]) return fail(state, 'Dieser Allianz-Tag ist bereits vergeben');
+  if(Object.values(universe.alliances).some(a=>a.name.toLowerCase()===name.toLowerCase())) return fail(state, 'Dieser Allianzname ist bereits vergeben');
+  const points = totalPlayerPoints(state);
+  if(points<ALLIANCE_MIN_POINTS) return fail(state, 'Du benötigst mindestens '+ALLIANCE_MIN_POINTS+' Punkte, um eine Allianz zu gründen (aktuell '+Math.floor(points)+')');
+  const p = requirePlanet(state, payload.planetIndex);
+  if(!hasRes(p, ALLIANCE_FOUND_COST)) return fail(state, 'Nicht genug Ressourcen zum Gründen (benötigt: M '+ALLIANCE_FOUND_COST.metal+' · K '+ALLIANCE_FOUND_COST.crystal+' · D '+ALLIANCE_FOUND_COST.deut+')');
+  spend(p, ALLIANCE_FOUND_COST);
+  universe.alliances[tag] = { tag, name, founder:username, members:[username], applications:[], depot:{metal:0,crystal:0,deut:0}, createdAt:Date.now() };
+  state.allianceTag = tag;
+  return ok(state, 'Allianz ['+tag+'] '+name+' gegründet');
+}
+function applyToAlliance(universe, username, payload){
+  const state = universe.players[username];
+  if(state.allianceTag) return fail(state, 'Du bist bereits Mitglied einer Allianz');
+  const tag = String(payload.tag||'').trim().toUpperCase();
+  const alliance = universe.alliances[tag];
+  if(!alliance) return fail(state, 'Allianz nicht gefunden');
+  if(alliance.applications.includes(username)) return fail(state, 'Bewerbung bereits eingereicht');
+  alliance.applications.push(username);
+  const founder = universe.players[alliance.founder];
+  if(founder) message(founder, username+' hat sich bei deiner Allianz ['+tag+'] beworben.');
+  return ok(state, 'Bewerbung bei ['+tag+'] '+alliance.name+' eingereicht');
+}
+function respondToApplication(universe, username, payload){
+  const state = universe.players[username];
+  const tag = state.allianceTag;
+  if(!tag) return fail(state, 'Du bist in keiner Allianz');
+  const alliance = universe.alliances[tag];
+  if(!alliance) return fail(state, 'Allianz nicht gefunden');
+  if(alliance.founder!==username) return fail(state, 'Nur der Gründer kann Bewerbungen bearbeiten');
+  const applicantUsername = String(payload.applicantUsername||'').trim();
+  const idx = alliance.applications.indexOf(applicantUsername);
+  if(idx<0) return fail(state, 'Bewerbung nicht gefunden');
+  alliance.applications.splice(idx,1);
+  const applicantState = universe.players[applicantUsername];
+  if(payload.accept){
+    if(!applicantState) return fail(state, 'Bewerber existiert nicht mehr');
+    if(applicantState.allianceTag) return fail(state, 'Bewerber ist inzwischen bereits in einer anderen Allianz');
+    alliance.members.push(applicantUsername);
+    applicantState.allianceTag = tag;
+    message(applicantState, 'Deine Bewerbung bei ['+tag+'] '+alliance.name+' wurde angenommen!');
+    return ok(state, applicantUsername+' wurde in die Allianz aufgenommen');
+  } else {
+    if(applicantState) message(applicantState, 'Deine Bewerbung bei ['+tag+'] '+alliance.name+' wurde abgelehnt.');
+    return ok(state, 'Bewerbung von '+applicantUsername+' abgelehnt');
+  }
+}
+function leaveAlliance(universe, username){
+  const state = universe.players[username];
+  if(!state.allianceTag) return fail(state, 'Du bist in keiner Allianz');
+  const tag = state.allianceTag;
+  removePlayerFromAlliance(universe, username);
+  return ok(state, 'Allianz ['+tag+'] verlassen');
 }
 function marketTrade(state, planetIndex, giveType, wantType, amount){
   const p = requirePlanet(state, planetIndex);
@@ -1337,7 +1458,11 @@ function applyAction(universe, username, type, payload){
     case 'scanSystem': return scanSystem(universe, username, payload);
     case 'sendDirectMessage': return sendDirectMessage(universe, username, payload);
     case 'markMailRead': return markMailRead(state);
-    case 'depositAlliance': return depositAlliance(state, payload.planetIndex);
+    case 'depositAlliance': return depositAlliance(universe, username, payload.planetIndex);
+    case 'foundAlliance': return foundAlliance(universe, username, payload);
+    case 'applyToAlliance': return applyToAlliance(universe, username, payload);
+    case 'respondToApplication': return respondToApplication(universe, username, payload);
+    case 'leaveAlliance': return leaveAlliance(universe, username);
     case 'marketTrade': return marketTrade(state, payload.planetIndex, payload.give, payload.want, payload.amount);
     case 'merchantBuy': return merchantBuy(state, payload.planetIndex, payload.resourceType, payload.amount);
     case 'launchMissiles': return launchMissiles(universe, username, payload.planetIndex, payload.targetPos, payload.count);
@@ -1356,4 +1481,5 @@ module.exports = {
   seedGalaxy, validCoord, coordStr, coordLinkHtml, debrisKey,
   computeHighscore, adminListPlayers, adminDeletePlayer, adminGrantResources,
   applyAction, tick, getPublicAuctionView, getPublicEventView,
+  getPlayerAllianceView, getAlliancesListView,
 };

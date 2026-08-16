@@ -97,7 +97,8 @@ const state = {
   debrisFields: {},
   moons: [],
   activeMoonIndex: null,
-  alliance: {name:'', tag:'', members:[], points:0, depot:{metal:0, crystal:0, deut:0}},
+  alliance: null,
+  alliancesList: [],
   officerExpiry: {},
   darkMatter: 0,
   expeditions: [],
@@ -434,7 +435,8 @@ function applyServerState(serverState, opts){
   state.mail = serverState.mail || [];
   state.debrisFields = serverState.debrisFields || {};
   state.moons = serverState.moons || [];
-  state.alliance = serverState.alliance || state.alliance;
+  if(serverState.alliance !== undefined) state.alliance = serverState.alliance;
+  state.alliancesList = serverState.alliancesList || state.alliancesList;
   state.officerExpiry = serverState.officerExpiry || {};
   state.darkMatter = serverState.darkMatter || 0;
   state.expeditions = serverState.expeditions || [];
@@ -1094,11 +1096,25 @@ function viewMoons(){
 }
 
 function viewAlliance(){
-  const a=state.alliance; const points = totalPlayerPoints()+a.points; const rank = allianceRank(points);
+  const a = state.alliance;
+  if(!a){
+    const list = state.alliancesList||[];
+    const listHtml = list.length ? `<table><tr><th>Name</th><th>Tag</th><th>Mitglieder</th><th>Punkte</th><th></th></tr>${list.map(x=>`<tr><td>${escapeHtml(x.name)}</td><td>[${escapeHtml(x.tag)}]</td><td>${fmt(x.memberCount)}</td><td>${fmt(x.points)}</td><td><button class="btn alt" data-apply-alliance="${escapeHtml(x.tag)}">Bewerben</button></td></tr>`).join('')}</table>` : `<div class="small">Noch keine Allianzen auf diesem Server.</div>`;
+    return `<h2>Allianz</h2><div class="small">Du bist derzeit unabhängig.</div><div style="height:16px"></div><div class="grid2">
+    <div class="card"><h3>Allianz gründen</h3><div class="small">Voraussetzungen: mindestens ${fmt(1000)} Punkte, eindeutiger Name &amp; Tag, Kosten M 5.000 · K 5.000 · D 2.000 (vom gewählten Planeten).</div><div style="height:10px"></div><form class="fleet-form" id="foundAllianceForm">
+      <label>Allianzname<input type="text" name="name" maxlength="30" required></label>
+      <label>Allianz-Tag (2-5 Zeichen)<input type="text" name="tag" maxlength="5" required></label>
+      <button class="btn good" type="submit">Gründen</button>
+    </form></div>
+    <div class="card"><h3>Bestehende Allianzen</h3>${listHtml}</div>
+    </div>`;
+  }
+  const rank = allianceRank(a.points);
+  const applicationsHtml = a.isFounder && a.applications.length ? `<div class="card" style="margin-top:16px"><h3>Bewerbungen</h3><table><tr><th>Spieler</th><th></th></tr>${a.applications.map(u=>`<tr><td>${escapeHtml(u)}</td><td><button class="btn good" data-respond-application="${escapeHtml(u)}:1">Annehmen</button> <button class="btn danger" data-respond-application="${escapeHtml(u)}:0">Ablehnen</button></td></tr>`).join('')}</table></div>` : '';
   return `<h2>Allianz</h2><div class="grid2">
-  <div class="card"><h3>${a.name} [${a.tag}]</h3><div class="small">Rang: ${rank} · Allianzpunkte: ${fmt(points)}</div><div style="height:10px"></div><table><tr><th>Mitglied</th></tr>${a.members.map(m=>`<tr><td>${m}</td></tr>`).join('')}</table></div>
+  <div class="card"><h3>${escapeHtml(a.name)} [${escapeHtml(a.tag)}]</h3><div class="small">Gründer: ${escapeHtml(a.founder)}${a.isFounder?' (Du)':''} · Rang: ${rank} · Allianzpunkte: ${fmt(a.points)}</div><div style="height:10px"></div><table><tr><th>Mitglied</th></tr>${a.members.map(m=>`<tr><td>${escapeHtml(m)}${m===state.username?' (Du)':''}</td></tr>`).join('')}</table><div style="height:10px"></div><button class="btn danger" id="leaveAllianceBtn">Allianz verlassen</button></div>
   <div class="card"><h3>Allianzdepot</h3><div class="grid3"><div class="card"><div class="label">Metall</div><div class="value">${fmt(a.depot.metal)}</div></div><div class="card"><div class="label">Kristall</div><div class="value">${fmt(a.depot.crystal)}</div></div><div class="card"><div class="label">Deuterium</div><div class="value">${fmt(a.depot.deut)}</div></div></div><div style="height:10px"></div><button class="btn alt" id="depositBtn">Bis zu 1000 von jeder Ressource einzahlen</button></div>
-  </div>`; }
+  </div>${applicationsHtml}`; }
 
 function viewOfficers(){
   const list=[['commander','Kommandant','Reduziert Baukosten für Gebäude und Verteidigung leicht (-5%).'],['admiral','Admiral','Erhöht die Flottengeschwindigkeit (+10%).'],['engineer','Ingenieur','Erhöht die Energieproduktion (+10%).'],['geologist','Geologe','Erhöht die Rohstoffproduktion um 10%.'],['technocrat','Technokrat','Beschleunigt die Forschung (-15% Zeit).']];
@@ -1208,6 +1224,10 @@ function renderView(bind=true){
     const changeServerBtn2=$('#changeServerBtn2'); if(changeServerBtn2) changeServerBtn2.onclick=()=>{ setToken(''); setServerUrl(''); state.username=null; everConnected=false; render(); };
     const ef=$('#expeditionForm'); if(ef) ef.onsubmit=e=>{e.preventDefault(); const ships={lightFighter:Number(ef.lightFighter.value)||0,cruiser:Number(ef.cruiser.value)||0,largeCargo:Number(ef.largeCargo.value)||0,pathfinder:Number(ef.pathfinder.value)||0,reaper:Number(ef.reaper.value)||0}; sendExpedition(ships, Number(ef.slot.value)||1);};
     const depositBtn=$('#depositBtn'); if(depositBtn) depositBtn.onclick=()=>depositAlliance();
+    const foundAllianceForm=$('#foundAllianceForm'); if(foundAllianceForm) foundAllianceForm.onsubmit=e=>{e.preventDefault(); postAction('foundAlliance', {planetIndex: state.activePlanet, name: foundAllianceForm.name.value, tag: foundAllianceForm.tag.value}); };
+    document.querySelectorAll('[data-apply-alliance]').forEach(b=>b.onclick=()=>postAction('applyToAlliance', {tag:b.dataset.applyAlliance}));
+    document.querySelectorAll('[data-respond-application]').forEach(b=>b.onclick=()=>{ const [applicantUsername,acceptFlag]=b.dataset.respondApplication.split(':'); postAction('respondToApplication', {applicantUsername, accept: acceptFlag==='1'}); });
+    const leaveAllianceBtn=$('#leaveAllianceBtn'); if(leaveAllianceBtn) leaveAllianceBtn.onclick=()=>{ if(confirm('Allianz wirklich verlassen?')) postAction('leaveAlliance', {}); };
     document.querySelectorAll('[data-officer]').forEach(b=>b.onclick=()=>{ if(officerActive(b.dataset.officer)) return; postAction('activateOfficer', {key:b.dataset.officer}); });
     document.querySelectorAll('[data-lifeform]').forEach(b=>b.onclick=()=>postAction('setLifeform', {species:b.dataset.lifeform}));
     document.querySelectorAll('[data-lifeform-build]').forEach(b=>b.onclick=()=>postAction('enqueueLifeformBuilding', {planetIndex: state.activePlanet, key:b.dataset.lifeformBuild}));
