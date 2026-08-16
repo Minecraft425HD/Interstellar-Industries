@@ -14,6 +14,7 @@ $script:UnitTarget = '/etc/systemd/system/stellare-industrien.service'
 $script:TunnelServiceName = 'stellare-tunnel'
 $script:TunnelBinary = '/usr/local/bin/cloudflared'
 $script:TunnelUnitTarget = '/etc/systemd/system/stellare-tunnel.service'
+$script:TunnelMetricsPort = 20241
 
 function Invoke-Native {
     <#
@@ -393,7 +394,7 @@ Wants=stellare-industrien.service
 
 [Service]
 Type=simple
-ExecStart=$script:TunnelBinary tunnel --no-autoupdate --url http://127.0.0.1:$Port
+ExecStart=$script:TunnelBinary tunnel --no-autoupdate --metrics 127.0.0.1:$script:TunnelMetricsPort --url http://127.0.0.1:$Port
 Restart=always
 RestartSec=3
 User=$currentUser
@@ -443,15 +444,43 @@ function Restart-StellareTunnel {
     if($addr){ Write-Host "Neue Adresse: $addr" -ForegroundColor Green }
 }
 
+function Get-StellareTunnelQuickUrl {
+    <#
+    .SYNOPSIS
+        Fragt die aktuelle *.trycloudflare.com-Adresse direkt bei cloudflareds lokalem
+        Metrics-Endpunkt ab (/quicktunnel) - unabhaengig vom Journal-Log und dessen
+        Rotation, und OHNE den Tunnel oder Server neu zu starten.
+    .DESCRIPTION
+        Funktioniert nur, wenn der Tunnel-Dienst mit "--metrics 127.0.0.1:<port>"
+        gestartet wurde (seit diesem Update Standard bei Install-StellareTunnel).
+        Bei aelteren, bereits laufenden Tunnel-Diensten ohne --metrics-Flag liefert
+        dies $null zurueck; dann greift Get-StellareTunnelAddress automatisch auf
+        das Log zurueck bzw. es hilft ein einmaliger "tunnel-restart".
+    #>
+    [CmdletBinding()]
+    param([int]$Port = $script:TunnelMetricsPort)
+    try {
+        $resp = Invoke-RestMethod -Uri "http://127.0.0.1:$Port/quicktunnel" -TimeoutSec 2 -ErrorAction Stop
+        if($resp -and $resp.hostname){ return "https://$($resp.hostname)" }
+    } catch { }
+    return $null
+}
+
 function Get-StellareTunnelAddress {
     <#
     .SYNOPSIS
-        Liest die aktuelle oeffentliche *.trycloudflare.com-Adresse aus den Tunnel-Logs.
+        Ermittelt die aktuelle oeffentliche *.trycloudflare.com-Adresse - zuerst ueber
+        cloudflareds Metrics-Endpunkt (schnell, kein Neustart noetig, funktioniert auch
+        nach geleertem Log), als Fallback aus den Tunnel-Logs (fuer aeltere Tunnel-
+        Dienste ohne --metrics-Flag).
     #>
     [CmdletBinding()]
     param([int]$MaxWaitSeconds = 5)
     $deadline = (Get-Date).AddSeconds($MaxWaitSeconds)
     do {
+        $quick = Get-StellareTunnelQuickUrl
+        if($quick){ Write-Host $quick; return $quick }
+
         $log = & sudo journalctl -u $script:TunnelServiceName -n 300 --no-pager 2>$null
         $urls = @()
         foreach($line in $log){
@@ -466,7 +495,11 @@ function Get-StellareTunnelAddress {
         }
         Start-Sleep -Seconds 1
     } while ((Get-Date) -lt $deadline)
-    Write-Warning "Keine Tunnel-Adresse gefunden. Laeuft der Tunnel? -> ./stellare.ps1 tunnel-status"
+    Write-Warning "Keine Tunnel-Adresse gefunden (weder ueber Metrics-Endpunkt noch im Log)."
+    Write-Warning "Laeuft der Tunnel? -> ./stellare.ps1 tunnel-status"
+    Write-Warning "Falls der Tunnel-Dienst noch VOR diesem Update eingerichtet wurde, hat er keinen"
+    Write-Warning "Metrics-Endpunkt aktiv. Einmalig './stellare.ps1 tunnel-restart' behebt das dauerhaft"
+    Write-Warning "(der Spiele-Server selbst bleibt davon unberuehrt und laeuft durchgehend weiter)."
     return $null
 }
 
@@ -480,6 +513,30 @@ function Get-StellareTunnelLog {
     param([int]$Lines = 100, [switch]$Follow)
     if($Follow){ & sudo journalctl -u $script:TunnelServiceName -f }
     else { & sudo journalctl -u $script:TunnelServiceName -n $Lines --no-pager }
+}
+
+function Clear-StellareTunnelLog {
+    <#
+    .SYNOPSIS
+        Leert die Tunnel-Logs, OHNE den Tunnel oder den Spiele-Server anzufassen -
+        beide laufen währenddessen und danach ununterbrochen weiter.
+    .DESCRIPTION
+        journald speichert Logs nicht separat pro Dienst, sondern in gemeinsamen
+        Journal-Dateien - "leeren" heisst hier: aktuelle Journal-Datei rotieren und
+        alles Aeltere als 1 Sekunde wegraeumen (--rotate + --vacuum-time=1s). Das
+        betrifft das gesamte System-Journal (alle Dienste), nicht nur den Tunnel -
+        es werden dabei aber ausschliesslich Log-DATEIEN geloescht, kein laufender
+        Prozess wird gestoppt, neugestartet oder sonst beeinflusst.
+    #>
+    [CmdletBinding()]
+    param()
+    Write-Host "Leere System-Journal (Tunnel und Server bleiben dabei durchgehend aktiv)..." -ForegroundColor Cyan
+    Invoke-Native sudo journalctl --rotate
+    Invoke-Native sudo journalctl --vacuum-time=1s
+    Write-Host "Journal geleert." -ForegroundColor Green
+    Write-Host "Hinweis: Falls dadurch die letzte bekannte Tunnel-Adresse verschwunden ist, hilft" -ForegroundColor Yellow
+    Write-Host "jetzt './stellare.ps1 tunnel-address' trotzdem sofort weiter, wenn der Tunnel-Dienst" -ForegroundColor Yellow
+    Write-Host "mit aktivem Metrics-Endpunkt laeuft (Standard seit diesem Update)." -ForegroundColor Yellow
 }
 
 function Uninstall-StellareTunnel {
@@ -496,5 +553,5 @@ Export-ModuleMember -Function `
     Get-StellareServerStatus, Get-StellareServerLog, Backup-StellareUniverse, Reset-StellareUniverse, Update-StellareServer, `
     Uninstall-StellareServer, Enable-StellareAutostart, Disable-StellareAutostart, Get-StellarePiAddress, `
     Install-StellareCloudflared, Install-StellareTunnel, Start-StellareTunnel, Stop-StellareTunnel, `
-    Restart-StellareTunnel, Get-StellareTunnelAddress, Get-StellareTunnelStatus, Get-StellareTunnelLog, `
-    Uninstall-StellareTunnel
+    Restart-StellareTunnel, Get-StellareTunnelAddress, Get-StellareTunnelQuickUrl, Get-StellareTunnelStatus, `
+    Get-StellareTunnelLog, Clear-StellareTunnelLog, Uninstall-StellareTunnel

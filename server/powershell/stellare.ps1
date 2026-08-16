@@ -18,7 +18,7 @@ param(
         'install','start','stop','restart','status','logs','backup','reset','update','uninstall',
         'enable-autostart','disable-autostart','address',
         'tunnel-install','tunnel-start','tunnel-stop','tunnel-restart','tunnel-address',
-        'tunnel-status','tunnel-logs','tunnel-uninstall',
+        'tunnel-status','tunnel-logs','tunnel-clear-log','tunnel-uninstall',
         'help'
     )]
     [string]$Command = 'help',
@@ -54,6 +54,7 @@ switch ($Command) {
     'tunnel-address'    { Get-StellareTunnelAddress -MaxWaitSeconds 5 | Out-Null }
     'tunnel-status'     { Get-StellareTunnelStatus }
     'tunnel-logs'       { Get-StellareTunnelLog -Lines $Lines -Follow:$Follow }
+    'tunnel-clear-log'  { Clear-StellareTunnelLog }
     'tunnel-uninstall'  { Uninstall-StellareTunnel }
     default {
         @'
@@ -93,6 +94,9 @@ Fernzugriff-Befehle (Cloudflare Tunnel, ohne Portweiterleitung):
   tunnel-address                aktuelle oeffentliche Adresse erneut anzeigen
   tunnel-status                 Tunnel-Dienststatus anzeigen
   tunnel-logs [-Lines n] [-Follow]  Tunnel-Logs anzeigen
+  tunnel-clear-log               Tunnel-/System-Journal leeren, OHNE Tunnel oder
+                                  Server anzufassen - beide laufen währenddessen
+                                  und danach ununterbrochen weiter.
   tunnel-uninstall               Tunnel-Dienst entfernen
 
 Beispiele:
@@ -101,6 +105,7 @@ Beispiele:
   ./stellare.ps1 logs -Follow
   ./stellare.ps1 tunnel-install
   ./stellare.ps1 tunnel-address
+  ./stellare.ps1 tunnel-clear-log
 '@ | Write-Host
     }
 }
