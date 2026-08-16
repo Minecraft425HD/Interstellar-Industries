@@ -345,6 +345,18 @@ function simulateBattle(attackerShips, defenderShips, defenderDefenseShips){
 function applyLosses(shipMap, ratio){ const res={}; for(const [k,v] of Object.entries(shipMap||{})){ res[k] = v ? Math.floor(v*(1-ratio)) : 0; } return res; }
 function diffLosses(before, after){ const res={}; for(const k of Object.keys(before||{})){ res[k]=Math.max(0,(before[k]||0)-(after[k]||0)); } return res; }
 function shipCostSum(shipMap, resource){ let sum=0; for(const [k,v] of Object.entries(shipMap||{})){ if(v && defs.ships[k]) sum += defs.ships[k].cost[resource]*v; } return sum; }
+function mergeShipMaps(list){ const result={}; for(const m of list){ for(const [k,v] of Object.entries(m||{})){ result[k]=(result[k]||0)+(v||0); } } return result; }
+// ACS (Allianz-Kampfstärke): findet eine bereits unterwegs befindliche Angriffsflotte mit
+// derselben acsId + Ziel, ueber ALLE Spieler hinweg (nicht nur den eigenen Zustand), damit
+// mehrere Allianzmitglieder ihre Flotten auf dieselbe Ankunftszeit synchronisieren koennen.
+function findAcsWave(universe, acsId, toCoord){
+  for(const state of Object.values(universe.players)){
+    for(const f of state.fleets){
+      if(f.phase==='outbound' && f.mission==='attack' && f.acsId===acsId && f.toCoord[0]===toCoord[0] && f.toCoord[1]===toCoord[1] && f.toCoord[2]===toCoord[2]) return f;
+    }
+  }
+  return null;
+}
 
 function scaledCost(base, level){ const mult=Math.pow(1.6, level-1); return {metal:Math.floor(base.metal*mult), crystal:Math.floor(base.crystal*mult), deut:Math.floor(base.deut*mult)}; }
 function hasRes(p,c){ return p.resources.metal>=c.metal && p.resources.crystal>=c.crystal && p.resources.deut>=c.deut; }
@@ -558,12 +570,35 @@ function sendFleet(universe, username, planetIndex, params){
   if(cargo.deut+fuel>p.resources.deut) return fail(state, 'Zu wenig Deuterium für Ladung und Flug');
   if(cargo.metal>p.resources.metal||cargo.crystal>p.resources.crystal) return fail(state, 'Nicht genug Ressourcen zum Versenden');
 
+  // ACS (Allianz-Kampfstärke): mehrere Angriffsflotten auf denselben ACS-Code + dasselbe
+  // Ziel synchronisieren ihre Ankunft, damit sie gemeinsam als eine Streitmacht kämpfen.
+  // Beitritt erfordert denselben (selbst gesetzten) Allianz-Tag wie die Welle - ohne echte
+  // Mitgliederverwaltung ist das die einfachste faire Näherung an "gleiche Allianz".
+  let arrive = Date.now()+dur*1000;
+  let acsId = null, acsAllianceTag = null;
+  if(mission==='attack' && params.acsId){
+    acsId = String(params.acsId).trim().slice(0,24);
+    if(acsId){
+      const existing = findAcsWave(universe, acsId, toCoord);
+      const myTag = (state.alliance && state.alliance.tag) || '-';
+      if(existing){
+        if(myTag==='-' || existing.acsAllianceTag==='-' || existing.acsAllianceTag!==myTag){
+          return fail(state, 'Beitritt zur ACS-Welle "'+acsId+'" nicht möglich: Allianz-Tag stimmt nicht mit dem der Welle überein.');
+        }
+        if(arrive>existing.arrive) return fail(state, 'Deine Flotte ist zu langsam, um die ACS-Welle "'+acsId+'" rechtzeitig zu erreichen.');
+        arrive = existing.arrive;
+      }
+      acsAllianceTag = myTag;
+    } else acsId = null;
+  }
+
   for(const [k,v] of Object.entries(ships)) p.ships[k]-=v;
   if(mission==='transport'){ p.resources.metal-=cargo.metal; p.resources.crystal-=cargo.crystal; p.resources.deut-=cargo.deut; }
   p.resources.deut-=fuel;
 
-  state.fleets.push({from:planetIndex, toCoord, toPlanetIndex, toOwner, npcSlot, emptySlot, ships, cargo:mission==='transport'?cargo:{metal:0,crystal:0,deut:0}, mission, arrive:Date.now()+dur*1000, returnAt:Date.now()+dur*2000, phase:'outbound', fuel});
-  return ok(state, missionLabels[mission]+'-Flotte nach '+coordLinkHtml(toCoord)+' gestartet');
+  state.fleets.push({from:planetIndex, toCoord, toPlanetIndex, toOwner, npcSlot, emptySlot, ships, cargo:mission==='transport'?cargo:{metal:0,crystal:0,deut:0}, mission, arrive, returnAt:Date.now()+dur*2000, phase:'outbound', fuel, acsId, acsAllianceTag});
+  const acsNote = acsId ? ' (ACS-Welle "'+acsId+'", Ankunft synchronisiert)' : '';
+  return ok(state, missionLabels[mission]+'-Flotte nach '+coordLinkHtml(toCoord)+' gestartet'+acsNote);
 }
 
 function sendExpedition(state, planetIndex, shipsMap, durationSlot){
@@ -780,68 +815,6 @@ function resolveArrival(universe, username, f){
       log(state, 'Spionagebericht über '+t.name+' erhalten');
     }
     f.phase='return';
-  } else if(f.mission==='attack'){
-    if(f.npcSlot){
-      const battle = simulateBattle(f.ships, f.npcSlot.fleet, f.npcSlot.defenseShips);
-      const survivingAttacker = applyLosses(f.ships, battle.attackerLossRatio);
-      const survivingDefenderFleet = applyLosses(f.npcSlot.fleet, battle.defenderLossRatio);
-      const lostAttacker = diffLosses(f.ships, survivingAttacker);
-      const lostDefenderFleet = diffLosses(f.npcSlot.fleet, survivingDefenderFleet);
-      const debrisMetal = Math.floor(shipCostSum(lostAttacker,'metal')*0.3 + shipCostSum(lostDefenderFleet,'metal')*0.3);
-      const debrisCrystal = Math.floor(shipCostSum(lostAttacker,'crystal')*0.3 + shipCostSum(lostDefenderFleet,'crystal')*0.3);
-      f.ships = survivingAttacker;
-      const roundsText = battle.rounds>0 ? battle.rounds+' Kampfrunde(n)' : 'kampflos (keine Verteidigung)';
-      if(debrisMetal+debrisCrystal>0){ addDebris(state, f.toCoord, debrisMetal, debrisCrystal); maybeCreateMoon(state, f.toCoord, debrisMetal+debrisCrystal); }
-      if(battle.attackerWon){
-        const loot = {metal: Math.floor(f.npcSlot.metal*0.5), crystal: Math.floor(f.npcSlot.crystal*0.5), deut: Math.floor(f.npcSlot.deut*0.5)};
-        const cap = capacityForShips(f.ships); const totalLoot = Math.min(cap, loot.metal+loot.crystal+loot.deut);
-        const ratio = (loot.metal+loot.crystal+loot.deut)>0 ? totalLoot/(loot.metal+loot.crystal+loot.deut) : 0;
-        f.cargo = {metal:Math.floor(loot.metal*ratio), crystal:Math.floor(loot.crystal*ratio), deut:Math.floor(loot.deut*ratio)};
-        message(state, 'Angriffsbericht: Sieg gegen '+f.npcSlot.name+' bei '+coordLinkHtml(f.toCoord)+' ('+roundsText+'). Beute '+(f.cargo.metal+f.cargo.crystal+f.cargo.deut)+'. Trümmerfeld: '+(debrisMetal+debrisCrystal)+'.');
-        log(state, 'Angriff auf '+f.npcSlot.name+' erfolgreich · Beute '+(f.cargo.metal+f.cargo.crystal+f.cargo.deut));
-      } else {
-        f.cargo={metal:0,crystal:0,deut:0};
-        message(state, 'Angriffsbericht: Niederlage gegen '+f.npcSlot.name+' bei '+coordLinkHtml(f.toCoord)+' ('+roundsText+'). Eigene Verluste erlitten.');
-        log(state, 'Angriff auf '+f.npcSlot.name+' gescheitert · Verluste erlitten');
-      }
-    } else if(targetState){
-      const t = targetState.planets[f.toPlanetIndex];
-      if(!t){ log(state, 'Angriff nicht möglich: Ziel existiert nicht mehr'); f.cargo={metal:0,crystal:0,deut:0}; f.phase='return'; return; }
-      const defBefore = extractDefense(t.buildings);
-      const battle = simulateBattle(f.ships, t.ships, defBefore);
-      const survivingAttacker = applyLosses(f.ships, battle.attackerLossRatio);
-      const survivingDefenderFleet = applyLosses(t.ships, battle.defenderLossRatio);
-      const survivingDef = applyLosses(defBefore, battle.defenderLossRatio);
-      const lostAttacker = diffLosses(f.ships, survivingAttacker);
-      const lostDefenderFleet = diffLosses(t.ships, survivingDefenderFleet);
-      const debrisMetal = Math.floor(shipCostSum(lostAttacker,'metal')*0.3 + shipCostSum(lostDefenderFleet,'metal')*0.3);
-      const debrisCrystal = Math.floor(shipCostSum(lostAttacker,'crystal')*0.3 + shipCostSum(lostDefenderFleet,'crystal')*0.3);
-      f.ships = survivingAttacker;
-      t.ships = survivingDefenderFleet;
-      for(const k of Object.keys(defBefore)) t.buildings[k] = survivingDef[k];
-      const roundsText = battle.rounds>0 ? battle.rounds+' Kampfrunde(n)' : 'kampflos (keine Verteidigung)';
-      if(debrisMetal+debrisCrystal>0){ addDebris(state, f.toCoord, debrisMetal, debrisCrystal); maybeCreateMoon(state, f.toCoord, debrisMetal+debrisCrystal); }
-      if(battle.attackerWon){
-        const loot = {metal: Math.floor(t.resources.metal*0.5), crystal: Math.floor(t.resources.crystal*0.5), deut: Math.floor(t.resources.deut*0.5)};
-        const cap = capacityForShips(f.ships); const totalLoot = Math.min(cap, loot.metal+loot.crystal+loot.deut);
-        const ratio = (loot.metal+loot.crystal+loot.deut)>0 ? totalLoot/(loot.metal+loot.crystal+loot.deut) : 0;
-        f.cargo = {metal:Math.floor(loot.metal*ratio), crystal:Math.floor(loot.crystal*ratio), deut:Math.floor(loot.deut*ratio)};
-        t.resources.metal -= f.cargo.metal; t.resources.crystal -= f.cargo.crystal; t.resources.deut -= f.cargo.deut;
-        message(state, 'Angriffsbericht: Sieg gegen '+t.name+' ('+f.toOwner+') bei '+coordLinkHtml(f.toCoord)+' ('+roundsText+'). Beute '+(f.cargo.metal+f.cargo.crystal+f.cargo.deut)+'. Trümmerfeld: '+(debrisMetal+debrisCrystal)+'.');
-        log(state, 'Angriff auf '+f.toOwner+' erfolgreich · Beute '+(f.cargo.metal+f.cargo.crystal+f.cargo.deut));
-        message(targetState, 'Dein Planet '+t.name+' wurde von '+username+' angegriffen und geplündert! Verlust: '+(f.cargo.metal+f.cargo.crystal+f.cargo.deut)+'.');
-        log(targetState, 'Angriff von '+username+' erlitten · Verluste');
-      } else {
-        f.cargo={metal:0,crystal:0,deut:0};
-        message(state, 'Angriffsbericht: Niederlage gegen '+t.name+' ('+f.toOwner+') bei '+coordLinkHtml(f.toCoord)+' ('+roundsText+'). Eigene Verluste erlitten.');
-        log(state, 'Angriff auf '+f.toOwner+' gescheitert · Verluste erlitten');
-        message(targetState, 'Dein Planet '+t.name+' wurde von '+username+' angegriffen – Verteidigung erfolgreich!');
-        log(targetState, 'Angriff von '+username+' abgewehrt');
-      }
-    } else {
-      log(state, 'Angriff nicht möglich'); f.cargo={metal:0,crystal:0,deut:0};
-    }
-    f.phase='return';
   } else if(f.mission==='harvest'){
     const key = debrisKey(f.toCoord); const field = state.debrisFields[key];
     if(field){
@@ -870,6 +843,99 @@ function resolveArrival(universe, username, f){
   }
 }
 
+// Loest Angriffsflotten aus, die gleichzeitig am selben Ziel ankommen - normalerweise genau
+// eine solo-Flotte, bei einer ACS-Welle mehrere Flotten verschiedener Spieler. Alle Schiffe
+// werden zu EINER Streitmacht zusammengefasst und in EINER Kampfrunde ausgewertet; Verluste
+// treffen danach jede teilnehmende Flotte anteilig mit derselben Verlustquote, Beute wird nach
+// verbleibender Ladekapazität aufgeteilt. Fuer eine einzelne Solo-Flotte ist das Ergebnis
+// numerisch identisch zur alten Einzel-Kampfabwicklung.
+function resolveAttackGroup(universe, participants){
+  const first = participants[0].fleet;
+  const isGroup = participants.length>1;
+  const waveNote = isGroup ? ' (ACS-Welle "'+first.acsId+'", '+participants.length+' Flotten)' : '';
+  const combinedShips = mergeShipMaps(participants.map(x=>x.fleet.ships));
+
+  function applyGroupOutcome(battle, lostDefenderFleet, wonText, lostText, targetLabel, targetResources){
+    const results = participants.map(({username, state, fleet})=>{
+      const before = fleet.ships;
+      const after = applyLosses(before, battle.attackerLossRatio);
+      const lost = diffLosses(before, after);
+      fleet.ships = after;
+      return {username, state, fleet, lost, cap:capacityForShips(after)};
+    });
+    const totalCapacity = results.reduce((s,r)=>s+r.cap,0);
+    const lostMetal = results.reduce((s,r)=>s+shipCostSum(r.lost,'metal'),0) + shipCostSum(lostDefenderFleet,'metal');
+    const lostCrystal = results.reduce((s,r)=>s+shipCostSum(r.lost,'crystal'),0) + shipCostSum(lostDefenderFleet,'crystal');
+    const debrisMetal = Math.floor(lostMetal*0.3), debrisCrystal = Math.floor(lostCrystal*0.3);
+    if(debrisMetal+debrisCrystal>0){
+      for(const r of results) addDebris(r.state, first.toCoord, debrisMetal, debrisCrystal);
+      maybeCreateMoon(results[0].state, first.toCoord, debrisMetal+debrisCrystal);
+    }
+    const roundsText = battle.rounds>0 ? battle.rounds+' Kampfrunde(n)' : 'kampflos (keine Verteidigung)';
+    let takenMetal=0, takenCrystal=0, takenDeut=0;
+    if(battle.attackerWon && targetResources){
+      const loot = {metal:Math.floor(targetResources.metal*0.5), crystal:Math.floor(targetResources.crystal*0.5), deut:Math.floor(targetResources.deut*0.5)};
+      const totalLootValue = loot.metal+loot.crystal+loot.deut;
+      const totalTaken = Math.min(totalCapacity, totalLootValue);
+      const ratio = totalLootValue>0 ? totalTaken/totalLootValue : 0;
+      const remaining = {metal:Math.floor(loot.metal*ratio), crystal:Math.floor(loot.crystal*ratio), deut:Math.floor(loot.deut*ratio)};
+      for(const r of results){
+        const share = totalCapacity>0 ? r.cap/totalCapacity : 0;
+        r.fleet.cargo = {metal:Math.floor(remaining.metal*share), crystal:Math.floor(remaining.crystal*share), deut:Math.floor(remaining.deut*share)};
+        takenMetal+=r.fleet.cargo.metal; takenCrystal+=r.fleet.cargo.crystal; takenDeut+=r.fleet.cargo.deut;
+        message(r.state, 'Angriffsbericht'+waveNote+': Sieg gegen '+targetLabel+' bei '+coordLinkHtml(first.toCoord)+' ('+roundsText+'). Beute '+(r.fleet.cargo.metal+r.fleet.cargo.crystal+r.fleet.cargo.deut)+'. Trümmerfeld: '+(debrisMetal+debrisCrystal)+'.');
+        log(r.state, 'Angriff auf '+targetLabel+' erfolgreich · Beute '+(r.fleet.cargo.metal+r.fleet.cargo.crystal+r.fleet.cargo.deut));
+      }
+    } else {
+      for(const r of results){
+        r.fleet.cargo = {metal:0,crystal:0,deut:0};
+        message(r.state, 'Angriffsbericht'+waveNote+': Niederlage gegen '+targetLabel+' bei '+coordLinkHtml(first.toCoord)+' ('+roundsText+'). Eigene Verluste erlitten.');
+        log(r.state, 'Angriff auf '+targetLabel+' gescheitert · Verluste erlitten');
+      }
+    }
+    for(const {fleet} of participants) fleet.phase='return';
+    return {takenMetal, takenCrystal, takenDeut, won:battle.attackerWon};
+  }
+
+  if(first.npcSlot){
+    const battle = simulateBattle(combinedShips, first.npcSlot.fleet, first.npcSlot.defenseShips);
+    const survivingDefenderFleet = applyLosses(first.npcSlot.fleet, battle.defenderLossRatio);
+    const lostDefenderFleet = diffLosses(first.npcSlot.fleet, survivingDefenderFleet);
+    applyGroupOutcome(battle, lostDefenderFleet, null, null, first.npcSlot.name, first.npcSlot);
+    return;
+  }
+
+  const targetState = first.toOwner ? universe.players[first.toOwner] : null;
+  if(targetState){
+    const t = targetState.planets[first.toPlanetIndex];
+    if(!t){
+      for(const {state, fleet} of participants){ log(state, 'Angriff nicht möglich: Ziel existiert nicht mehr'); fleet.cargo={metal:0,crystal:0,deut:0}; fleet.phase='return'; }
+      return;
+    }
+    const defBefore = extractDefense(t.buildings);
+    const battle = simulateBattle(combinedShips, t.ships, defBefore);
+    const survivingDefenderFleet = applyLosses(t.ships, battle.defenderLossRatio);
+    const survivingDef = applyLosses(defBefore, battle.defenderLossRatio);
+    const lostDefenderFleet = diffLosses(t.ships, survivingDefenderFleet);
+    t.ships = survivingDefenderFleet;
+    for(const k of Object.keys(defBefore)) t.buildings[k] = survivingDef[k];
+    const targetLabel = t.name+' ('+first.toOwner+')';
+    const outcome = applyGroupOutcome(battle, lostDefenderFleet, null, null, targetLabel, t.resources);
+    t.resources.metal -= outcome.takenMetal; t.resources.crystal -= outcome.takenCrystal; t.resources.deut -= outcome.takenDeut;
+    const attackerNames = participants.map(x=>x.username).join(', ');
+    if(outcome.won){
+      message(targetState, 'Dein Planet '+t.name+' wurde von '+attackerNames+waveNote+' angegriffen und geplündert! Verlust: '+(outcome.takenMetal+outcome.takenCrystal+outcome.takenDeut)+'.');
+      log(targetState, 'Angriff von '+attackerNames+' erlitten · Verluste');
+    } else {
+      message(targetState, 'Dein Planet '+t.name+' wurde von '+attackerNames+waveNote+' angegriffen – Verteidigung erfolgreich!');
+      log(targetState, 'Angriff von '+attackerNames+' abgewehrt');
+    }
+    return;
+  }
+
+  for(const {state, fleet} of participants){ log(state, 'Angriff nicht möglich'); fleet.cargo={metal:0,crystal:0,deut:0}; fleet.phase='return'; }
+}
+
 function tick(universe){
   const now = Date.now();
   for(const state of Object.values(universe.players)){
@@ -886,9 +952,25 @@ function tick(universe){
     });
     state.moons.forEach(m=>{ while(m.buildQueue[0] && m.buildQueue[0].done<=now){ const q=m.buildQueue.shift(); m.buildings[q.key]=(m.buildings[q.key]||0)+1; message(state, 'Mond '+coordLinkHtml(m.coord)+': '+q.name+' fertig'); } });
   }
+  // Angriffsflotten, die jetzt ankommen, werden zunaechst ueber ALLE Spieler hinweg gesammelt
+  // und nach ACS-Welle gruppiert (bzw. einzeln bei Solo-Angriffen), damit gleichzeitig
+  // eintreffende Allianzflotten gemeinsam statt nacheinander gegen das Ziel kaempfen.
+  const arrivingAttacks = [];
+  for(const [username, state] of Object.entries(universe.players)){
+    state.fleets.forEach(f=>{ if(f.phase==='outbound' && f.arrive<=now && f.mission==='attack') arrivingAttacks.push({username, state, fleet:f}); });
+  }
+  const attackGroups = new Map();
+  for(const entry of arrivingAttacks){
+    const f = entry.fleet;
+    const key = f.acsId ? ('acs:'+f.acsId+':'+f.toCoord.join(':')) : ('solo:'+entry.username+':'+f.toCoord.join(':')+':'+f.arrive+':'+f.from);
+    if(!attackGroups.has(key)) attackGroups.set(key, []);
+    attackGroups.get(key).push(entry);
+  }
+  for(const participants of attackGroups.values()) resolveAttackGroup(universe, participants);
+
   for(const [username, state] of Object.entries(universe.players)){
     state.fleets.forEach(f=>{
-      if(f.phase==='outbound' && f.arrive<=now){ resolveArrival(universe, username, f); }
+      if(f.phase==='outbound' && f.arrive<=now && f.mission!=='attack'){ resolveArrival(universe, username, f); }
       if(f.phase==='return' && f.returnAt<=now){
         const source = state.planets[f.from];
         if(source){

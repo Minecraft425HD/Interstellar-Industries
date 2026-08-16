@@ -737,7 +737,8 @@ function sendFleet(form){
   const ships = {};
   Object.keys(defs.ships).forEach(k=>{ if(defs.ships[k].role!=='power' && form[k]) ships[k]=Number(form[k].value)||0; });
   const cargo = {metal:Number(form.metal.value)||0, crystal:Number(form.crystal.value)||0, deut:Number(form.deut.value)||0};
-  postAction('sendFleet', {planetIndex: state.activePlanet, mission: form.mission.value, gal, sys, pos, ships, cargo});
+  const acsId = (form.mission.value==='attack' && form.acsId) ? form.acsId.value.trim() : '';
+  postAction('sendFleet', {planetIndex: state.activePlanet, mission: form.mission.value, gal, sys, pos, ships, cargo, acsId});
 }
 function sendExpedition(shipsMap, durationSlot){ postAction('sendExpedition', {planetIndex: state.activePlanet, ships: shipsMap, durationSlot}); }
 function activeMoon(){ return state.activeMoonIndex!=null ? state.moons[state.activeMoonIndex] : null; }
@@ -857,6 +858,10 @@ function viewFleet(){
     <label>Zielsystem (1-${UNIVERSE.systems})<input type="number" name="system" min="1" max="${UNIVERSE.systems}" value="${sysVal}"></label>
     <label>Zielposition (1-${UNIVERSE.positions})<input type="number" name="position" min="1" max="${UNIVERSE.positions}" value="${posVal}"></label>
     <input type="hidden" name="target" id="targetField">
+    <div id="acsField" style="display:${missionVal==='attack'?'block':'none'}">
+      <label>ACS-Code (optional, Allianz-Kampfstärke)<input type="text" name="acsId" placeholder="z.B. RAID-42" maxlength="24"></label>
+      <div class="small">Gleicher Code + gleiches Ziel wie ein Allianzmitglied lässt eure Flotten gemeinsam und zeitgleich ankommen und als eine Streitmacht kämpfen. Erfordert denselben Allianz-Tag auf beiden Seiten. Leer lassen für einen normalen Solo-Angriff.</div>
+    </div>
     <div class="grid3">
       ${sendableShips.map(([k,d])=>`<label>${d.name}<select name="${k}">${shipOptions(k)}</select></label>`).join('')}
     </div>
@@ -1021,7 +1026,7 @@ function renderView(bind=true){
     document.querySelectorAll('[data-defense]').forEach(b=>b.onclick=()=>enqueueDefense(b.dataset.defense));
     const ff=$('#fleetForm'); if(ff){
       ff.onsubmit=e=>{e.preventDefault(); const gal=Number(ff.galaxy.value), sys=Number(ff.system.value), pos=Number(ff.position.value); $('#targetField').value = gal+':'+sys+':'+pos; state.fleetPrefill=null; sendFleet(ff)};
-      ff.mission.onchange=()=>{ state.fleetPrefill=null; };
+      ff.mission.onchange=()=>{ state.fleetPrefill=null; const acsField=$('#acsField'); if(acsField) acsField.style.display = ff.mission.value==='attack' ? 'block' : 'none'; };
       ff.galaxy.onchange=()=>{ state.fleetPrefill=null; };
       ff.system.onchange=()=>{ state.fleetPrefill=null; };
       ff.position.onchange=()=>{ state.fleetPrefill=null; };
