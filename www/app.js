@@ -739,6 +739,7 @@ async function fetchGalaxySlots(g,s){
 // ---- Highscore data (real registered players) ----
 let highscoreCache = null;
 let highscoreLoading = false;
+let highscoreCategory = 'points';
 async function fetchHighscore(){
   highscoreLoading = true;
   try { const data = await apiFetch('/api/highscore'); highscoreCache = data.list; }
@@ -1045,7 +1046,11 @@ function viewHighscore(){
   if(!highscoreCache){
     return `<h2>Rangliste</h2><div class="small">Lade Rangliste…</div>`;
   }
-  return `<h2>Rangliste</h2><div class="small">Echte Punkte aller registrierten Spieler auf diesem Server, basierend auf dem Ressourcenwert aller Gebäude, Forschungen und Schiffe.</div><div style="height:10px"></div><table><thead><tr><th>Rang</th><th>Spieler</th><th>Planeten</th><th>Punkte</th></tr></thead><tbody>${highscoreCache.map((e,i)=>`<tr${e.username===state.username?' style="color:var(--accent2);font-weight:700"':''}><td>${i+1}</td><td>${e.username}${e.username===state.username?' (Du)':''}</td><td>${fmt(e.planets)}</td><td>${fmt(e.points)}</td></tr>`).join('')}</tbody></table>`;
+  const categories = [['points','Gesamt'],['buildingPoints','Gebäude'],['researchPoints','Forschung'],['fleetPoints','Flotte'],['defensePoints','Verteidigung']];
+  const cat = categories.find(c=>c[0]===highscoreCategory) ? highscoreCategory : 'points';
+  const sorted = [...highscoreCache].sort((a,b)=>(b[cat]||0)-(a[cat]||0));
+  const tabsHtml = categories.map(([k,label])=>`<button type="button" class="pill ${cat===k?'active':''}" data-highscore-cat="${k}">${label}</button>`).join('');
+  return `<h2>Rangliste</h2><div class="small">Echte Punkte aller registrierten Spieler auf diesem Server, basierend auf dem Ressourcenwert aller Gebäude, Forschungen, Schiffe und Verteidigungsanlagen.</div><div style="height:10px"></div><div class="planet-tabs" style="margin-bottom:10px">${tabsHtml}</div><table><thead><tr><th>Rang</th><th>Spieler</th><th>Planeten</th><th>${categories.find(c=>c[0]===cat)[1]}</th></tr></thead><tbody>${sorted.map((e,i)=>`<tr${e.username===state.username?' style="color:var(--accent2);font-weight:700"':''}><td>${i+1}</td><td>${e.username}${e.username===state.username?' (Du)':''}</td><td>${fmt(e.planets)}</td><td>${fmt(e[cat]||0)}</td></tr>`).join('')}</tbody></table>`;
 }
 
 function renderView(bind=true){
@@ -1099,6 +1104,7 @@ function renderView(bind=true){
     document.querySelectorAll('[data-officer]').forEach(b=>b.onclick=()=>{ if(officerActive(b.dataset.officer)) return; postAction('activateOfficer', {key:b.dataset.officer}); });
     document.querySelectorAll('[data-lifeform]').forEach(b=>b.onclick=()=>postAction('setLifeform', {species:b.dataset.lifeform}));
     document.querySelectorAll('[data-lifeform-build]').forEach(b=>b.onclick=()=>postAction('enqueueLifeformBuilding', {planetIndex: state.activePlanet, key:b.dataset.lifeformBuild}));
+    document.querySelectorAll('[data-highscore-cat]').forEach(b=>b.onclick=()=>{ highscoreCategory=b.dataset.highscoreCat; renderView(); });
     document.querySelectorAll('[data-moon-select]').forEach(b=>b.onclick=()=>{ state.activeMoonIndex=Number(b.dataset.moonSelect); renderView(true); });
     document.querySelectorAll('[data-moon-build]').forEach(b=>b.onclick=()=>enqueueMoonBuild(b.dataset.moonBuild));
     const jgf=$('#jumpGateForm'); if(jgf) jgf.onsubmit=e=>{e.preventDefault(); const toIdx=Number(jgf.targetMoon.value); const ships={lightFighter:Number(jgf.lightFighter.value)||0, cruiser:Number(jgf.cruiser.value)||0}; jumpGateTransfer(state.activeMoonIndex, toIdx, {}, ships); };

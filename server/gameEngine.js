@@ -308,7 +308,11 @@ function registerAccount(universe, username, passwordHash, coord, planetName){
 
 function computeHighscore(universe){
   return Object.entries(universe.players)
-    .map(([username, state])=>({ username, points: totalPlayerPoints(state), planets: state.planets.length }))
+    .map(([username, state])=>{
+      const b = totalPlayerPointsBreakdown(state);
+      return { username, points: totalPlayerPoints(state), planets: state.planets.filter(p=>!p.destroyed).length,
+        buildingPoints: b.buildings, researchPoints: b.research, fleetPoints: b.fleet, defensePoints: b.defense };
+    })
     .sort((a,b)=>b.points-a.points);
 }
 
@@ -485,6 +489,30 @@ function computePoints(p){
   for(const [k,lvl] of Object.entries(p.research)){ const def=defs.research[k]; if(!def||!lvl) continue; for(let l=1;l<=lvl;l++){ const c=scaledCost(def.base,l); total+=c.metal+c.crystal+c.deut; } }
   for(const [k,v] of Object.entries(p.ships)){ if(defs.ships[k] && v) total += (defs.ships[k].cost.metal+defs.ships[k].cost.crystal+defs.ships[k].cost.deut)*v; }
   return total;
+}
+// Wie computePoints(), aber nach OGame-Ranglisten-Kategorien aufgeschluesselt statt einer
+// einzelnen Summe: Gebaeude (ohne Verteidigung), Verteidigung (isDefense-Gebaeude eigens),
+// Forschung, Flotte (Schiffe).
+function computePointsBreakdown(p){
+  let buildings=0, defense=0, research=0, fleet=0;
+  for(const [k,lvl] of Object.entries(p.buildings)){
+    const def=defs.buildings[k]; if(!def||!lvl) continue;
+    let sum=0; for(let l=1;l<=lvl;l++){ const c=scaledCost(def.base,l); sum+=c.metal+c.crystal+c.deut; }
+    if(def.isDefense) defense+=sum; else buildings+=sum;
+  }
+  for(const [k,lvl] of Object.entries(p.research)){ const def=defs.research[k]; if(!def||!lvl) continue; for(let l=1;l<=lvl;l++){ const c=scaledCost(def.base,l); research+=c.metal+c.crystal+c.deut; } }
+  for(const [k,v] of Object.entries(p.ships)){ if(defs.ships[k] && v) fleet += (defs.ships[k].cost.metal+defs.ships[k].cost.crystal+defs.ships[k].cost.deut)*v; }
+  return {buildings, defense, research, fleet};
+}
+function totalPlayerPointsBreakdown(state){
+  const sum = {buildings:0, defense:0, research:0, fleet:0};
+  for(const p of state.planets){
+    if(p.destroyed) continue;
+    const b = computePointsBreakdown(p);
+    sum.buildings+=b.buildings; sum.defense+=b.defense; sum.research+=b.research; sum.fleet+=b.fleet;
+  }
+  const buildings=Math.floor(sum.buildings/1000), defense=Math.floor(sum.defense/1000), research=Math.floor(sum.research/1000), fleet=Math.floor(sum.fleet/1000);
+  return {buildings, defense, research, fleet, total: buildings+defense+research+fleet};
 }
 function totalPlayerPoints(state){ return Math.floor(state.planets.filter(p=>!p.destroyed).reduce((s,p)=>s+computePoints(p),0)/1000); }
 
