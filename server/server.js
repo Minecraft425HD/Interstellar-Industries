@@ -253,7 +253,12 @@ app.get('/api/admin/log', requireAuth, requireAdmin, (req, res) => {
 app.post('/api/admin/deletePlayer', requireAuth, requireAdmin, (req, res) => {
   const target = req.body && req.body.username;
   const result = engine.adminDeletePlayer(universe, target);
-  if(result.ok){ dirty=true; saveUniverse(); }
+  if(result.ok){
+    dirty=true; saveUniverse();
+    // Noch gueltige Anmelde-Sessions des geloeschten Kontos sofort ungueltig machen,
+    // statt sie bis zum natuerlichen Ablauf (30 Tage) weiter zu akzeptieren.
+    for(const [token, session] of sessions.entries()){ if(session.username===target) sessions.delete(token); }
+  }
   logLine('ADMIN ' + req.username + (result.ok ? ' loeschte Spieler ' : ' konnte Spieler NICHT loeschen ') + target + (result.error ? (' :: ' + result.error) : ''));
   res.status(result.ok?200:400).json(result);
 });

@@ -560,6 +560,18 @@ function adminDeletePlayer(universe, username){
   if(universe.accounts[username] && universe.accounts[username].isAdmin) return { ok:false, error:'Admin-Konto kann nicht gelöscht werden' };
   if(!universe.players[username]) return { ok:false, error:'Spieler nicht gefunden' };
   removePlayerFromAlliance(universe, username);
+  // removePlayerFromAlliance kuemmert sich nur um eine tatsaechliche Mitgliedschaft -
+  // offene Bewerbungen bei ANDEREN Allianzen (noch nicht angenommen) haengen sonst als
+  // Karteileiche im applications-Array und tauchen dort fuer den Gruender weiter auf.
+  for(const alliance of Object.values(universe.alliances)){
+    if(alliance.applications) alliance.applications = alliance.applications.filter(m=>m!==username);
+  }
+  // Ein laufendes Hoechstgebot im Auktionshaus zuruecksetzen, statt die Runde auf einen
+  // nicht mehr existierenden "Gewinner" einfrieren zu lassen.
+  if(universe.auction && universe.auction.currentBidder===username){
+    universe.auction.currentBidder = null;
+    universe.auction.currentBid = 0;
+  }
   delete universe.players[username];
   delete universe.accounts[username];
   return { ok:true };
