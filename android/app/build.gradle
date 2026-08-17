@@ -15,8 +15,8 @@ android {
         // "adb install -r") die APK nicht zuverlaessig als Update und behaelt die alte
         // Version - genau das Symptom, das hier aufgetreten ist (versionCode stand die
         // ganze Session ueber unveraendert auf 1).
-        versionCode 2
-        versionName "1.1"
+        versionCode 3
+        versionName "1.2"
     }
 
     buildTypes {

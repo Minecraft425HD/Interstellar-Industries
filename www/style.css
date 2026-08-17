@@ -56,11 +56,20 @@ body{ display:flex; flex-direction:column; min-height:100%; }
 }
 .planet-id #planetName{ font-weight:700; font-size:16px; text-shadow:0 0 12px rgba(63,169,245,.35); letter-spacing:.02em; }
 .planet-id .small{ color:var(--muted); font-size:12px; }
-.resources{ display:flex; flex-wrap:wrap; gap:14px; }
-.res-item{ display:flex; flex-direction:column; align-items:flex-end; min-width:74px; line-height:1.25; }
-.res-label{ font-size:10px; color:var(--muted); text-transform:uppercase; letter-spacing:.04em; }
-.res-item > span:nth-child(2){ font-weight:700; font-size:14px; }
-.rate{ font-size:11px; color:var(--accent2); }
+/* Alle Rohstoffe passen nicht mehr nebeneinander in eine Zeile fester Breite - statt
+   ueber mehrere Zeilen umzubrechen (macht die Kopfzeile riesig hoch), bleibt die Leiste
+   EINE Zeile fest und wird stattdessen horizontal scrollbar (nach rechts wischen). */
+.resources{
+  display:flex; flex-wrap:nowrap; gap:8px;
+  overflow-x:auto; overflow-y:hidden;
+  -webkit-overflow-scrolling:touch; scrollbar-width:thin;
+  flex:1 1 100%; max-width:100%;
+  padding-bottom:2px;
+}
+.res-item{ display:flex; flex-direction:column; align-items:flex-start; flex:0 0 auto; min-width:0; line-height:1.15; white-space:nowrap; }
+.res-label{ font-size:9px; color:var(--muted); text-transform:uppercase; letter-spacing:.03em; }
+.res-item > span:nth-child(2){ font-weight:700; font-size:12.5px; }
+.rate{ font-size:10px; color:var(--accent2); }
 
 #nav{
   display:flex; gap:6px; overflow-x:auto; padding:8px 10px;
