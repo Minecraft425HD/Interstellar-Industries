@@ -4,6 +4,8 @@ const RESOURCE_KEYS = [
   'crudeOil','naturalGas','coal',
   'sulfur','phosphate','wood',
   'freshwater','saltwater',
+  'steel','electronics','plastic','alloy','concrete','batteryCells',
+  'machineParts','compositeMaterial',
 ];
 const RESOURCE_INFO = {
   iron: {name:'Eisen', group:'ore'}, copper: {name:'Kupfer', group:'ore'}, aluminium: {name:'Aluminium', group:'ore'},
@@ -12,11 +14,14 @@ const RESOURCE_INFO = {
   crudeOil: {name:'Rohöl', group:'fuel'}, naturalGas: {name:'Erdgas', group:'fuel'}, coal: {name:'Kohle', group:'fuel'}, uranium: {name:'Uran', group:'fuel'},
   sulfur: {name:'Schwefel', group:'special'}, phosphate: {name:'Phosphat', group:'special'}, wood: {name:'Holz', group:'special'},
   freshwater: {name:'Süßwasser', group:'water'}, saltwater: {name:'Salzwasser', group:'water'},
+  steel: {name:'Stahl', group:'goods'}, electronics: {name:'Elektronik', group:'goods'}, plastic: {name:'Kunststoff', group:'goods'},
+  alloy: {name:'Legierung', group:'goods'}, concrete: {name:'Beton', group:'goods'}, batteryCells: {name:'Batteriezellen', group:'goods'},
+  machineParts: {name:'Maschinenteile', group:'goods'}, compositeMaterial: {name:'Verbundwerkstoff', group:'goods'},
 };
 const RESOURCE_GROUPS = {
   ore: {name:'Erze', storageBuilding:'oreStorage'}, tech: {name:'Technologiemetalle', storageBuilding:'techStorage'},
   fuel: {name:'Energieträger', storageBuilding:'fuelStorage'}, special: {name:'Sonderrohstoffe', storageBuilding:'resourceStorage'},
-  water: {name:'Wasser', storageBuilding:'resourceStorage'},
+  water: {name:'Wasser', storageBuilding:'resourceStorage'}, goods: {name:'Industriegüter', storageBuilding:'goodsStorage'},
 };
 const PLANET_TYPES = {
   rocky: {name:'Gesteinsplanet', desc:'Fester, mineralreicher Untergrund - der Standard-Planetentyp für Heimatwelten.', resources:['iron','copper','aluminium','nickel','limestone']},
@@ -66,9 +71,33 @@ const defs = {
     techStorage:{name:'Technologielager', desc:'Erhöht die maximale Lagerkapazität für alle Technologiemetalle.', base:{gold:700, silver:700}, },
     fuelStorage:{name:'Energielager', desc:'Erhöht die maximale Lagerkapazität für alle Energieträger.', base:{iron:800, crudeOil:600}, },
     resourceStorage:{name:'Rohstofflager', desc:'Erhöht die maximale Lagerkapazität für Sonderrohstoffe und Wasser.', base:{limestone:600, freshwater:300, phosphate:250}, },
+    goodsStorage:{name:'Güterlager', desc:'Erhöht die maximale Lagerkapazität für Industriegüter (Zwischenprodukte).', base:{steel:500, electronics:300}, },
     robotFactory:{name:'Roboterfabrik', desc:'Beschleunigt den Bau von Gebäuden und ist Voraussetzung für viele fortgeschrittene Anlagen.', base:{iron:500, copper:220}, },
     shipyard:{name:'Raumschiffwerft', desc:'Ermöglicht den Bau von Raumschiffen und Verteidigungsanlagen.', base:{iron:400, aluminium:250, nickel:100}, requires:{robotFactory:2}},
     spaceDock:{name:'Raumstation', desc:'Fortgeschrittene Werftanlage, Voraussetzung für die stärksten Kriegsschiffe.', base:{aluminium:35000, gold:25000}, requires:{shipyard:3}},
+
+    // ---- Fabriken (Zwischenprodukte) ----
+    // Nicht planetentyp-gebunden (kein `resource`-Feld) - ueberall baubar, nur ueber
+    // `requires` gegated. `recipe` beschreibt Nameplate-Produktion + Rohstoff-Eingaben
+    // je gefertigter Einheit; bei knappem Input wird der tatsaechliche Output proportional
+    // gedrosselt (siehe factoryThrottle/hourly weiter unten) - Grundlage der
+    // Flaschenhals-Anzeige. Baukosten bewusst reine Rohstoffe. Erster anpassbarer Entwurf.
+    steelMill:{name:'Stahlwerk', desc:'Verhüttet Eisen mit Kohle zu Stahl - Grundlage vieler Maschinenbauteile.', base:{iron:600, copper:250}, requires:{robotFactory:2}, powerUse:l=>12*l, factory:true,
+      recipe:{output:'steel', prod:l=>15*l*Math.pow(1.1,l), inputsPerUnit:{iron:2, coal:1}}},
+    electronicsFactory:{name:'Elektronikfabrik', desc:'Fertigt aus Kupfer und Gold hochwertige Elektronikbauteile.', base:{copper:600, silver:250}, requires:{robotFactory:2}, powerUse:l=>12*l, factory:true,
+      recipe:{output:'electronics', prod:l=>10*l*Math.pow(1.1,l), inputsPerUnit:{copper:3, gold:1}}},
+    plasticsPlant:{name:'Kunststoffwerk', desc:'Verarbeitet Rohöl und Kohle zu vielseitigem Kunststoff.', base:{aluminium:600, crudeOil:250}, requires:{robotFactory:2}, powerUse:l=>12*l, factory:true,
+      recipe:{output:'plastic', prod:l=>12*l*Math.pow(1.1,l), inputsPerUnit:{crudeOil:2, coal:1}}},
+    alloyFoundry:{name:'Legierungsschmelze', desc:'Schmilzt Aluminium, Nickel und Seltene Erden zu widerstandsfähigen Legierungen.', base:{aluminium:700, nickel:250}, requires:{robotFactory:2}, powerUse:l=>13*l, factory:true,
+      recipe:{output:'alloy', prod:l=>9*l*Math.pow(1.1,l), inputsPerUnit:{aluminium:2, nickel:1, rareEarths:1}}},
+    concretePlant:{name:'Betonwerk', desc:'Mischt Kalkstein und Süßwasser zu Beton für schwere Bauwerke.', base:{limestone:600, freshwater:250}, requires:{robotFactory:2}, powerUse:l=>10*l, factory:true,
+      recipe:{output:'concrete', prod:l=>18*l*Math.pow(1.1,l), inputsPerUnit:{limestone:3, freshwater:1}}},
+    batteryFactory:{name:'Batteriefabrik', desc:'Fertigt aus Lithium und Schwefel wiederaufladbare Batteriezellen.', base:{lithium:600, sulfur:250}, requires:{robotFactory:2}, powerUse:l=>13*l, factory:true,
+      recipe:{output:'batteryCells', prod:l=>8*l*Math.pow(1.1,l), inputsPerUnit:{lithium:2, sulfur:1}}},
+    machineWorks:{name:'Maschinenbauwerk', desc:'Fertigt aus Stahl und Elektronik komplexe Maschinenteile (Tier 2).', base:{steel:800, electronics:400}, requires:{steelMill:3, electronicsFactory:3}, powerUse:l=>16*l, factory:true,
+      recipe:{output:'machineParts', prod:l=>7*l*Math.pow(1.1,l), inputsPerUnit:{steel:2, electronics:1}}},
+    compositePlant:{name:'Verbundstoffwerk', desc:'Verbindet Legierung und Kunststoff zu hochfesten Verbundwerkstoffen (Tier 2).', base:{alloy:800, plastic:400}, requires:{alloyFoundry:3, plasticsPlant:3}, powerUse:l=>16*l, factory:true,
+      recipe:{output:'compositeMaterial', prod:l=>6*l*Math.pow(1.1,l), inputsPerUnit:{alloy:2, plastic:1}}},
     researchLab:{name:'Forschungslabor', desc:'Ermöglicht das Erforschen neuer Technologien und beschleunigt laufende Forschung.', base:{copper:400, silver:440}, },
     naniteFactory:{name:'Nanitenfabrik', desc:'Hochentwickelte Fertigungsanlage, Voraussetzung für die fortschrittlichsten Bauten.', base:{nickel:900000, rareEarths:500000, uranium:200000}, requires:{robotFactory:10, computerTech:10}, facility:true},
     terraformer:{name:'Terraformer', desc:'Formt die Planetenoberfläche um, schafft eine künstliche Biosphäre und ermöglicht den Holzanbau. Erfordert vor allem Süßwasser.', base:{lithium:90000, freshwater:85000}, requires:{naniteFactory:1, energyTech:12}, facility:true},
@@ -175,7 +204,8 @@ const state = {
   fleetPrefill: null,
   username: null,
   isAdmin: false,
-  adminMode: false
+  adminMode: false,
+  factoryTab: 'all'
 };
 
 const UNIVERSE = { galaxies: 9, systems: 499, positions: 15 };
@@ -224,6 +254,12 @@ function levelEffectText(d, key, lvl){
   if(d.uraniumUse) parts.push('Uran '+fmt(Math.floor(d.uraniumUse(lvl)))+'/h');
   if(RESOURCE_GROUPS[d.storageGroup]) parts.push('Kapazität '+fmt(Math.max(5000,5000*lvl)));
   if(d.boostsGroup){ const groupName=RESOURCE_GROUPS[d.boostsGroup]?RESOURCE_GROUPS[d.boostsGroup].name:d.boostsGroup; parts.push('+'+(lvl*2)+'% '+groupName+'-Produktion'); }
+  if(d.recipe){
+    parts.push('Produktion '+fmt(Math.floor(d.recipe.prod(lvl)))+' '+RESOURCE_INFO[d.recipe.output].name+'/h (bei voller Kapazität)');
+    for(const [inputKey,perUnit] of Object.entries(d.recipe.inputsPerUnit)){
+      parts.push('Verbraucht '+fmt(Math.floor(d.recipe.prod(lvl)*perUnit))+' '+RESOURCE_INFO[inputKey].name+'/h');
+    }
+  }
   return parts.length ? parts.join(' · ') : null;
 }
 function openInfoModal(type, key, level){
@@ -951,6 +987,8 @@ function scaledCost(base, level){const mult=Math.pow(1.6, level-1); const r={}; 
 function buildingCost(base, level){ const c=scaledCost(base, level); const d=commanderDiscount(); const r={}; for(const k of RESOURCE_KEYS) r[k]=Math.floor((c[k]||0)*d); return r; }
 function mineByResource(resource){ return Object.entries(defs.buildings).find(([,d])=>d.resource===resource)?.[0]; }
 function uraniumUse(p){ return (p.buildings.nuclearReactor) ? defs.buildings.nuclearReactor.uraniumUse(p.buildings.nuclearReactor) : 0; }
+// Alle Gebaeude mit einem `recipe`-Feld (analog zu mineByResource fuer Minen).
+const FACTORY_KEYS = Object.entries(defs.buildings).filter(([,d])=>d.recipe).map(([k])=>k);
 function energyStats(p){
   const solar=defs.buildings.solarPlant.power(p.buildings.solarPlant||0);
   const nuclear=defs.buildings.nuclearReactor.power(p.buildings.nuclearReactor||0);
@@ -958,7 +996,23 @@ function energyStats(p){
   const prod=(solar+nuclear+satellites)*engineerBonus();
   let use=0;
   for(const [k,d] of Object.entries(defs.buildings)){ if(d.resource && d.powerUse) use += d.powerUse(p.buildings[k]||0); }
+  for(const k of FACTORY_KEYS){ if(defs.buildings[k].powerUse) use += defs.buildings[k].powerUse(p.buildings[k]||0); }
   return {prod,use,ratio: use? Math.min(1,prod/use):1};
+}
+// Client-Spiegel von factoryThrottle() im Server: wie stark eine Fabrik gerade gedrosselt
+// laufen muss, verhaeltnismaessig zum knappsten Eingaberohstoff. Grundlage der
+// Flaschenhals-Anzeige in viewFactories().
+function factoryThrottle(p, recipe, lvl){
+  if(!lvl) return {throttle:1, limitingInput:null};
+  let throttle = 1, limitingInput = null;
+  const nameplate = recipe.prod(lvl);
+  for(const [inputKey, perUnit] of Object.entries(recipe.inputsPerUnit)){
+    const desiredRate = nameplate * perUnit;
+    if(desiredRate<=0) continue;
+    const ratio = Math.min(1, Math.max(0, p.resources[inputKey]||0) / desiredRate);
+    if(ratio < throttle){ throttle = ratio; limitingInput = inputKey; }
+  }
+  return {throttle, limitingInput};
 }
 // Bewusste Vereinfachung (bestand schon vor dem Rohstoffsystem-Umbau): die Client-Vorschau
 // spiegelt nur Energie/Offiziers-Boni, nicht Item-/Lebensform-Boosts - siehe hourly() im
@@ -974,6 +1028,20 @@ function hourly(p){
     inc[res] = defs.buildings[mineKey].prod(lvl)*e*bonus;
   }
   inc.uranium -= uraniumUse(p);
+  // Client-Spiegel von applyFactories() im Server - siehe dort fuer die vollstaendige
+  // Begruendung (proportionale Drosselung statt hart an/aus, ein Tick Verzoegerung bei
+  // mehrstufigen Rezepten, da Tier-2 nur aus vorhandenem Lagerbestand schoepft).
+  for(const key of FACTORY_KEYS){
+    const lvl = p.buildings[key]||0;
+    if(!lvl) continue;
+    const recipe = defs.buildings[key].recipe;
+    const {throttle} = factoryThrottle(p, recipe, lvl);
+    const actualOut = recipe.prod(lvl) * e * throttle;
+    inc[recipe.output] = (inc[recipe.output]||0) + actualOut;
+    for(const [inputKey, perUnit] of Object.entries(recipe.inputsPerUnit)){
+      inc[inputKey] = (inc[inputKey]||0) - actualOut*perUnit;
+    }
+  }
   return inc;
 }
 function maxStorage(p){
@@ -1000,7 +1068,7 @@ function computePoints(p){
 }
 function totalPlayerPoints(){ return Math.floor(state.planets.filter(p=>!p.destroyed).reduce((s,p)=>s+computePoints(p),0)/1000); }
 
-const navItems = [['overview','Übersicht'],['buildings','Gebäude'],['facilities','Anlagen'],['defense','Verteidigung'],['resources','Ressourcen'],['research','Forschung'],['shipyard','Werft'],['fleet','Flotte'],['expeditions','Expeditionen'],['galaxy','Galaxie'],['moons','Monde'],['alliance','Allianz'],['officers','Offiziere'],['lifeform','Lebensform'],['market','Markt'],['reports','Berichte'],['messages','Nachrichten'],['empire','Imperium'],['highscore','Rangliste'],['settings','Einstellungen']];
+const navItems = [['overview','Übersicht'],['buildings','Gebäude'],['facilities','Anlagen'],['factories','Fabriken'],['defense','Verteidigung'],['resources','Ressourcen'],['research','Forschung'],['shipyard','Werft'],['fleet','Flotte'],['expeditions','Expeditionen'],['galaxy','Galaxie'],['moons','Monde'],['alliance','Allianz'],['officers','Offiziere'],['lifeform','Lebensform'],['market','Markt'],['reports','Berichte'],['messages','Nachrichten'],['empire','Imperium'],['highscore','Rangliste'],['settings','Einstellungen']];
 
 function unreadMailCount(){ return (state.mail||[]).filter(m=>m.direction==='in' && !m.read).length; }
 function renderNav(){ const unread=unreadMailCount(); $('#nav').innerHTML = navItems.map(([id,label])=>`<button class="${state.view===id?'active':''}" data-view="${id}">${label}${id==='messages'&&unread>0?` <span class="pill active" style="padding:1px 6px;font-size:11px">${unread}</span>`:''}</button>`).join(''); document.querySelectorAll('[data-view]').forEach(b=>b.onclick=()=>{ if(b.dataset.view!=='fleet') state.fleetPrefill=null; if(b.dataset.view==='highscore') highscoreCache=null; if(b.dataset.view==='galaxy') galaxyCache={}; state.view=b.dataset.view; if(b.dataset.view==='messages' && unreadMailCount()>0) postAction('markMailRead', {}); render(); }); }
@@ -1055,6 +1123,44 @@ function viewOverview(){ const p=active(), e=energyStats(p), inc=hourly(p), cap=
 function viewBuildings(){ const p=active(); const buildable = Object.entries(defs.buildings).filter(([,d])=>!d.isDefense && !d.facility && (!d.resource || planetTypesForResource(d.resource).includes(p.planetType) || d.resource==='wood')); return `<h2>Gebäude</h2><div class="list">${buildable.map(([k,d])=>{ const lvl=(p.buildings[k]||0)+1; const c=buildingCost(costBaseFor(d,p),lvl); const ok=meetsRequirements(p,d.requires); return `<div class="row"><div><strong>${d.name}</strong><div class="sub">Stufe ${p.buildings[k]||0}</div><div class="sub">Kosten: ${resCostText(c)}</div>${!ok?`<div class="sub warn-text">Benötigt: ${requirementText(d.requires)}</div>`:''}</div><div style="display:flex;gap:6px;align-items:center">${infoIconHtml('building',k,p.buildings[k]||0)}<button class="btn" data-build="${k}" ${ok?'':'disabled'}>Ausbauen</button></div></div>`; }).join('')}</div>`; }
 
 function viewFacilities(){ const p=active(); const facKeys = Object.entries(defs.buildings).filter(([,d])=>d.facility && !d.moonOnly); return `<h2>Anlagen</h2><div class="list">${facKeys.map(([k,d])=>{ const lvl=(p.buildings[k]||0)+1; const c=buildingCost(costBaseFor(d,p),lvl); const ok=meetsRequirements(p,d.requires); return `<div class="row"><div><strong>${d.name}</strong><div class="sub">Stufe ${p.buildings[k]||0}</div><div class="sub">Kosten: ${resCostText(c)}</div>${!ok?`<div class="sub warn-text">Benötigt: ${requirementText(d.requires)}</div>`:''}</div><div style="display:flex;gap:6px;align-items:center">${infoIconHtml('building',k,p.buildings[k]||0)}<button class="btn alt" data-build="${k}" ${ok?'':'disabled'}>Ausbauen</button></div></div>`; }).join('')}</div>`; }
+
+// Ist ein Fabrik-Rezept Tier 2 (verbraucht mind. ein anderes Industriegut statt nur
+// Rohstoffe)? Wird ueber die Rohstoffgruppe der Eingaben erkannt, kein Extra-Flag noetig.
+function isTier2Factory(d){ return Object.keys(d.recipe.inputsPerUnit).some(k=>RESOURCE_INFO[k].group==='goods'); }
+function viewFactories(){
+  const p=active(); const allFactories = Object.entries(defs.buildings).filter(([,d])=>d.factory);
+  const isThrottled = ([k,d])=>{ const lvl=p.buildings[k]||0; if(!lvl) return false; return factoryThrottle(p,d.recipe,lvl).throttle<1; };
+  const tabs = [['all','Alle'],['tier1','Tier 1'],['tier2','Tier 2'],['bottleneck','Engpässe']];
+  const tabHtml = `<div class="subnav">${tabs.map(([id,label])=>`<button class="${state.factoryTab===id?'active':''}" data-factory-tab="${id}">${label}</button>`).join('')}</div>`;
+
+  let shown = allFactories;
+  if(state.factoryTab==='tier1') shown = allFactories.filter(([,d])=>!isTier2Factory(d));
+  else if(state.factoryTab==='tier2') shown = allFactories.filter(([,d])=>isTier2Factory(d));
+  else if(state.factoryTab==='bottleneck') shown = allFactories.filter(isThrottled);
+
+  const throttled = allFactories.filter(isThrottled);
+  const bottleneckCard = `<div class="card"><h3>Aktuelle Engpässe</h3>${throttled.length ? `<div class="list">${throttled.map(([k,d])=>{
+    const lvl=p.buildings[k]||0; const {throttle,limitingInput}=factoryThrottle(p,d.recipe,lvl);
+    return `<div class="row"><div><strong>${d.name}</strong></div><div class="danger-text">${Math.round(throttle*100)}% Kapazität · Engpass: ${RESOURCE_INFO[limitingInput].name}</div></div>`;
+  }).join('')}</div>` : '<div class="small">Keine Engpässe - alle Fabriken laufen mit voller Kapazität.</div>'}</div>`;
+
+  const rows = shown.map(([k,d])=>{
+    const curLvl=p.buildings[k]||0, lvl=curLvl+1;
+    const c=buildingCost(costBaseFor(d,p),lvl);
+    const ok=meetsRequirements(p,d.requires);
+    const recipeText = Object.entries(d.recipe.inputsPerUnit).map(([ik,amt])=>`${amt}× ${RESOURCE_INFO[ik].name}`).join(' + ') + ` → ${RESOURCE_INFO[d.recipe.output].name}`;
+    let statusHtml = '';
+    if(curLvl>0){
+      const {throttle,limitingInput} = factoryThrottle(p, d.recipe, curLvl);
+      const pct = Math.round(throttle*100);
+      const capText = throttle<1 ? `<span class="danger-text">Läuft mit ${pct}% Kapazität · Engpass: ${RESOURCE_INFO[limitingInput].name}</span>` : 'Läuft mit voller Kapazität';
+      statusHtml = `<div class="sub">${capText}</div><div class="bar${throttle<1?' bar-danger':''}" style="margin-top:4px"><span style="width:${pct}%"></span></div>`;
+    }
+    return `<div class="row"><div><strong>${d.name}</strong><div class="sub">Stufe ${curLvl}</div><div class="sub">Rezept: ${recipeText}</div><div class="sub">Kosten: ${resCostText(c)}</div>${statusHtml}${!ok?`<div class="sub warn-text">Benötigt: ${requirementText(d.requires)}</div>`:''}</div><div style="display:flex;gap:6px;align-items:center">${infoIconHtml('building',k,curLvl)}<button class="btn alt" data-build="${k}" ${ok?'':'disabled'}>Ausbauen</button></div></div>`;
+  }).join('') || '<div class="small">Keine Fabriken in dieser Kategorie.</div>';
+
+  return `<h2>Fabriken</h2>${tabHtml}<div style="height:12px"></div>${bottleneckCard}<div style="height:12px"></div><div class="list">${rows}</div>`;
+}
 function viewResources(){ const p=active(), inc=hourly(p), e=energyStats(p); const planetType=PLANET_TYPES[p.planetType]||PLANET_TYPES.rocky; const shown=RESOURCE_KEYS.filter(k=>planetType.resources.includes(k) || (p.resources[k]||0)>0 || (inc[k]||0)!==0); return `<h2>Ressourcen</h2><div class="grid2"><div class="card"><h3>Produktion pro Stunde</h3><div class="list">${shown.map(k=>`<div class="row"><span>${RESOURCE_INFO[k].name}</span><strong>${fmt1(inc[k]||0)}</strong></div>`).join('')}</div></div><div class="card"><h3>Energieeffizienz</h3><div class="bar"><span style="width:${Math.min(100,e.ratio*100)}%"></span></div><div style="height:10px"></div><div class="small">${fmt(e.prod)} verfügbar · ${fmt(e.use)} benötigt</div></div></div>`; }
 function viewResearch(){ const p=active(); return `<h2>Forschung</h2><div class="small">Max. Kolonien: ${maxColonies(p)} · Max. gleichzeitige Expeditionen: ${maxExpeditions(p)} (abhängig von Astrophysik)</div><div style="height:10px"></div><div class="list">${Object.entries(defs.research).map(([k,d])=>{ const lvl=p.research[k]+1; const c=scaledCost(d.base,lvl); const ok=meetsRequirements(p,d.requires); return `<div class="row"><div><strong>${d.name}</strong><div class="sub">Stufe ${p.research[k]}</div><div class="sub">Kosten: ${resCostText(c)}</div>${!ok?`<div class="sub warn-text">Benötigt: ${requirementText(d.requires)}</div>`:''}</div><div style="display:flex;gap:6px;align-items:center">${infoIconHtml('research',k,p.research[k])}<button class="btn good" data-research="${k}" ${ok?'':'disabled'}>Forschen</button></div></div>`; }).join('')}</div>`; }
 function viewShipyard(){ const p=active(); return `<h2>Raumschiffwerft</h2><div class="list">${Object.entries(defs.ships).map(([k,d])=>{ const ok=meetsRequirements(p,d.requires); return `<div class="row"><div><strong>${d.name}</strong><div class="sub">Vorhanden ${fmt(p.ships[k]||0)} · Angriff ${d.attack} · Ladung ${fmt(d.cargo)}</div><div class="sub">Kosten: ${resCostText(d.cost)}</div>${!ok?`<div class="sub warn-text">Benötigt: ${requirementText(d.requires)}</div>`:''}</div><div style="display:flex;gap:6px;align-items:center">${infoIconHtml('ship',k)}<button class="btn warn" data-ship="${k}" ${ok?'':'disabled'}>Bauen</button></div></div>`; }).join('')}</div>`; }
@@ -1308,9 +1414,10 @@ function viewHighscore(){
 }
 
 function renderView(bind=true){
-  const views={overview:viewOverview,buildings:viewBuildings,facilities:viewFacilities,defense:viewDefense,resources:viewResources,research:viewResearch,shipyard:viewShipyard,fleet:viewFleet,expeditions:viewExpeditions,galaxy:viewGalaxy,moons:viewMoons,alliance:viewAlliance,officers:viewOfficers,lifeform:viewLifeform,market:viewMarket,reports:viewReports,messages:viewMessages,empire:viewEmpire,highscore:viewHighscore,settings:viewSettings};
+  const views={overview:viewOverview,buildings:viewBuildings,facilities:viewFacilities,factories:viewFactories,defense:viewDefense,resources:viewResources,research:viewResearch,shipyard:viewShipyard,fleet:viewFleet,expeditions:viewExpeditions,galaxy:viewGalaxy,moons:viewMoons,alliance:viewAlliance,officers:viewOfficers,lifeform:viewLifeform,market:viewMarket,reports:viewReports,messages:viewMessages,empire:viewEmpire,highscore:viewHighscore,settings:viewSettings};
   $('#view').innerHTML = views[state.view]();
   if(bind){
+    document.querySelectorAll('[data-factory-tab]').forEach(b=>b.onclick=()=>{ state.factoryTab=b.dataset.factoryTab; renderView(); });
     document.querySelectorAll('[data-build]').forEach(b=>b.onclick=()=>enqueueBuild(b.dataset.build));
     document.querySelectorAll('[data-research]').forEach(b=>b.onclick=()=>enqueueResearch(b.dataset.research));
     document.querySelectorAll('[data-ship]').forEach(b=>b.onclick=()=>enqueueShip(b.dataset.ship));

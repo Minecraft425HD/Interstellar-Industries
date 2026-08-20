@@ -11,6 +11,12 @@ const RESOURCE_KEYS = [
   'crudeOil','naturalGas','coal',
   'sulfur','phosphate','wood',
   'freshwater','saltwater',
+  // ---- Zwischenprodukte (Industriegueter) - werden nicht abgebaut, sondern in
+  // Fabriken aus Rohstoffen (und teils aus anderen Zwischenprodukten) gefertigt.
+  // Tier 1 (direkt aus Rohstoffen):
+  'steel','electronics','plastic','alloy','concrete','batteryCells',
+  // Tier 2 (aus Tier-1-Guetern):
+  'machineParts','compositeMaterial',
 ];
 const RESOURCE_INFO = {
   iron: {name:'Eisen', group:'ore'},
@@ -31,6 +37,14 @@ const RESOURCE_INFO = {
   wood: {name:'Holz', group:'special'},
   freshwater: {name:'Süßwasser', group:'water'},
   saltwater: {name:'Salzwasser', group:'water'},
+  steel: {name:'Stahl', group:'goods'},
+  electronics: {name:'Elektronik', group:'goods'},
+  plastic: {name:'Kunststoff', group:'goods'},
+  alloy: {name:'Legierung', group:'goods'},
+  concrete: {name:'Beton', group:'goods'},
+  batteryCells: {name:'Batteriezellen', group:'goods'},
+  machineParts: {name:'Maschinenteile', group:'goods'},
+  compositeMaterial: {name:'Verbundwerkstoff', group:'goods'},
 };
 const RESOURCE_GROUPS = {
   ore: {name:'Erze', storageBuilding:'oreStorage'},
@@ -38,6 +52,7 @@ const RESOURCE_GROUPS = {
   fuel: {name:'Energieträger', storageBuilding:'fuelStorage'},
   special: {name:'Sonderrohstoffe', storageBuilding:'resourceStorage'},
   water: {name:'Wasser', storageBuilding:'resourceStorage'},
+  goods: {name:'Industriegüter', storageBuilding:'goodsStorage'},
 };
 const PLANET_TYPES = {
   rocky: {name:'Gesteinsplanet', desc:'Fester, mineralreicher Untergrund - der Standard-Planetentyp für Heimatwelten.', resources:['iron','copper','aluminium','nickel','limestone']},
@@ -129,11 +144,39 @@ const defs = {
     techStorage:{name:'Technologielager', base:{gold:700, silver:700}},
     fuelStorage:{name:'Energielager', base:{iron:800, crudeOil:600}},
     resourceStorage:{name:'Rohstofflager', base:{limestone:600, freshwater:300, phosphate:250}},
+    goodsStorage:{name:'Güterlager', base:{steel:500, electronics:300}},
 
     // ---- Infrastruktur ----
     robotFactory:{name:'Roboterfabrik', base:{iron:500, copper:220}},
     shipyard:{name:'Raumschiffwerft', base:{iron:400, aluminium:250, nickel:100}, requires:{robotFactory:2}},
     spaceDock:{name:'Raumstation', base:{aluminium:35000, gold:25000}, requires:{shipyard:3}},
+
+    // ---- Fabriken (Zwischenprodukte) ----
+    // Anders als Minen sind Fabriken NICHT planetentyp-gebunden (kein `resource`-Feld -
+    // meetsPlanetType() laesst sie ueberall zu) - ihre Rohstoff-Eingaben koennen per
+    // Handel/Flotte herangeschafft werden. Jede Fabrik traegt ein `recipe`-Feld
+    // {output, prod(l), inputsPerUnit}: prod(l) ist die NAMEPLATE-Rate bei voller
+    // Rohstoffversorgung; ist ein Eingaberohstoff knapp, wird der tatsaechliche Output
+    // proportional gedrosselt (siehe factoryThrottle/applyFactories weiter unten) -
+    // das ist die Grundlage der Flaschenhals-Anzeige im Client. Baukosten sind bewusst
+    // reine Rohstoffe (kein Zwischenprodukt), um keinen Henne-Ei-Zirkelschluss zu bauen.
+    // Erster, mit Spielerfahrung noch anpassbarer Entwurf (Zahlen wie beim Rohstoffsystem).
+    steelMill:{name:'Stahlwerk', base:{iron:600, copper:250}, requires:{robotFactory:2}, powerUse:l=>12*l, factory:true,
+      recipe:{output:'steel', prod:l=>15*l*Math.pow(1.1,l), inputsPerUnit:{iron:2, coal:1}}},
+    electronicsFactory:{name:'Elektronikfabrik', base:{copper:600, silver:250}, requires:{robotFactory:2}, powerUse:l=>12*l, factory:true,
+      recipe:{output:'electronics', prod:l=>10*l*Math.pow(1.1,l), inputsPerUnit:{copper:3, gold:1}}},
+    plasticsPlant:{name:'Kunststoffwerk', base:{aluminium:600, crudeOil:250}, requires:{robotFactory:2}, powerUse:l=>12*l, factory:true,
+      recipe:{output:'plastic', prod:l=>12*l*Math.pow(1.1,l), inputsPerUnit:{crudeOil:2, coal:1}}},
+    alloyFoundry:{name:'Legierungsschmelze', base:{aluminium:700, nickel:250}, requires:{robotFactory:2}, powerUse:l=>13*l, factory:true,
+      recipe:{output:'alloy', prod:l=>9*l*Math.pow(1.1,l), inputsPerUnit:{aluminium:2, nickel:1, rareEarths:1}}},
+    concretePlant:{name:'Betonwerk', base:{limestone:600, freshwater:250}, requires:{robotFactory:2}, powerUse:l=>10*l, factory:true,
+      recipe:{output:'concrete', prod:l=>18*l*Math.pow(1.1,l), inputsPerUnit:{limestone:3, freshwater:1}}},
+    batteryFactory:{name:'Batteriefabrik', base:{lithium:600, sulfur:250}, requires:{robotFactory:2}, powerUse:l=>13*l, factory:true,
+      recipe:{output:'batteryCells', prod:l=>8*l*Math.pow(1.1,l), inputsPerUnit:{lithium:2, sulfur:1}}},
+    machineWorks:{name:'Maschinenbauwerk', base:{steel:800, electronics:400}, requires:{steelMill:3, electronicsFactory:3}, powerUse:l=>16*l, factory:true,
+      recipe:{output:'machineParts', prod:l=>7*l*Math.pow(1.1,l), inputsPerUnit:{steel:2, electronics:1}}},
+    compositePlant:{name:'Verbundstoffwerk', base:{alloy:800, plastic:400}, requires:{alloyFoundry:3, plasticsPlant:3}, powerUse:l=>16*l, factory:true,
+      recipe:{output:'compositeMaterial', prod:l=>6*l*Math.pow(1.1,l), inputsPerUnit:{alloy:2, plastic:1}}},
     researchLab:{name:'Forschungslabor', base:{copper:400, silver:440}},
     naniteFactory:{name:'Nanitenfabrik', base:{nickel:900000, rareEarths:500000, uranium:200000}, requires:{robotFactory:10, computerTech:10}, facility:true},
     // Kostet bewusst KEIN Holz: Holz kann erst NACH dem Terraformer ueberhaupt produziert
@@ -229,6 +272,8 @@ const defs = {
 // berechnung, Anforderungspruefung und generische Client-Anzeige).
 const MINE_BY_RESOURCE = {};
 for(const [key, def] of Object.entries(defs.buildings)){ if(def.resource) MINE_BY_RESOURCE[def.resource] = key; }
+// Reverse-Lookup analog zu MINE_BY_RESOURCE: alle Gebaeude mit einem `recipe`-Feld.
+const FACTORY_KEYS = Object.keys(defs.buildings).filter(k=>defs.buildings[k].recipe);
 
 const missionLabels = {transport:'Transport', spy:'Spionage', attack:'Angriff', colonize:'Kolonisierung', harvest:'Trümmerfeld-Bergung'};
 const UNIVERSE = { galaxies: 9, systems: 499, positions: 15 };
@@ -729,7 +774,49 @@ function energyStats(state, p){
   for(const [res, mineKey] of Object.entries(MINE_BY_RESOURCE)){
     if(defs.buildings[mineKey].powerUse) use += defs.buildings[mineKey].powerUse(p.buildings[mineKey]||0);
   }
+  for(const key of FACTORY_KEYS){
+    if(defs.buildings[key].powerUse) use += defs.buildings[key].powerUse(p.buildings[key]||0);
+  }
   return {prod,use,ratio: use? Math.min(1,prod/use):1};
+}
+// Wie stark eine Fabrik gerade gedrosselt laufen muss: verhaeltnismaessig zum knappsten
+// Eingaberohstoff (min(1, Lagerbestand/Bedarf) ueber alle inputsPerUnit), nicht hart
+// an/aus - das ist die Grundlage der Flaschenhals-Anzeige im Client. Nutzt den
+// Lagerbestand zu Beginn des hourly()-Aufrufs als Naeherung fuer "diese Stunde
+// verfuegbar", exakt dieselbe Vereinfachung wie das bestehende fusionDeutUse() unten -
+// kein Lookahead fuer sehr grosse Nachhol-Ticks, tick()s abschliessendes Clamping
+// verhindert negative Bestaende.
+function factoryThrottle(p, recipe, lvl){
+  if(!lvl) return {throttle:1, limitingInput:null};
+  let throttle = 1, limitingInput = null;
+  const nameplate = recipe.prod(lvl);
+  for(const [inputKey, perUnit] of Object.entries(recipe.inputsPerUnit)){
+    const desiredRate = nameplate * perUnit;
+    if(desiredRate<=0) continue;
+    const ratio = Math.min(1, Math.max(0, p.resources[inputKey]||0) / desiredRate);
+    if(ratio < throttle){ throttle = ratio; limitingInput = inputKey; }
+  }
+  return {throttle, limitingInput};
+}
+// Wendet alle Fabrik-Rezepte auf den bereits von der Rohstoffabbau-Schleife befuellten
+// inc-Vektor an (additiv, wie tick() es ohnehin fuer jeden Rohstoff erwartet - tick()
+// selbst braucht keine Aenderung). Bei mehrstufigen Rezepten (Tier 2 verbraucht ein
+// Tier-1-Gut) wird bewusst nur der VORHANDENE Lagerbestand genutzt, nicht der Output
+// aus demselben Durchlauf - vermeidet einen Abhaengigkeits-Solver, kostet dafuer einen
+// harmlosen Tick Verzoegerung in der Kette.
+function applyFactories(state, p, universe, inc){
+  const e = energyStats(state, p).ratio;
+  for(const key of FACTORY_KEYS){
+    const lvl = p.buildings[key]||0;
+    if(!lvl) continue;
+    const recipe = defs.buildings[key].recipe;
+    const {throttle} = factoryThrottle(p, recipe, lvl);
+    const actualOut = recipe.prod(lvl) * e * throttle;
+    inc[recipe.output] = (inc[recipe.output]||0) + actualOut;
+    for(const [inputKey, perUnit] of Object.entries(recipe.inputsPerUnit)){
+      inc[inputKey] = (inc[inputKey]||0) - actualOut*perUnit;
+    }
+  }
 }
 function lifeformBoost(state, resource){
   let mult = 1;
@@ -764,6 +851,7 @@ function hourly(state, p, universe){
     inc[res] = defs.buildings[mineKey].prod(lvl)*e*bonus*boost;
   }
   inc.uranium -= fusionDeutUse(p);
+  applyFactories(state, p, universe, inc);
   return inc;
 }
 function maxStorage(p){
@@ -1783,11 +1871,12 @@ function applyAction(universe, username, type, payload){
 
 module.exports = {
   defs, UNIVERSE, missionLabels,
-  RESOURCE_KEYS, RESOURCE_INFO, RESOURCE_GROUPS, PLANET_TYPES, MINE_BY_RESOURCE,
+  RESOURCE_KEYS, RESOURCE_INFO, RESOURCE_GROUPS, PLANET_TYPES, MINE_BY_RESOURCE, FACTORY_KEYS,
   createUniverse, normalizeUniverse, normalizePlayerState, createStarterEmpire,
   registerAccount, findPlanetOwner, isPositionFree,
   seedGalaxy, validCoord, coordStr, coordLinkHtml, debrisKey,
   computeHighscore, adminListPlayers, adminDeletePlayer, adminGrantResources,
   applyAction, tick, getPublicAuctionView, getPublicEventView,
   getPlayerAllianceView, getAlliancesListView,
+  hourly, energyStats, maxStorage, factoryThrottle, applyFactories, zeroResources, resTotal,
 };

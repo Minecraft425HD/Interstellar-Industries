@@ -167,6 +167,31 @@ h3{ margin:0 0 10px; font-size:14px; color:var(--accent2); }
 }
 .row .sub{ font-size:11.5px; color:var(--muted); margin-top:2px; }
 .warn-text{ color:var(--warn) !important; }
+.danger-text{ color:var(--danger) !important; }
+
+/* Sub-Reiter innerhalb einer Ansicht (z.B. Fabriken: Alle/Tier 1/Tier 2/Engpässe) -
+   optisch identisch zur Haupt-Nav (#nav button), aber scoped auf einen eigenen
+   Container statt die fixierte Kopfleiste. */
+.subnav{ display:flex; flex-wrap:wrap; gap:8px; }
+.subnav button{
+  flex:0 0 auto; color:var(--muted);
+  background-image: var(--tex-diagonal-soft), linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,0) 40%);
+  background-color: rgba(10,17,32,.6);
+  border:1px solid var(--border);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.05);
+  padding:8px 12px; border-radius:3px 8px 3px 8px; font-size:12.5px; white-space:nowrap; cursor:pointer;
+}
+.subnav button.active{
+  background-image: var(--tex-diagonal), linear-gradient(180deg, var(--accent), #2c86d1);
+  background-color:transparent;
+  color:#04101f; border-color:var(--accent); font-weight:700;
+  box-shadow: 0 0 16px -2px rgba(63,169,245,.8), inset 0 1px 0 rgba(255,255,255,.4);
+}
+.bar-danger span{
+  background-image:
+    repeating-linear-gradient(90deg, rgba(255,255,255,.3) 0px, rgba(255,255,255,.3) 2px, transparent 2px, transparent 6px),
+    linear-gradient(90deg, var(--danger), #c73a54);
+}
 
 .info-btn{
   flex:0 0 auto; width:26px; height:26px; border-radius:50%;
