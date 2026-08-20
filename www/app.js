@@ -6,6 +6,7 @@ const RESOURCE_KEYS = [
   'freshwater','saltwater',
   'steel','electronics','plastic','alloy','concrete','batteryCells',
   'machineParts','compositeMaterial',
+  'precisionComponents',
 ];
 const RESOURCE_INFO = {
   iron: {name:'Eisen', group:'ore'}, copper: {name:'Kupfer', group:'ore'}, aluminium: {name:'Aluminium', group:'ore'},
@@ -17,6 +18,7 @@ const RESOURCE_INFO = {
   steel: {name:'Stahl', group:'goods'}, electronics: {name:'Elektronik', group:'goods'}, plastic: {name:'Kunststoff', group:'goods'},
   alloy: {name:'Legierung', group:'goods'}, concrete: {name:'Beton', group:'goods'}, batteryCells: {name:'Batteriezellen', group:'goods'},
   machineParts: {name:'Maschinenteile', group:'goods'}, compositeMaterial: {name:'Verbundwerkstoff', group:'goods'},
+  precisionComponents: {name:'Präzisionskomponenten', group:'goods'},
 };
 const RESOURCE_GROUPS = {
   ore: {name:'Erze', storageBuilding:'oreStorage'}, tech: {name:'Technologiemetalle', storageBuilding:'techStorage'},
@@ -98,20 +100,22 @@ const defs = {
       recipe:{output:'machineParts', prod:l=>7*l*Math.pow(1.1,l), inputsPerUnit:{steel:2, electronics:1}}},
     compositePlant:{name:'Verbundstoffwerk', desc:'Verbindet Legierung und Kunststoff zu hochfesten Verbundwerkstoffen (Tier 2).', base:{alloy:800, plastic:400}, requires:{alloyFoundry:3, plasticsPlant:3}, powerUse:l=>16*l, factory:true,
       recipe:{output:'compositeMaterial', prod:l=>6*l*Math.pow(1.1,l), inputsPerUnit:{alloy:2, plastic:1}}},
+    precisionWorks:{name:'Präzisionswerk', desc:'Kombiniert Maschinenteile, Verbundwerkstoff und Seltene Erden zu hochpräzisen Komponenten für die fortschrittlichste Technologie (Tier 3).', base:{machineParts:1200, compositeMaterial:1200}, requires:{machineWorks:5, compositePlant:5}, powerUse:l=>20*l, factory:true,
+      recipe:{output:'precisionComponents', prod:l=>4*l*Math.pow(1.1,l), inputsPerUnit:{machineParts:2, compositeMaterial:2, rareEarths:5}}},
     researchLab:{name:'Forschungslabor', desc:'Ermöglicht das Erforschen neuer Technologien und beschleunigt laufende Forschung.', base:{copper:400, silver:440, electronics:150}, },
-    naniteFactory:{name:'Nanitenfabrik', desc:'Hochentwickelte Fertigungsanlage, Voraussetzung für die fortschrittlichsten Bauten.', base:{nickel:900000, rareEarths:500000, uranium:200000, compositeMaterial:15000}, requires:{robotFactory:10, computerTech:10}, facility:true},
+    naniteFactory:{name:'Nanitenfabrik', desc:'Hochentwickelte Fertigungsanlage, Voraussetzung für die fortschrittlichsten Bauten.', base:{nickel:900000, rareEarths:500000, uranium:200000, precisionComponents:1000}, requires:{robotFactory:10, computerTech:10}, facility:true},
     terraformer:{name:'Terraformer', desc:'Formt die Planetenoberfläche um, schafft eine künstliche Biosphäre und ermöglicht den Holzanbau. Erfordert vor allem Süßwasser.', base:{lithium:90000, freshwater:85000, concrete:8000}, requires:{naniteFactory:1, energyTech:12}, facility:true},
     allianceDepot:{name:'Allianzdepot', desc:'Lagerplatz für Ressourcen, die der Allianz zur Verfügung gestellt werden.', base:{limestone:30000, gold:30000, phosphate:5000, concrete:6000}, requires:{shipyard:3}, facility:true},
     missileSilo:{name:'Raketensilo', desc:'Lagert und startet interplanetare Raketen zum Fernangriff auf gegnerische Verteidigung.', base:{iron:30000, sulfur:11000, steel:3000}, requires:{shipyard:1}, facility:true},
     sensorPhalanx:{name:'Sensorphalanx', desc:'Ermöglicht die Überwachung fremder Systeme von einem Mond aus.', base:{copper:30000, silver:35000, naturalGas:15000, electronics:6000}, requires:{naniteFactory:1}, moonOnly:true, facility:true},
-    jumpGate:{name:'Sprungtor', desc:'Verbindet zwei eigene Monde für verzögerungsfreien Flottentransfer.', base:{aluminium:2000000, lithium:3500000, uranium:1300000, compositeMaterial:80000}, requires:{naniteFactory:1, hyperspaceTech:7}, moonOnly:true, facility:true},
+    jumpGate:{name:'Sprungtor', desc:'Verbindet zwei eigene Monde für verzögerungsfreien Flottentransfer.', base:{aluminium:2000000, lithium:3500000, uranium:1300000, precisionComponents:5000}, requires:{naniteFactory:1, hyperspaceTech:7}, moonOnly:true, facility:true},
     lunarBase:{name:'Lunarbasis', desc:'Grundlegende Infrastruktur auf einem Mond, Voraussetzung für weitere Mondgebäude.', base:{limestone:40000, aluminium:40000, concrete:10000}, requires:{}, moonOnly:true, facility:true},
     missileLauncher:{name:'Raketenwerfer', desc:'Einfache, günstige Verteidigungsanlage mit solidem Grundschutz.', base:{iron:1400, sulfur:600, steel:200}, isDefense:true, attack:80, shield:20, hull:2000, requires:{shipyard:1}},
     lightLaser:{name:'Leichtes Laser-Geschütz', desc:'Leichte Laserkanone mit ausgewogenem Verhältnis aus Kosten und Feuerkraft.', base:{iron:1300, silver:700, electronics:150}, isDefense:true, attack:100, shield:25, hull:2000, requires:{shipyard:2, energyTech:1}},
     heavyLaser:{name:'Schweres Laser-Geschütz', desc:'Schwere Laserkanone mit deutlich mehr Angriffskraft.', base:{iron:5500, silver:2500, electronics:600}, isDefense:true, attack:250, shield:100, hull:8000, requires:{shipyard:4, energyTech:3}},
     gaussCannon:{name:'Gauß-Kanone', desc:'Schweres Railgun-Geschütz mit hoher Durchschlagskraft, teuer aber effektiv.', base:{iron:22000, silver:11000, naturalGas:4000, machineParts:800}, isDefense:true, attack:1100, shield:200, hull:35000, requires:{shipyard:6, weaponsTech:3, shieldingTech:1, energyTech:6}},
     ionCannon:{name:'Ionenkanone', desc:'Spezialisiert auf hohe Schildwerte - schwer zu durchdringen.', base:{aluminium:5000, lithium:3000, electronics:400}, isDefense:true, attack:150, shield:500, hull:8000, requires:{shipyard:4, ionTech:4}},
-    plasmaTurret:{name:'Plasmawerfer', desc:'Stärkste konventionelle Verteidigungsanlage mit enormer Feuerkraft.', base:{aluminium:60000, rareEarths:45000, uranium:25000, compositeMaterial:3000}, isDefense:true, attack:3000, shield:300, hull:100000, requires:{shipyard:8, plasmaTech:7}},
+    plasmaTurret:{name:'Plasmawerfer', desc:'Stärkste konventionelle Verteidigungsanlage mit enormer Feuerkraft.', base:{aluminium:60000, rareEarths:45000, uranium:25000, precisionComponents:200}, isDefense:true, attack:3000, shield:300, hull:100000, requires:{shipyard:8, plasmaTech:7}},
     smallShield:{name:'Kleine Schildkuppel', desc:'Errichtet einen Schutzschild um den gesamten Planeten (nur einmal baubar).', base:{aluminium:12000, silver:8000, alloy:1500}, isDefense:true, unique:true, attack:1, shield:2000, hull:20000, requires:{shieldingTech:2}},
     largeShield:{name:'Große Schildkuppel', desc:'Mächtiger Schutzschild mit deutlich höherer Kapazität als die kleine Schildkuppel (nur einmal baubar).', base:{aluminium:60000, silver:40000, alloy:6000}, isDefense:true, unique:true, attack:1, shield:10000, hull:100000, requires:{shipyard:6, shieldingTech:6}},
     interplanetaryMissile:{name:'Interplanetare Rakete', desc:'Einweg-Fernwaffe gegen gegnerische Verteidigung in Reichweite des Raketensilos.', base:{iron:10000, sulfur:5000, steel:2000}, isDefense:true, attack:12000, shield:0, hull:1, requires:{missileSilo:4}},
@@ -132,7 +136,7 @@ const defs = {
     plasmaTech:{name:'Plasmatechnik', desc:'Grundlage für Plasmawaffen, die stärkste konventionelle Waffentechnologie.', base:{aluminium:2000, rareEarths:4200, uranium:800, compositeMaterial:300}, requires:{researchLab:4, energyTech:8, laserTech:10, ionTech:5}},
     gravitonTech:{name:'Gravitationstechnik', desc:'Extrem aufwendige Forschung, Voraussetzung für den Todesstern.', base:{}, requires:{researchLab:12}},
     astrophysics:{name:'Astrophysik', desc:'Erhöht die maximale Anzahl an Kolonien und gleichzeitigen Expeditionen.', base:{aluminium:5000, lithium:7000, crudeOil:4000, alloy:900}, requires:{researchLab:3, espionageTech:4, impulseDrive:3}},
-    intergalacticNetwork:{name:'Intergalaktisches Forschungsnetzwerk', desc:'Beschleunigt die Forschung durch ein Netzwerk verbundener Forschungslabore.', base:{aluminium:250000, rareEarths:400000, naturalGas:150000, electronics:20000}, requires:{researchLab:10, computerTech:8}},
+    intergalacticNetwork:{name:'Intergalaktisches Forschungsnetzwerk', desc:'Beschleunigt die Forschung durch ein Netzwerk verbundener Forschungslabore.', base:{aluminium:250000, rareEarths:400000, naturalGas:150000, machineParts:1500}, requires:{researchLab:10, computerTech:8}},
   },
   ships: {
     smallCargo:{name:'Kleiner Transporter', desc:'Günstiger Transporter für kleinere Ladungen.', cost:{iron:2500, aluminium:1500, steel:400}, cargo:5000, speed:1, fuel:12, attack:5, shield:10, hull:4000, role:'cargo', requires:{shipyard:2}},
@@ -148,7 +152,7 @@ const defs = {
     destroyer:{name:'Zerstörer', desc:'Schweres Kampfschiff, besonders effektiv gegen Bomber.', cost:{iron:65000, aluminium:45000, crudeOil:15000, alloy:6000}, cargo:2000, speed:0.7, fuel:100, attack:2000, shield:500, hull:110000, role:'combat', requires:{shipyard:9, hyperspaceTech:5, hyperspaceDrive:6}},
     reaper:{name:'Reaper', desc:'Elite-Kampfschiff mit enormer Feuerkraft und Hülle.', cost:{iron:85000, aluminium:50000, rareEarths:25000, machineParts:4000}, cargo:10000, speed:0.6, fuel:80, attack:2800, shield:700, hull:140000, role:'combat', requires:{shipyard:10, spaceDock:1, hyperspaceTech:6, hyperspaceDrive:7}},
     pathfinder:{name:'Pfadfinder', desc:'Schnelles, vielseitiges Schiff mit hoher Ladekapazität.', cost:{aluminium:10000, lithium:14000, crudeOil:7000, electronics:1500}, cargo:10000, speed:1.6, fuel:20, attack:200, shield:100, hull:23000, role:'combat', requires:{shipyard:5, spaceDock:1, hyperspaceDrive:2, hyperspaceTech:3}},
-    deathstar:{name:'Todesstern', desc:'Die mächtigste Waffe im Universum - extrem teuer und stark.', cost:{iron:4000000, aluminium:3000000, rareEarths:2000000, compositeMaterial:250000}, cargo:1000000, speed:0.4, fuel:1, attack:200000, shield:50000, hull:9000000, role:'combat', requires:{shipyard:12, hyperspaceTech:6, gravitonTech:1}},
+    deathstar:{name:'Todesstern', desc:'Die mächtigste Waffe im Universum - extrem teuer und stark.', cost:{iron:4000000, aluminium:3000000, rareEarths:2000000, precisionComponents:15000}, cargo:1000000, speed:0.4, fuel:1, attack:200000, shield:50000, hull:9000000, role:'combat', requires:{shipyard:12, hyperspaceTech:6, gravitonTech:1}},
     solarSatellite:{name:'Solarsatellit', desc:'Liefert zusätzliche Energie, kann sich nicht bewegen oder kämpfen.', cost:{silver:1800, crudeOil:700}, cargo:0, speed:0, fuel:0, attack:1, shield:1, hull:2000, role:'power', requires:{}},
     recycler:{name:'Recycler', desc:'Sammelt Trümmerfelder nach Schlachten ein.', cost:{iron:11000, aluminium:5000, crudeOil:2000, steel:800}, cargo:20000, speed:0.7, fuel:30, attack:1, shield:10, hull:16000, role:'recycler', requires:{shipyard:4, combustion:6}},
     researchProbe:{name:'Forschungssonde', desc:'Baugleich mit der Spionagesonde, ermöglicht aber bei Spionage gegen NPC-Kolonien den Diebstahl fremder Forschung.', cost:{lithium:1000, electronics:150}, cargo:5, speed:3, fuel:1, attack:0, shield:0, hull:1000, role:'research', requires:{shipyard:3, combustion:3}},
@@ -1126,16 +1130,30 @@ function viewFacilities(){ const p=active(); const facKeys = Object.entries(defs
 
 // Ist ein Fabrik-Rezept Tier 2 (verbraucht mind. ein anderes Industriegut statt nur
 // Rohstoffe)? Wird ueber die Rohstoffgruppe der Eingaben erkannt, kein Extra-Flag noetig.
-function isTier2Factory(d){ return Object.keys(d.recipe.inputsPerUnit).some(k=>RESOURCE_INFO[k].group==='goods'); }
+// Tiefe eines Fabrik-Rezepts: 1, wenn alle Eingaben reine Rohstoffe sind, sonst
+// 1 + die groesste Tiefe der Fabrik(en), die die verbrauchten Zwischenprodukte
+// herstellen. Ersetzt die alte isTier2Factory() (die nur "verbraucht irgendein
+// Gut" erkennen konnte und Tier 2/3 nicht mehr unterscheiden kann, sobald es
+// mehr als zwei Tiers gibt).
+function factoryTier(key){
+  const d = defs.buildings[key];
+  let maxInputTier = 0;
+  for(const inputKey of Object.keys(d.recipe.inputsPerUnit)){
+    const producer = FACTORY_KEYS.find(fk=>defs.buildings[fk].recipe.output===inputKey);
+    if(producer){ maxInputTier = Math.max(maxInputTier, factoryTier(producer)); }
+  }
+  return maxInputTier + 1;
+}
 function viewFactories(){
   const p=active(); const allFactories = Object.entries(defs.buildings).filter(([,d])=>d.factory);
   const isThrottled = ([k,d])=>{ const lvl=p.buildings[k]||0; if(!lvl) return false; return factoryThrottle(p,d.recipe,lvl).throttle<1; };
-  const tabs = [['all','Alle'],['tier1','Tier 1'],['tier2','Tier 2'],['bottleneck','Engpässe']];
+  const tabs = [['all','Alle'],['tier1','Tier 1'],['tier2','Tier 2'],['tier3','Tier 3'],['bottleneck','Engpässe']];
   const tabHtml = `<div class="subnav">${tabs.map(([id,label])=>`<button class="${state.factoryTab===id?'active':''}" data-factory-tab="${id}">${label}</button>`).join('')}</div>`;
 
   let shown = allFactories;
-  if(state.factoryTab==='tier1') shown = allFactories.filter(([,d])=>!isTier2Factory(d));
-  else if(state.factoryTab==='tier2') shown = allFactories.filter(([,d])=>isTier2Factory(d));
+  if(state.factoryTab==='tier1') shown = allFactories.filter(([k])=>factoryTier(k)===1);
+  else if(state.factoryTab==='tier2') shown = allFactories.filter(([k])=>factoryTier(k)===2);
+  else if(state.factoryTab==='tier3') shown = allFactories.filter(([k])=>factoryTier(k)===3);
   else if(state.factoryTab==='bottleneck') shown = allFactories.filter(isThrottled);
 
   const throttled = allFactories.filter(isThrottled);

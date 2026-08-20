@@ -17,6 +17,8 @@ const RESOURCE_KEYS = [
   'steel','electronics','plastic','alloy','concrete','batteryCells',
   // Tier 2 (aus Tier-1-Guetern):
   'machineParts','compositeMaterial',
+  // Tier 3 (aus Tier-2-Guetern + einem Rohstoff):
+  'precisionComponents',
 ];
 const RESOURCE_INFO = {
   iron: {name:'Eisen', group:'ore'},
@@ -45,6 +47,7 @@ const RESOURCE_INFO = {
   batteryCells: {name:'Batteriezellen', group:'goods'},
   machineParts: {name:'Maschinenteile', group:'goods'},
   compositeMaterial: {name:'Verbundwerkstoff', group:'goods'},
+  precisionComponents: {name:'Präzisionskomponenten', group:'goods'},
 };
 const RESOURCE_GROUPS = {
   ore: {name:'Erze', storageBuilding:'oreStorage'},
@@ -177,8 +180,10 @@ const defs = {
       recipe:{output:'machineParts', prod:l=>7*l*Math.pow(1.1,l), inputsPerUnit:{steel:2, electronics:1}}},
     compositePlant:{name:'Verbundstoffwerk', base:{alloy:800, plastic:400}, requires:{alloyFoundry:3, plasticsPlant:3}, powerUse:l=>16*l, factory:true,
       recipe:{output:'compositeMaterial', prod:l=>6*l*Math.pow(1.1,l), inputsPerUnit:{alloy:2, plastic:1}}},
+    precisionWorks:{name:'Präzisionswerk', base:{machineParts:1200, compositeMaterial:1200}, requires:{machineWorks:5, compositePlant:5}, powerUse:l=>20*l, factory:true,
+      recipe:{output:'precisionComponents', prod:l=>4*l*Math.pow(1.1,l), inputsPerUnit:{machineParts:2, compositeMaterial:2, rareEarths:5}}},
     researchLab:{name:'Forschungslabor', base:{copper:400, silver:440, electronics:150}},
-    naniteFactory:{name:'Nanitenfabrik', base:{nickel:900000, rareEarths:500000, uranium:200000, compositeMaterial:15000}, requires:{robotFactory:10, computerTech:10}, facility:true},
+    naniteFactory:{name:'Nanitenfabrik', base:{nickel:900000, rareEarths:500000, uranium:200000, precisionComponents:1000}, requires:{robotFactory:10, computerTech:10}, facility:true},
     // Kostet bewusst KEIN Holz: Holz kann erst NACH dem Terraformer ueberhaupt produziert
     // werden (Forstplantage erfordert terraformer:1) - sonst waere der erste Terraformer
     // eines jeden Spielers ein unaufloesbarer Henne-Ei-Zirkelschluss.
@@ -186,7 +191,7 @@ const defs = {
     allianceDepot:{name:'Allianzdepot', base:{limestone:30000, gold:30000, phosphate:5000, concrete:6000}, requires:{shipyard:3}, facility:true},
     missileSilo:{name:'Raketensilo', base:{iron:30000, sulfur:11000, steel:3000}, requires:{shipyard:1}, facility:true},
     sensorPhalanx:{name:'Sensorphalanx', base:{copper:30000, silver:35000, naturalGas:15000, electronics:6000}, requires:{naniteFactory:1}, moonOnly:true, facility:true},
-    jumpGate:{name:'Sprungtor', base:{aluminium:2000000, lithium:3500000, uranium:1300000, compositeMaterial:80000}, requires:{naniteFactory:1, hyperspaceTech:7}, moonOnly:true, facility:true},
+    jumpGate:{name:'Sprungtor', base:{aluminium:2000000, lithium:3500000, uranium:1300000, precisionComponents:5000}, requires:{naniteFactory:1, hyperspaceTech:7}, moonOnly:true, facility:true},
     lunarBase:{name:'Lunarbasis', base:{limestone:40000, aluminium:40000, concrete:10000}, requires:{}, moonOnly:true, facility:true},
 
     // ---- Verteidigung ----
@@ -195,7 +200,7 @@ const defs = {
     heavyLaser:{name:'Schweres Laser-Geschütz', base:{iron:5500, silver:2500, electronics:600}, isDefense:true, attack:250, shield:100, hull:8000, requires:{shipyard:4, energyTech:3}},
     gaussCannon:{name:'Gauß-Kanone', base:{iron:22000, silver:11000, naturalGas:4000, machineParts:800}, isDefense:true, attack:1100, shield:200, hull:35000, requires:{shipyard:6, weaponsTech:3, shieldingTech:1, energyTech:6}},
     ionCannon:{name:'Ionenkanone', base:{aluminium:5000, lithium:3000, electronics:400}, isDefense:true, attack:150, shield:500, hull:8000, requires:{shipyard:4, ionTech:4}},
-    plasmaTurret:{name:'Plasmawerfer', base:{aluminium:60000, rareEarths:45000, uranium:25000, compositeMaterial:3000}, isDefense:true, attack:3000, shield:300, hull:100000, requires:{shipyard:8, plasmaTech:7}},
+    plasmaTurret:{name:'Plasmawerfer', base:{aluminium:60000, rareEarths:45000, uranium:25000, precisionComponents:200}, isDefense:true, attack:3000, shield:300, hull:100000, requires:{shipyard:8, plasmaTech:7}},
     smallShield:{name:'Kleine Schildkuppel', base:{aluminium:12000, silver:8000, alloy:1500}, isDefense:true, unique:true, attack:1, shield:2000, hull:20000, requires:{shieldingTech:2}},
     largeShield:{name:'Große Schildkuppel', base:{aluminium:60000, silver:40000, alloy:6000}, isDefense:true, unique:true, attack:1, shield:10000, hull:100000, requires:{shipyard:6, shieldingTech:6}},
     interplanetaryMissile:{name:'Interplanetare Rakete', base:{iron:10000, sulfur:5000, steel:2000}, isDefense:true, attack:12000, shield:0, hull:1, requires:{missileSilo:4}},
@@ -216,7 +221,7 @@ const defs = {
     plasmaTech:{name:'Plasmatechnik', base:{aluminium:2000, rareEarths:4200, uranium:800, compositeMaterial:300}, requires:{researchLab:4, energyTech:8, laserTech:10, ionTech:5}},
     gravitonTech:{name:'Gravitationstechnik', base:{}, requires:{researchLab:12}},
     astrophysics:{name:'Astrophysik', base:{aluminium:5000, lithium:7000, crudeOil:4000, alloy:900}, requires:{researchLab:3, espionageTech:4, impulseDrive:3}},
-    intergalacticNetwork:{name:'Intergalaktisches Forschungsnetzwerk', base:{aluminium:250000, rareEarths:400000, naturalGas:150000, electronics:20000}, requires:{researchLab:10, computerTech:8}},
+    intergalacticNetwork:{name:'Intergalaktisches Forschungsnetzwerk', base:{aluminium:250000, rareEarths:400000, naturalGas:150000, machineParts:1500}, requires:{researchLab:10, computerTech:8}},
   },
   ships: {
     smallCargo:{name:'Kleiner Transporter', cost:{iron:2500, aluminium:1500, steel:400}, cargo:5000, speed:1, fuel:12, attack:5, shield:10, hull:4000, role:'cargo', requires:{shipyard:2}},
@@ -236,7 +241,7 @@ const defs = {
     destroyer:{name:'Zerstörer', cost:{iron:65000, aluminium:45000, crudeOil:15000, alloy:6000}, cargo:2000, speed:0.7, fuel:100, attack:2000, shield:500, hull:110000, role:'combat', requires:{shipyard:9, hyperspaceTech:5, hyperspaceDrive:6}},
     reaper:{name:'Reaper', cost:{iron:85000, aluminium:50000, rareEarths:25000, machineParts:4000}, cargo:10000, speed:0.6, fuel:80, attack:2800, shield:700, hull:140000, role:'combat', requires:{shipyard:10, spaceDock:1, hyperspaceTech:6, hyperspaceDrive:7}},
     pathfinder:{name:'Pfadfinder', cost:{aluminium:10000, lithium:14000, crudeOil:7000, electronics:1500}, cargo:10000, speed:1.6, fuel:20, attack:200, shield:100, hull:23000, role:'combat', requires:{shipyard:5, spaceDock:1, hyperspaceDrive:2, hyperspaceTech:3}},
-    deathstar:{name:'Todesstern', cost:{iron:4000000, aluminium:3000000, rareEarths:2000000, compositeMaterial:250000}, cargo:1000000, speed:0.4, fuel:1, attack:200000, shield:50000, hull:9000000, role:'combat', requires:{shipyard:12, hyperspaceTech:6, gravitonTech:1}},
+    deathstar:{name:'Todesstern', cost:{iron:4000000, aluminium:3000000, rareEarths:2000000, precisionComponents:15000}, cargo:1000000, speed:0.4, fuel:1, attack:200000, shield:50000, hull:9000000, role:'combat', requires:{shipyard:12, hyperspaceTech:6, gravitonTech:1}},
     solarSatellite:{name:'Solarsatellit', cost:{silver:1800, crudeOil:700}, cargo:0, speed:0, fuel:0, attack:1, shield:1, hull:2000, role:'power', requires:{}},
     recycler:{name:'Recycler', cost:{iron:11000, aluminium:5000, crudeOil:2000, steel:800}, cargo:20000, speed:0.7, fuel:30, attack:1, shield:10, hull:16000, role:'recycler', requires:{shipyard:4, combustion:6}},
     researchProbe:{name:'Forschungssonde', cost:{lithium:1000, electronics:150}, cargo:5, speed:3, fuel:1, attack:0, shield:0, hull:1000, role:'research', requires:{shipyard:3, combustion:3}},
