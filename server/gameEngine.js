@@ -179,15 +179,16 @@ const defs = {
     machineWorks:{name:'Maschinenbauwerk', base:{steel:800, electronics:400}, requires:{steelMill:3, electronicsFactory:3}, powerUse:l=>16*l, factory:true,
       recipe:{output:'machineParts', prod:l=>7*l*Math.pow(1.1,l), inputsPerUnit:{steel:2, electronics:1}}},
     compositePlant:{name:'Verbundstoffwerk', base:{alloy:800, plastic:400}, requires:{alloyFoundry:3, plasticsPlant:3}, powerUse:l=>16*l, factory:true,
-      recipe:{output:'compositeMaterial', prod:l=>6*l*Math.pow(1.1,l), inputsPerUnit:{alloy:2, plastic:1}}},
+      recipe:{output:'compositeMaterial', prod:l=>6*l*Math.pow(1.1,l), inputsPerUnit:{alloy:2, plastic:1, wood:1}}},
     precisionWorks:{name:'Präzisionswerk', base:{machineParts:1200, compositeMaterial:1200}, requires:{machineWorks:5, compositePlant:5}, powerUse:l=>20*l, factory:true,
       recipe:{output:'precisionComponents', prod:l=>4*l*Math.pow(1.1,l), inputsPerUnit:{machineParts:2, compositeMaterial:2, rareEarths:5}}},
+    // ---- Sonstige Einrichtungen ----
     researchLab:{name:'Forschungslabor', base:{copper:400, silver:440, electronics:150}},
     naniteFactory:{name:'Nanitenfabrik', base:{nickel:900000, rareEarths:500000, uranium:200000, precisionComponents:1000}, requires:{robotFactory:10, computerTech:10}, facility:true},
     // Kostet bewusst KEIN Holz: Holz kann erst NACH dem Terraformer ueberhaupt produziert
     // werden (Forstplantage erfordert terraformer:1) - sonst waere der erste Terraformer
     // eines jeden Spielers ein unaufloesbarer Henne-Ei-Zirkelschluss.
-    terraformer:{name:'Terraformer', base:{lithium:90000, freshwater:85000, concrete:8000}, requires:{naniteFactory:1, energyTech:12}, facility:true},
+    terraformer:{name:'Terraformer', base:{lithium:20000, freshwater:5000, concrete:8000}, requires:{naniteFactory:1, energyTech:12}, facility:true},
     allianceDepot:{name:'Allianzdepot', base:{limestone:30000, gold:30000, phosphate:5000, concrete:6000}, requires:{shipyard:3}, facility:true},
     missileSilo:{name:'Raketensilo', base:{iron:30000, sulfur:11000, steel:3000}, requires:{shipyard:1}, facility:true},
     sensorPhalanx:{name:'Sensorphalanx', base:{copper:30000, silver:35000, naturalGas:15000, electronics:6000}, requires:{naniteFactory:1}, moonOnly:true, facility:true},
@@ -1040,8 +1041,8 @@ function enqueueBuild(state, planetIndex, key){
   const cost = buildingCost(state, costBaseFor(def,p), lvl);
   if(!hasRes(p,cost)) return fail(state, 'Nicht genug Ressourcen für '+def.name);
   spend(p,cost);
-  const secs = Math.max(8, Math.round(resTotal(cost)/(250*(1+p.buildings.robotFactory))));
-  p.buildQueue.push({type:'building', key, name:def.name, done:Date.now()+secs*1000});
+  const secs = Math.max(8*lvl, Math.round(resTotal(cost)/(250*(1+p.buildings.robotFactory))));
+  p.buildQueue.push({type:'building', key, name:def.name, level:lvl, done:Date.now()+secs*1000});
   return ok(state, def.name+' Stufe '+lvl+' gestartet');
 }
 function enqueueResearch(state, planetIndex, key){
@@ -1053,8 +1054,8 @@ function enqueueResearch(state, planetIndex, key){
   const cost = scaledCost(def.base, lvl);
   if(!hasRes(p,cost)) return fail(state, 'Nicht genug Ressourcen für '+def.name);
   spend(p,cost);
-  const secs = Math.max(12, Math.round(resTotal(cost)/(220*(1+p.buildings.researchLab))*technocratSpeed(state)*networkSpeed(p)));
-  p.researchQueue.push({type:'research', key, name:def.name, done:Date.now()+secs*1000});
+  const secs = Math.max(12*lvl, Math.round(resTotal(cost)/(220*(1+p.buildings.researchLab))*technocratSpeed(state)*networkSpeed(p)));
+  p.researchQueue.push({type:'research', key, name:def.name, level:lvl, done:Date.now()+secs*1000});
   return ok(state, def.name+' Stufe '+lvl+' gestartet');
 }
 function enqueueShip(state, planetIndex, key){
@@ -1219,7 +1220,7 @@ function enqueueMoonBuild(state, planetIndex, moonIndex, key){
   if(!hasRes(p,cost)) return fail(state, 'Nicht genug Ressourcen auf dem Heimatplaneten für '+def.name);
   spend(p,cost);
   const secs = Math.max(10, Math.round(resTotal(cost)/300));
-  m.buildQueue.push({key, name:def.name, done:Date.now()+secs*1000});
+  m.buildQueue.push({key, name:def.name, level:lvl, done:Date.now()+secs*1000});
   return ok(state, def.name+' auf Mond gestartet (Kosten vom gewählten Planeten)');
 }
 function jumpGateReady(m){ return (m.buildings.jumpGate||0) >= 1; }

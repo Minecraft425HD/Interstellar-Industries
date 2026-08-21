@@ -25,6 +25,9 @@ const RESOURCE_GROUPS = {
   fuel: {name:'Energieträger', storageBuilding:'fuelStorage'}, special: {name:'Sonderrohstoffe', storageBuilding:'resourceStorage'},
   water: {name:'Wasser', storageBuilding:'resourceStorage'}, goods: {name:'Industriegüter', storageBuilding:'goodsStorage'},
 };
+// Gemeinsame Gruppierungsreihenfolge fuer Topbar (renderTop) und Uebersicht (viewOverview) -
+// vorher hatte jede Stelle ihre eigene (teils unvollstaendige, 'goods' fehlte) Sortierung.
+const RESOURCE_GROUP_ORDER = ['ore','tech','fuel','special','water','goods'];
 const PLANET_TYPES = {
   rocky: {name:'Gesteinsplanet', desc:'Fester, mineralreicher Untergrund - der Standard-Planetentyp für Heimatwelten.', resources:['iron','copper','aluminium','nickel','limestone']},
   desert: {name:'Wüstenplanet', desc:'Heiß, trocken, geologisch alt - reich an Edelmetallen und radioaktiven Ablagerungen.', resources:['gold','silver','uranium','rareEarths','sulfur','phosphate']},
@@ -98,13 +101,14 @@ const defs = {
       recipe:{output:'batteryCells', prod:l=>8*l*Math.pow(1.1,l), inputsPerUnit:{lithium:2, sulfur:1}}},
     machineWorks:{name:'Maschinenbauwerk', desc:'Fertigt aus Stahl und Elektronik komplexe Maschinenteile (Tier 2).', base:{steel:800, electronics:400}, requires:{steelMill:3, electronicsFactory:3}, powerUse:l=>16*l, factory:true,
       recipe:{output:'machineParts', prod:l=>7*l*Math.pow(1.1,l), inputsPerUnit:{steel:2, electronics:1}}},
-    compositePlant:{name:'Verbundstoffwerk', desc:'Verbindet Legierung und Kunststoff zu hochfesten Verbundwerkstoffen (Tier 2).', base:{alloy:800, plastic:400}, requires:{alloyFoundry:3, plasticsPlant:3}, powerUse:l=>16*l, factory:true,
-      recipe:{output:'compositeMaterial', prod:l=>6*l*Math.pow(1.1,l), inputsPerUnit:{alloy:2, plastic:1}}},
+    compositePlant:{name:'Verbundstoffwerk', desc:'Verbindet Legierung, Kunststoff und Holz zu hochfesten Verbundwerkstoffen (Tier 2).', base:{alloy:800, plastic:400}, requires:{alloyFoundry:3, plasticsPlant:3}, powerUse:l=>16*l, factory:true,
+      recipe:{output:'compositeMaterial', prod:l=>6*l*Math.pow(1.1,l), inputsPerUnit:{alloy:2, plastic:1, wood:1}}},
     precisionWorks:{name:'Präzisionswerk', desc:'Kombiniert Maschinenteile, Verbundwerkstoff und Seltene Erden zu hochpräzisen Komponenten für die fortschrittlichste Technologie (Tier 3).', base:{machineParts:1200, compositeMaterial:1200}, requires:{machineWorks:5, compositePlant:5}, powerUse:l=>20*l, factory:true,
       recipe:{output:'precisionComponents', prod:l=>4*l*Math.pow(1.1,l), inputsPerUnit:{machineParts:2, compositeMaterial:2, rareEarths:5}}},
+    // ---- Sonstige Einrichtungen ----
     researchLab:{name:'Forschungslabor', desc:'Ermöglicht das Erforschen neuer Technologien und beschleunigt laufende Forschung.', base:{copper:400, silver:440, electronics:150}, },
     naniteFactory:{name:'Nanitenfabrik', desc:'Hochentwickelte Fertigungsanlage, Voraussetzung für die fortschrittlichsten Bauten.', base:{nickel:900000, rareEarths:500000, uranium:200000, precisionComponents:1000}, requires:{robotFactory:10, computerTech:10}, facility:true},
-    terraformer:{name:'Terraformer', desc:'Formt die Planetenoberfläche um, schafft eine künstliche Biosphäre und ermöglicht den Holzanbau. Erfordert vor allem Süßwasser.', base:{lithium:90000, freshwater:85000, concrete:8000}, requires:{naniteFactory:1, energyTech:12}, facility:true},
+    terraformer:{name:'Terraformer', desc:'Formt die Planetenoberfläche um, schafft eine künstliche Biosphäre und ermöglicht den Holzanbau. Erfordert vor allem Lithium und Süßwasser.', base:{lithium:20000, freshwater:5000, concrete:8000}, requires:{naniteFactory:1, energyTech:12}, facility:true},
     allianceDepot:{name:'Allianzdepot', desc:'Lagerplatz für Ressourcen, die der Allianz zur Verfügung gestellt werden.', base:{limestone:30000, gold:30000, phosphate:5000, concrete:6000}, requires:{shipyard:3}, facility:true},
     missileSilo:{name:'Raketensilo', desc:'Lagert und startet interplanetare Raketen zum Fernangriff auf gegnerische Verteidigung.', base:{iron:30000, sulfur:11000, steel:3000}, requires:{shipyard:1}, facility:true},
     sensorPhalanx:{name:'Sensorphalanx', desc:'Ermöglicht die Überwachung fremder Systeme von einem Mond aus.', base:{copper:30000, silver:35000, naturalGas:15000, electronics:6000}, requires:{naniteFactory:1}, moonOnly:true, facility:true},
@@ -281,26 +285,37 @@ function openInfoModal(type, key, level){
   if(isLeveled){
     const curLevel = level||0;
     const hasEffect = levelEffectText(d, key, curLevel+1)!=null;
+    const showTime = (type==='building' || type==='research') && p;
     const rows = [];
     for(let lvl=curLevel+1; lvl<=curLevel+10; lvl++){
       const base = (type==='building' && p) ? costBaseFor(d, p) : d.base;
       const cost = (type==='research'||type==='lifeformBuilding') ? scaledCost(base, lvl) : buildingCost(base, lvl);
       const effect = levelEffectText(d, key, lvl);
-      rows.push(`<tr><td>${lvl}</td><td class="info-modal-cost">${resCostText(cost)}</td>${hasEffect?`<td class="info-modal-effect">${effect||''}</td>`:''}</tr>`);
+      const timeCell = showTime ? `<td>${formatDuration(buildSeconds(type==='research'?'research':'building', cost, p, lvl)*1000)}</td>` : '';
+      rows.push(`<tr><td>${lvl}</td><td class="info-modal-cost">${resCostText(cost)}</td>${timeCell}${hasEffect?`<td class="info-modal-effect">${effect||''}</td>`:''}</tr>`);
     }
     levelTableHtml = `<div class="info-modal-subhead">Aktuelle Stufe: ${curLevel} · Kosten &amp; Effekt nächste 10 Stufen</div>
       <div class="info-modal-scroll"><table class="info-modal-table info-modal-leveltable">
-        <thead><tr><th>Stufe</th><th>Kosten</th>${hasEffect?'<th>Effekt</th>':''}</tr></thead>
+        <thead><tr><th>Stufe</th><th>Kosten</th>${showTime?'<th>Bauzeit</th>':''}${hasEffect?'<th>Effekt</th>':''}</tr></thead>
         <tbody>${rows.join('')}</tbody>
       </table></div>`;
     if(d.resource){
-      const types = planetTypesForResource(d.resource).map(t=>PLANET_TYPES[t].name).join(', ');
-      statsRows.push(['Planetentyp', types || 'nur nach Terraformierung']);
+      const availableTypes = planetTypesForResource(d.resource);
+      const onCurrentPlanet = availableTypes.length===0 || (p && availableTypes.includes(p.planetType));
+      let val = availableTypes.length ? availableTypes.map(t=>PLANET_TYPES[t].name).join(', ') : 'nur nach Terraformierung';
+      if(!onCurrentPlanet) val += ' · nicht auf diesem Planeten - alternativ Marktplatz oder Söldnerhändler';
+      statsRows.push(['Planetentyp', val]);
     }
     if(d.requires && Object.keys(d.requires).length) statsRows.push(['Voraussetzung', requirementText(d.requires)]);
   } else {
     const cost = d.cost || d.base;
     if(cost) statsRows.push(['Kosten', resCostText(cost)]);
+    if(cost && p){
+      const isDefenseItem = type==='building' && d.isDefense;
+      let timeCost = cost;
+      if(isDefenseItem){ const disc=commanderDiscount(); timeCost={}; for(const k of RESOURCE_KEYS) timeCost[k]=Math.floor((cost[k]||0)*disc); }
+      statsRows.push(['Bauzeit', formatDuration(buildSeconds(isDefenseItem?'defense':'ship', timeCost, p, 1)*1000)]);
+    }
     if(d.attack!=null) statsRows.push(['Angriff', fmt(d.attack)]);
     if(d.shield!=null) statsRows.push(['Schild', fmt(d.shield)]);
     if(d.hull!=null) statsRows.push(['Hülle', fmt(d.hull)]);
@@ -421,6 +436,16 @@ function commanderDiscount(){ return officerActive('commander') ? 0.95 : 1.0; }
 function technocratSpeed(){ return officerActive('technocrat') ? 0.85 : 1.0; }
 function pathfinderBonus(shipMap){ return (shipMap && shipMap.pathfinder>0) ? 1.1 : 1.0; }
 function networkSpeed(p){ const lvl=(p.research.intergalacticNetwork)||0; return Math.max(0.5, 1-0.02*lvl); }
+// Client-Spiegel der 4 Bauzeit-Formeln aus enqueueBuild/enqueueResearch/enqueueShip/
+// enqueueDefense im Server (server/gameEngine.js) - fuer die Bauzeit-Vorschau im Info-Modal.
+function buildSeconds(kind, cost, p, lvl){
+  const total = resTotal(cost);
+  if(kind==='building') return Math.max(8*lvl, Math.round(total/(250*(1+p.buildings.robotFactory))));
+  if(kind==='research') return Math.max(12*lvl, Math.round(total/(220*(1+p.buildings.researchLab))*technocratSpeed()*networkSpeed(p)));
+  if(kind==='ship') return Math.max(6, Math.round(total/(300*(1+p.buildings.shipyard))));
+  if(kind==='defense') return Math.max(5, Math.round(total/(300*(1+p.buildings.shipyard))));
+  return 0;
+}
 function maxColonies(p){ const lvl=(p.research.astrophysics)||0; return 1+Math.floor((lvl+1)/2); }
 function maxExpeditions(p){ const lvl=(p.research.astrophysics)||0; return 1+Math.floor(lvl/2); }
 function viewInteractionActive(){
@@ -1086,15 +1111,16 @@ function renderTop(){
   // einen Blick sehen, nicht nur das, was der aktuelle Planet selbst abbaut.
   // Die "0/h"-Zeile wird weggelassen, wenn gerade nichts produziert wird (bei 18 Rohstoffen
   // meist der Großteil) - spart eine Zeile pro Chip und haelt die Leiste kompakter.
-  const resHtml = RESOURCE_KEYS.map(k=>`<div class="res-item"><span class="res-label">${RESOURCE_INFO[k].name}</span><span>${fmt(p.resources[k]||0)}</span>${inc[k]?`<span class="rate">${fmt1(inc[k])}/h</span>`:''}</div>`).join('');
+  const orderedKeys = RESOURCE_GROUP_ORDER.flatMap(g=>RESOURCE_KEYS.filter(k=>RESOURCE_INFO[k].group===g));
+  const resHtml = orderedKeys.map(k=>`<div class="res-item"><span class="res-label">${RESOURCE_INFO[k].name}</span><span>${fmt(p.resources[k]||0)}</span>${inc[k]?`<span class="rate">${fmt1(inc[k])}/h</span>`:''}</div>`).join('');
   $('#resourcesTop').innerHTML = resHtml + `<div class="res-item"><span class="res-label">Energie</span><span id="energyTop">${fmt(e.prod)}</span><span class="rate" id="energyUse">${fmt(e.use)} genutzt</span></div>`;
 }
 function renderSide(){
   $('#planetTabs').innerHTML = state.planets.map((p,i)=>p.destroyed?'':`<button class="pill ${state.activePlanet===i?'active':''}" data-planet="${i}">${p.name}</button>`).join('');
   document.querySelectorAll('[data-planet]').forEach(b=>b.onclick=()=>{state.activePlanet=Number(b.dataset.planet); render();});
   const p=active(); if(!p) return; const qs=[];
-  p.buildQueue.forEach(q=>qs.push(`<div class="queue-item">Bau · ${q.name}<br><span class="small">${secsLeft(q.done)} s</span></div>`));
-  p.researchQueue.forEach(q=>qs.push(`<div class="queue-item">Forschung · ${q.name}<br><span class="small">${secsLeft(q.done)} s</span></div>`));
+  p.buildQueue.forEach(q=>qs.push(`<div class="queue-item">Bau · ${q.name}${q.level?` (Stufe ${q.level})`:''}<br><span class="small">${secsLeft(q.done)} s</span></div>`));
+  p.researchQueue.forEach(q=>qs.push(`<div class="queue-item">Forschung · ${q.name}${q.level?` (Stufe ${q.level})`:''}<br><span class="small">${secsLeft(q.done)} s</span></div>`));
   p.shipQueue.forEach(q=>qs.push(`<div class="queue-item">Werft · ${q.name}<br><span class="small">${secsLeft(q.done)} s</span></div>`));
   $('#queues').innerHTML = qs.join('') || '<div class="small">Keine aktiven Aufträge.</div>';
   $('#fleetMovements').innerHTML = state.fleets.map(f=>`<div class="queue-item">${missionLabels[f.mission]} ${state.planets[f.from]?state.planets[f.from].name:'?'} → ${coordLinkHtml(f.toCoord)}<br><span class="small">${f.phase==='outbound'?'Ankunft':'Rückflug'} in ${secsLeft(f.phase==='outbound'?f.arrive:f.returnAt)} s</span></div>`).join('') || '<div class="small">Keine Flotten unterwegs.</div>';
@@ -1107,8 +1133,7 @@ function viewOverview(){ const p=active(), e=energyStats(p), inc=hourly(p), cap=
   // Zeigt JEDEN Rohstoff, den der Planet abbaut, produziert ODER (z.B. durch Handel) tatsaechlich
   // auf Lager hat - nicht nur die zum Planetentyp "heimischen" Rohstoffe wie zuvor.
   const relevant = RESOURCE_KEYS.filter(k=>planetType.resources.includes(k) || (p.resources[k]||0)>0 || (inc[k]||0)!==0);
-  const groupOrder = ['ore','tech','fuel','special','water'];
-  const groupCards = groupOrder.filter(g=>relevant.some(k=>RESOURCE_INFO[k].group===g)).map(g=>{
+  const groupCards = RESOURCE_GROUP_ORDER.filter(g=>relevant.some(k=>RESOURCE_INFO[k].group===g)).map(g=>{
     const rows = relevant.filter(k=>RESOURCE_INFO[k].group===g).map(k=>`<div class="row"><div><strong>${RESOURCE_INFO[k].name}</strong></div><div>${fmt(p.resources[k]||0)} / ${fmt(cap[k])}<span class="small" style="margin-left:6px">${fmt1(inc[k]||0)}/h</span></div></div>`).join('');
     return `<div class="card"><h3>${RESOURCE_GROUPS[g].name}</h3><div class="list">${rows}</div></div>`;
   }).join('');
@@ -1124,7 +1149,19 @@ function viewOverview(){ const p=active(), e=energyStats(p), inc=hourly(p), cap=
   <div style="height:16px"></div>
   <div class="card"><h3>Flottenstatus</h3><div class="list">${Object.entries(p.ships).filter(([k])=>defs.ships[k]).map(([k,v])=>`<div class="row"><div><strong>${defs.ships[k].name}</strong></div><div>${fmt(v)}</div></div>`).join('')}</div></div>`; }
 
-function viewBuildings(){ const p=active(); const buildable = Object.entries(defs.buildings).filter(([,d])=>!d.isDefense && !d.facility && (!d.resource || planetTypesForResource(d.resource).includes(p.planetType) || d.resource==='wood')); return `<h2>Gebäude</h2><div class="list">${buildable.map(([k,d])=>{ const lvl=(p.buildings[k]||0)+1; const c=buildingCost(costBaseFor(d,p),lvl); const ok=meetsRequirements(p,d.requires); return `<div class="row"><div><strong>${d.name}</strong><div class="sub">Stufe ${p.buildings[k]||0}</div><div class="sub">Kosten: ${resCostText(c)}</div>${!ok?`<div class="sub warn-text">Benötigt: ${requirementText(d.requires)}</div>`:''}</div><div style="display:flex;gap:6px;align-items:center">${infoIconHtml('building',k,p.buildings[k]||0)}<button class="btn" data-build="${k}" ${ok?'':'disabled'}>Ausbauen</button></div></div>`; }).join('')}</div>`; }
+function viewBuildings(){
+  const p=active();
+  const planetType = PLANET_TYPES[p.planetType]||PLANET_TYPES.rocky;
+  const buildable = Object.entries(defs.buildings).filter(([,d])=>!d.isDefense && !d.facility && !d.factory);
+  return `<h2>Gebäude</h2><div class="list">${buildable.map(([k,d])=>{
+    const lvl=(p.buildings[k]||0)+1;
+    const c=buildingCost(costBaseFor(d,p),lvl);
+    const ok=meetsRequirements(p,d.requires);
+    const typeOk = !d.resource || planetTypesForResource(d.resource).includes(p.planetType) || d.resource==='wood';
+    const typeHint = !typeOk ? `<div class="sub warn-text">Nicht auf ${planetType.name} abbaubar - vorkommend auf: ${planetTypesForResource(d.resource).map(t=>PLANET_TYPES[t].name).join(', ')}. Alternativ: Marktplatz oder Söldnerhändler.</div>` : '';
+    return `<div class="row"><div><strong>${d.name}</strong><div class="sub">Stufe ${p.buildings[k]||0}</div><div class="sub">Kosten: ${resCostText(c)}</div>${typeHint}${!ok?`<div class="sub warn-text">Benötigt: ${requirementText(d.requires)}</div>`:''}</div><div style="display:flex;gap:6px;align-items:center">${infoIconHtml('building',k,p.buildings[k]||0)}<button class="btn" data-build="${k}" ${ok&&typeOk?'':'disabled'}>Ausbauen</button></div></div>`;
+  }).join('')}</div>`;
+}
 
 function viewFacilities(){ const p=active(); const facKeys = Object.entries(defs.buildings).filter(([,d])=>d.facility && !d.moonOnly); return `<h2>Anlagen</h2><div class="list">${facKeys.map(([k,d])=>{ const lvl=(p.buildings[k]||0)+1; const c=buildingCost(costBaseFor(d,p),lvl); const ok=meetsRequirements(p,d.requires); return `<div class="row"><div><strong>${d.name}</strong><div class="sub">Stufe ${p.buildings[k]||0}</div><div class="sub">Kosten: ${resCostText(c)}</div>${!ok?`<div class="sub warn-text">Benötigt: ${requirementText(d.requires)}</div>`:''}</div><div style="display:flex;gap:6px;align-items:center">${infoIconHtml('building',k,p.buildings[k]||0)}<button class="btn alt" data-build="${k}" ${ok?'':'disabled'}>Ausbauen</button></div></div>`; }).join('')}</div>`; }
 
@@ -1318,7 +1355,7 @@ function viewMoons(){
   let detail = '<div class="small">Wähle oben einen Mond aus.</div>';
   if(m){
     const buildRows = moonKeys.map(k=>{ const def=defs.buildings[k]; const lvl=(m.buildings[k]||0)+1; const c=scaledCost(def.base, lvl); return `<div class="row"><div><strong>${def.name}</strong><div class="sub">Stufe ${m.buildings[k]||0}</div><div class="sub">Kosten (vom gewählten Planeten): ${resCostText(c)}</div></div><button class="btn alt" data-moon-build="${k}">Ausbauen</button></div>`; }).join('');
-    const queueRows = m.buildQueue.map(q=>`<div class="queue-item">${q.name}<br><span class="small">${secsLeft(q.done)} s</span></div>`).join('') || '<div class="small">Keine aktiven Mondbauten.</div>';
+    const queueRows = m.buildQueue.map(q=>`<div class="queue-item">${q.name}${q.level?` (Stufe ${q.level})`:''}<br><span class="small">${secsLeft(q.done)} s</span></div>`).join('') || '<div class="small">Keine aktiven Mondbauten.</div>';
     const otherMoons = state.moons.filter((mm,i)=>i!==state.activeMoonIndex);
     const jumpForm = otherMoons.length ? `<form id="jumpGateForm" class="fleet-form">
       <label>Zielmond<select name="targetMoon">${state.moons.map((mm,i)=> i!==state.activeMoonIndex ? `<option value="${i}">${coordStr(mm.coord)}</option>` : '').join('')}</select></label>
