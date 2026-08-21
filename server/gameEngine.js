@@ -1086,6 +1086,11 @@ function enqueueBuild(state, planetIndex, key){
   if(!def) return fail(state, 'Unbekanntes Gebäude');
   if(!meetsPlanetType(p, def)) return fail(state, def.name+' kann auf diesem Planetentyp ('+PLANET_TYPES[p.planetType].name+') nicht gebaut werden');
   if(!meetsRequirements(p, def.requires)) return fail(state, def.name+' benötigt: '+requirementText(def.requires));
+  // Gebaeude/Anlagen/Fabriken sind einstufig - waehrend eine Stufe bereits in der Warteschlange
+  // steht, wuerde ein zweiter Klick denselben lvl (p.buildings[key]+1) nochmal berechnen und
+  // Ressourcen fuer eine faelschlich doppelt ausgewiesene Stufe abbuchen. Anders als bei
+  // Schiffen/Verteidigung (dort ist Mehrfachbau gewollt) wird das hier serverseitig blockiert.
+  if(p.buildQueue.some(q=>q.key===key)) return fail(state, def.name+' wird bereits gebaut');
   const lvl = p.buildings[key]+1;
   const cost = buildingCost(state, costBaseFor(def,p), lvl);
   if(!hasRes(p,cost)) return fail(state, 'Nicht genug Ressourcen für '+def.name);
@@ -1099,6 +1104,7 @@ function enqueueResearch(state, planetIndex, key){
   const def = defs.research[key];
   if(!def) return fail(state, 'Unbekannte Forschung');
   if(!meetsRequirements(p, def.requires)) return fail(state, def.name+' benötigt: '+requirementText(def.requires));
+  if(p.researchQueue.some(q=>q.key===key)) return fail(state, def.name+' wird bereits erforscht');
   const lvl = p.research[key]+1;
   const cost = scaledCost(def.base, lvl);
   if(!hasRes(p,cost)) return fail(state, 'Nicht genug Ressourcen für '+def.name);
@@ -1263,6 +1269,7 @@ function enqueueMoonBuild(state, planetIndex, moonIndex, key){
   if(!m) return fail(state, 'Kein Mond ausgewählt');
   const def = defs.buildings[key];
   if(!def) return fail(state, 'Unbekanntes Mondgebäude');
+  if(m.buildQueue.some(q=>q.key===key)) return fail(state, def.name+' wird bereits gebaut');
   const lvl = (m.buildings[key]||0)+1;
   const cost = scaledCost(def.base, lvl);
   const p = requirePlanet(state, planetIndex);
