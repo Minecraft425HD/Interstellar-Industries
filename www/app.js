@@ -249,7 +249,8 @@ const state = {
   username: null,
   isAdmin: false,
   adminMode: false,
-  factoryTab: 'all'
+  factoryTab: 'all',
+  buildingTab: 'all'
 };
 
 const UNIVERSE = { galaxies: 9, systems: 499, positions: 15 };
@@ -1133,7 +1134,7 @@ function computePoints(p){
 }
 function totalPlayerPoints(){ return Math.floor(state.planets.filter(p=>!p.destroyed).reduce((s,p)=>s+computePoints(p),0)/1000); }
 
-const navItems = [['overview','Übersicht'],['buildings','Gebäude'],['facilities','Anlagen'],['factories','Fabriken'],['defense','Verteidigung'],['resources','Ressourcen'],['research','Forschung'],['shipyard','Werft'],['fleet','Flotte'],['expeditions','Expeditionen'],['galaxy','Galaxie'],['moons','Monde'],['alliance','Allianz'],['officers','Offiziere'],['lifeform','Lebensform'],['market','Markt'],['reports','Berichte'],['messages','Nachrichten'],['empire','Imperium'],['highscore','Rangliste'],['settings','Einstellungen']];
+const navItems = [['overview','Übersicht'],['buildings','Gebäude'],['facilities','Anlagen'],['factories','Fabriken'],['defense','Verteidigung'],['research','Forschung'],['shipyard','Werft'],['fleet','Flotte'],['expeditions','Expeditionen'],['galaxy','Galaxie'],['moons','Monde'],['alliance','Allianz'],['officers','Offiziere'],['lifeform','Lebensform'],['market','Markt'],['reports','Berichte'],['messages','Nachrichten'],['empire','Imperium'],['highscore','Rangliste'],['settings','Einstellungen']];
 
 function unreadMailCount(){ return (state.mail||[]).filter(m=>m.direction==='in' && !m.read).length; }
 function renderNav(){ const unread=unreadMailCount(); $('#nav').innerHTML = navItems.map(([id,label])=>`<button class="${state.view===id?'active':''}" data-view="${id}">${label}${id==='messages'&&unread>0?` <span class="pill active" style="padding:1px 6px;font-size:11px">${unread}</span>`:''}</button>`).join(''); document.querySelectorAll('[data-view]').forEach(b=>b.onclick=()=>{ if(b.dataset.view!=='fleet') state.fleetPrefill=null; if(b.dataset.view==='highscore') highscoreCache=null; if(b.dataset.view==='galaxy') galaxyCache={}; state.view=b.dataset.view; if(b.dataset.view==='messages' && unreadMailCount()>0) postAction('markMailRead', {}); render(); }); }
@@ -1172,7 +1173,6 @@ function viewOverview(){ const p=active(), e=energyStats(p), inc=hourly(p), cap=
       <p style="margin-top:8px">${planetType.desc}</p>
       <div class="small" style="margin-top:6px">✓ <strong>Vorteil:</strong> ${planetType.pros}</div>
       <div class="small warn-text" style="margin-top:4px">✕ <strong>Nachteil:</strong> ${planetType.cons}</div>
-      <form id="renamePlanetForm" class="market-form" style="margin-top:10px"><label>Planet umbenennen<input type="text" name="name" maxlength="30" value="${escapeHtml(p.name)}"></label><button class="btn alt" type="submit">Speichern</button></form>
     </div>
     <div class="card"><h2>Energie</h2><div class="small">Ohne genug Energie sinkt die Produktion proportional.</div><div style="height:10px"></div><div class="bar"><span style="width:${Math.min(100,(e.prod/Math.max(1,e.use))*100)}%"></span></div><div style="height:10px"></div><div class="small">Produktion ${fmt(e.prod)} · Verbrauch ${fmt(e.use)} · Faktor ${fmt1(e.ratio*100)}%</div></div>
   </div>
@@ -1181,11 +1181,24 @@ function viewOverview(){ const p=active(), e=energyStats(p), inc=hourly(p), cap=
   <div style="height:16px"></div>
   <div class="card"><h3>Flottenstatus</h3><div class="list">${Object.entries(p.ships).filter(([k])=>defs.ships[k]).map(([k,v])=>`<div class="row"><div><strong>${defs.ships[k].name}</strong></div><div>${fmt(v)}</div></div>`).join('')}</div></div>`; }
 
+// Ordnet ein Gebaeude einer der 5 Gebaeude-Kategorien zu, rein anhand bereits
+// vorhandener Flags in defs.buildings - keine zusaetzliche Lookup-Tabelle noetig.
+function buildingCategory(key){
+  const d = defs.buildings[key];
+  if(d.resource && d.resource!=='wood') return 'mines';
+  if(d.recipe || d.resource==='wood') return 'secondary';
+  if(d.power) return 'energy';
+  if(Object.values(RESOURCE_GROUPS).some(g=>g.storageBuilding===key)) return 'storage';
+  return 'infra';
+}
 function viewBuildings(){
   const p=active();
   const planetType = PLANET_TYPES[p.planetType]||PLANET_TYPES.rocky;
   const buildable = Object.entries(defs.buildings).filter(([,d])=>!d.isDefense && !d.facility && !d.factory);
-  return `<h2>Gebäude</h2><div class="list">${buildable.map(([k,d])=>{
+  const tabs = [['all','Alle'],['mines','Minen'],['secondary','Sekundär'],['energy','Energie'],['storage','Lager'],['infra','Infrastruktur']];
+  const tabHtml = `<div class="subnav">${tabs.map(([id,label])=>`<button class="${state.buildingTab===id?'active':''}" data-building-tab="${id}">${label}</button>`).join('')}</div>`;
+  const shown = state.buildingTab==='all' ? buildable : buildable.filter(([k])=>buildingCategory(k)===state.buildingTab);
+  const rows = shown.map(([k,d])=>{
     const lvl=(p.buildings[k]||0)+1;
     const c=buildingCost(costBaseFor(d,p),lvl);
     const ok=meetsRequirements(p,d.requires);
@@ -1194,7 +1207,8 @@ function viewBuildings(){
     const typeHint = !typeOk ? `<div class="sub warn-text">Nicht auf ${planetType.name} abbaubar - vorkommend auf: ${planetTypesForResource(d.resource).map(t=>PLANET_TYPES[t].name).join(', ')}. Alternativ: Marktplatz oder Söldnerhändler.</div>` : '';
     const queuedHint = queued ? `<div class="sub warn-text">Wird bereits gebaut (Stufe ${lvl})</div>` : '';
     return `<div class="row"><div><strong>${d.name}</strong><div class="sub">Stufe ${p.buildings[k]||0}</div><div class="sub">Kosten: ${resCostText(c)}</div>${typeHint}${queuedHint}${!ok?`<div class="sub warn-text">Benötigt: ${requirementText(d.requires)}</div>`:''}</div><div style="display:flex;gap:6px;align-items:center">${infoIconHtml('building',k,p.buildings[k]||0)}<button class="btn" data-build="${k}" ${ok&&typeOk&&!queued?'':'disabled'}>Ausbauen</button></div></div>`;
-  }).join('')}</div>`;
+  }).join('') || '<div class="small">Keine Gebäude in dieser Kategorie.</div>';
+  return `<h2>Gebäude</h2>${tabHtml}<div style="height:12px"></div><div class="list">${rows}</div>`;
 }
 
 function viewFacilities(){ const p=active(); const facKeys = Object.entries(defs.buildings).filter(([,d])=>d.facility && !d.moonOnly); return `<h2>Anlagen</h2><div class="list">${facKeys.map(([k,d])=>{ const lvl=(p.buildings[k]||0)+1; const c=buildingCost(costBaseFor(d,p),lvl); const ok=meetsRequirements(p,d.requires); const queued=p.buildQueue.some(q=>q.key===k); return `<div class="row"><div><strong>${d.name}</strong><div class="sub">Stufe ${p.buildings[k]||0}</div><div class="sub">Kosten: ${resCostText(c)}</div>${queued?`<div class="sub warn-text">Wird bereits gebaut (Stufe ${lvl})</div>`:''}${!ok?`<div class="sub warn-text">Benötigt: ${requirementText(d.requires)}</div>`:''}</div><div style="display:flex;gap:6px;align-items:center">${infoIconHtml('building',k,p.buildings[k]||0)}<button class="btn alt" data-build="${k}" ${ok&&!queued?'':'disabled'}>Ausbauen</button></div></div>`; }).join('')}</div>`; }
@@ -1210,7 +1224,7 @@ function factoryTier(key){
   const d = defs.buildings[key];
   let maxInputTier = 0;
   for(const inputKey of Object.keys(d.recipe.inputsPerUnit)){
-    const producer = FACTORY_KEYS.find(fk=>defs.buildings[fk].recipe.output===inputKey);
+    const producer = FACTORY_KEYS.find(fk=>defs.buildings[fk].factory && defs.buildings[fk].recipe.output===inputKey);
     if(producer){ maxInputTier = Math.max(maxInputTier, factoryTier(producer)); }
   }
   return maxInputTier + 1;
@@ -1251,7 +1265,6 @@ function viewFactories(){
 
   return `<h2>Fabriken</h2>${tabHtml}<div style="height:12px"></div>${bottleneckCard}<div style="height:12px"></div><div class="list">${rows}</div>`;
 }
-function viewResources(){ const p=active(), inc=hourly(p), e=energyStats(p); const planetType=PLANET_TYPES[p.planetType]||PLANET_TYPES.rocky; const shown=RESOURCE_KEYS.filter(k=>planetType.resources.includes(k) || (p.resources[k]||0)>0 || (inc[k]||0)!==0); return `<h2>Ressourcen</h2><div class="grid2"><div class="card"><h3>Produktion pro Stunde</h3><div class="list">${shown.map(k=>`<div class="row"><span>${RESOURCE_INFO[k].name}</span><strong>${fmt1(inc[k]||0)}</strong></div>`).join('')}</div></div><div class="card"><h3>Energieeffizienz</h3><div class="bar"><span style="width:${Math.min(100,e.ratio*100)}%"></span></div><div style="height:10px"></div><div class="small">${fmt(e.prod)} verfügbar · ${fmt(e.use)} benötigt</div></div></div>`; }
 function viewResearch(){ const p=active(); return `<h2>Forschung</h2><div class="small">Max. Kolonien: ${maxColonies(p)} · Max. gleichzeitige Expeditionen: ${maxExpeditions(p)} (abhängig von Astrophysik)</div><div style="height:10px"></div><div class="list">${Object.entries(defs.research).map(([k,d])=>{ const lvl=p.research[k]+1; const c=scaledCost(d.base,lvl); const ok=meetsRequirements(p,d.requires); const queued=p.researchQueue.some(q=>q.key===k); return `<div class="row"><div><strong>${d.name}</strong><div class="sub">Stufe ${p.research[k]}</div><div class="sub">Kosten: ${resCostText(c)}</div>${queued?`<div class="sub warn-text">Wird bereits erforscht (Stufe ${lvl})</div>`:''}${!ok?`<div class="sub warn-text">Benötigt: ${requirementText(d.requires)}</div>`:''}</div><div style="display:flex;gap:6px;align-items:center">${infoIconHtml('research',k,p.research[k])}<button class="btn good" data-research="${k}" ${ok&&!queued?'':'disabled'}>Forschen</button></div></div>`; }).join('')}</div>`; }
 function viewShipyard(){ const p=active(); return `<h2>Raumschiffwerft</h2><div class="list">${Object.entries(defs.ships).map(([k,d])=>{ const ok=meetsRequirements(p,d.requires); return `<div class="row"><div><strong>${d.name}</strong><div class="sub">Vorhanden ${fmt(p.ships[k]||0)} · Angriff ${d.attack} · Ladung ${fmt(d.cargo)}</div><div class="sub">Kosten: ${resCostText(d.cost)}</div>${!ok?`<div class="sub warn-text">Benötigt: ${requirementText(d.requires)}</div>`:''}</div><div style="display:flex;gap:6px;align-items:center">${infoIconHtml('ship',k)}<button class="btn warn" data-ship="${k}" ${ok?'':'disabled'}>Bauen</button></div></div>`; }).join('')}</div>`; }
 
@@ -1356,13 +1369,20 @@ function viewMessages(){
 }
 
 function viewSettings(){
+  const p = active();
   const native = !!(window.Android && window.Android.saveGame);
   const url = getServerUrl();
   const statusLabel = connectionStatus==='connected' ? 'Verbunden' : (connectionStatus==='error' ? 'Fehler: '+connectionError : 'Nicht verbunden');
   const statusColor = connectionStatus==='connected' ? 'var(--good)' : (connectionStatus==='error' ? 'var(--danger)' : 'var(--muted)');
+  const renameCooldownMs = 7*24*60*60*1000;
+  const renameRemaining = ((p.lastRenamed||0) + renameCooldownMs) - Date.now();
+  const renameCard = renameRemaining > 0
+    ? `<div class="card"><h3>Planet umbenennen</h3><div class="small">Planeten können nur einmal pro Woche umbenannt werden.</div><div class="small" style="margin-top:6px">Nächste Umbenennung möglich in <strong>${formatDuration(renameRemaining)}</strong></div></div>`
+    : `<div class="card"><h3>Planet umbenennen</h3><div class="small">Planeten können nur einmal pro Woche umbenannt werden.</div><div style="height:10px"></div><form id="renamePlanetForm" class="market-form"><label>Neuer Name<input type="text" name="name" maxlength="30" value="${escapeHtml(p.name)}"></label><button class="btn alt" type="submit">Speichern</button></form></div>`;
   return `<h2>Einstellungen</h2><div class="grid2">
   <div class="card"><h3>Konto</h3><div class="small">Angemeldet als <strong>${state.username||'-'}</strong></div><div class="small" style="color:${statusColor}">Server-Status: ${statusLabel}</div><div class="small">Server: ${url}</div><div style="height:10px"></div><button class="btn danger" id="logoutBtn">Abmelden</button> <button class="btn alt" id="changeServerBtn2">Server wechseln</button></div>
   <div class="card"><h3>Spielstand-Sicherung</h3><div class="small">Der Server speichert automatisch und dauerhaft. Diese Buttons erstellen zusätzlich eine lokale Sicherungskopie deines Imperiums.</div><div style="height:10px"></div><button class="btn" id="saveBtn">Backup herunterladen</button><div style="height:10px"></div>${native ? '<button class="btn alt" id="loadBtnNative">Backup wiederherstellen</button>' : '<input type="file" id="loadInput" accept="application/json">'}</div>
+  ${renameCard}
   </div>`;
 }
 
@@ -1504,10 +1524,11 @@ function viewHighscore(){
 }
 
 function renderView(bind=true){
-  const views={overview:viewOverview,buildings:viewBuildings,facilities:viewFacilities,factories:viewFactories,defense:viewDefense,resources:viewResources,research:viewResearch,shipyard:viewShipyard,fleet:viewFleet,expeditions:viewExpeditions,galaxy:viewGalaxy,moons:viewMoons,alliance:viewAlliance,officers:viewOfficers,lifeform:viewLifeform,market:viewMarket,reports:viewReports,messages:viewMessages,empire:viewEmpire,highscore:viewHighscore,settings:viewSettings};
+  const views={overview:viewOverview,buildings:viewBuildings,facilities:viewFacilities,factories:viewFactories,defense:viewDefense,research:viewResearch,shipyard:viewShipyard,fleet:viewFleet,expeditions:viewExpeditions,galaxy:viewGalaxy,moons:viewMoons,alliance:viewAlliance,officers:viewOfficers,lifeform:viewLifeform,market:viewMarket,reports:viewReports,messages:viewMessages,empire:viewEmpire,highscore:viewHighscore,settings:viewSettings};
   $('#view').innerHTML = views[state.view]();
   if(bind){
     document.querySelectorAll('[data-factory-tab]').forEach(b=>b.onclick=()=>{ state.factoryTab=b.dataset.factoryTab; renderView(); });
+    document.querySelectorAll('[data-building-tab]').forEach(b=>b.onclick=()=>{ state.buildingTab=b.dataset.buildingTab; renderView(); });
     document.querySelectorAll('[data-build]').forEach(b=>b.onclick=()=>enqueueBuild(b.dataset.build));
     document.querySelectorAll('[data-research]').forEach(b=>b.onclick=()=>enqueueResearch(b.dataset.research));
     document.querySelectorAll('[data-ship]').forEach(b=>b.onclick=()=>enqueueShip(b.dataset.ship));

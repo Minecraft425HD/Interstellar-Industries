@@ -1572,13 +1572,21 @@ function enqueueLifeformBuilding(state, planetIndex, key){
   return ok(state, def.name+' Stufe '+lvl+' fertiggestellt');
 }
 const PLANET_NAME_MAX_LEN = 30;
+const PLANET_RENAME_COOLDOWN_MS = 7*24*60*60*1000;
 function renamePlanet(state, planetIndex, name){
   const p = requirePlanet(state, planetIndex);
   const trimmed = String(name||'').trim();
   if(!trimmed) return fail(state, 'Planetenname darf nicht leer sein');
   if(trimmed.length>PLANET_NAME_MAX_LEN) return fail(state, 'Planetenname zu lang (max. '+PLANET_NAME_MAX_LEN+' Zeichen)');
+  const last = p.lastRenamed || 0;
+  const elapsed = Date.now() - last;
+  if(elapsed < PLANET_RENAME_COOLDOWN_MS){
+    const daysLeft = Math.ceil((PLANET_RENAME_COOLDOWN_MS - elapsed) / (24*60*60*1000));
+    return fail(state, 'Umbenennung nicht möglich: Planeten können nur einmal pro Woche umbenannt werden (noch '+daysLeft+' Tag(e)).');
+  }
   const oldName = p.name;
   p.name = trimmed;
+  p.lastRenamed = Date.now();
   return ok(state, 'Planet "'+oldName+'" wurde in "'+trimmed+'" umbenannt');
 }
 
