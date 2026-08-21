@@ -522,6 +522,9 @@ function npcSeedRandom(galaxy, system, pos, salt){
 const RAW_RESOURCE_KEYS = RESOURCE_KEYS.slice(0, 18);
 const ASTEROID_FIELD_CHANCE = 0.22;   // Anteil der LEEREN Felder, die stattdessen ein Asteroidenfeld werden
 const ASTEROID_REGEN_PER_HOUR = 0.05; // 5% der Kapazitaet je Realzeitstunde -> volle Auffuellung in 20h
+const BLACKHOLE_CHANCE = 0.04;              // Anteil der NICHT-Asteroiden-leeren Felder, die stattdessen ein Schwarzes Loch werden
+const BLACKHOLE_DURATION_MULTIPLIER = 1.25; // +25% Flugzeit fuer Flotten mit Start ODER Ziel im selben System wie ein Schwarzes Loch
+const BLACKHOLE_SHIP_LOSS_CHANCE = 0.02;    // 2% Chance pro Mission durch eine Gefahrenzone, ein zufaelliges Schiff zu verlieren
 
 function asteroidFieldSeed(galaxy, system, pos){
   const tierRoll = npcSeedRandom(galaxy, system, pos, 101);
@@ -672,11 +675,21 @@ function seedGalaxy(universe, galaxy, system, viewerUsername){
         const field = readAsteroidField(universe, debrisKey([galaxy, system, pos]), seed);
         slots.push({pos, type:'asteroid', planetType, tier: seed.tier, composition: seed.composition, capacity: seed.capacity, stock: field.stock, lastRegen: field.lastRegen});
       } else {
-        slots.push({pos, type:'empty', planetType});
+        const blackholeRoll = npcSeedRandom(galaxy, system, pos, 108);
+        if(blackholeRoll < BLACKHOLE_CHANCE){
+          slots.push({pos, type:'blackhole', planetType});
+        } else {
+          slots.push({pos, type:'empty', planetType});
+        }
       }
     }
   }
   return slots;
+}
+
+function systemHasBlackHole(universe, galaxy, system){
+  const slots = seedGalaxy(universe, galaxy, system, null);
+  return slots.some(s=>s.type==='blackhole');
 }
 
 function isPositionFree(universe, galaxy, system, pos){
@@ -1251,7 +1264,13 @@ function sendFleet(universe, username, planetIndex, params){
   for(const k of RESOURCE_KEYS) cargo[k] = Number(cargoParam[k])||0;
   const cap = capacityForShips(ships); const totalCargo = resTotal(cargo);
   if(mission==='transport' && totalCargo>cap) return fail(state, 'Zu wenig Ladekapazität');
-  const dur = fleetDuration(state, p.coords, toCoord, ships);
+  let dur = fleetDuration(state, p.coords, toCoord, ships);
+  // Schwarze Loecher machen ihr GESAMTES System zur Gefahrenzone: jede Flotte mit Start
+  // ODER Ziel im selben System erleidet +25% Flugzeit. Da das Flugmodell rein
+  // Punkt-zu-Punkt ist (kein "in-transit"-Zustand in tick()), wird die Wirkung EINMALIG
+  // hier beim Abflug aufgeloest - genauso wie Treibstoff schon jetzt synchron abgezogen wird.
+  const dangerZone = systemHasBlackHole(universe, p.coords[0], p.coords[1]) || systemHasBlackHole(universe, gal, sys);
+  if(dangerZone) dur = Math.round(dur * BLACKHOLE_DURATION_MULTIPLIER);
   // Treibstoff (Rohöl) wird zusaetzlich zu evtl. mitgefuehrtem Rohöl-Frachtgut benoetigt.
   const fuel = fuelForShips(ships)*Math.max(1,dur/20);
   if(cargo.crudeOil+fuel>p.resources.crudeOil) return fail(state, 'Zu wenig Rohöl für Ladung und Flug');
@@ -1282,9 +1301,26 @@ function sendFleet(universe, username, planetIndex, params){
   if(mission==='transport'){ spend(p, cargo); }
   p.resources.crudeOil-=fuel;
 
+  // Schwarzes-Loch-Risiko: bei Gefahrenzone besteht eine kleine Chance, ein zufaelliges
+  // Schiff der bereits abgezogenen Flotte zu verlieren. ships wird IN-PLACE mutiert, damit
+  // die gepushte Flotte den Verlust widerspiegelt - Ressourcen/Schiffe sind an dieser Stelle
+  // bereits vom Heimatplaneten abgebucht und bleiben es (wie beim Treibstoff).
+  let hazardNote = '';
+  if(dangerZone){
+    hazardNote = ' (Schwarzes Loch im System: Flugzeit +25%)';
+    if(Math.random() < BLACKHOLE_SHIP_LOSS_CHANCE){
+      const survivors = Object.entries(ships).filter(([,v])=>v>0);
+      if(survivors.length){
+        const [lostKey] = survivors[Math.floor(Math.random()*survivors.length)];
+        ships[lostKey] -= 1;
+        hazardNote += ' - 1 '+defs.ships[lostKey].name+' im Schwarzen Loch verloren';
+      }
+    }
+  }
+
   state.fleets.push({from:planetIndex, toCoord, toPlanetIndex, toOwner, npcSlot, emptySlot, ships, cargo:mission==='transport'?cargo:zeroResources(), mission, arrive, returnAt:Date.now()+dur*2000, phase:'outbound', fuel, acsId, acsAllianceTag});
   const acsNote = acsId ? ' (ACS-Welle "'+acsId+'", Ankunft synchronisiert)' : '';
-  return ok(state, missionLabels[mission]+'-Flotte nach '+coordLinkHtml(toCoord)+' gestartet'+acsNote);
+  return ok(state, missionLabels[mission]+'-Flotte nach '+coordLinkHtml(toCoord)+' gestartet'+acsNote+hazardNote);
 }
 
 function sendExpedition(state, planetIndex, shipsMap, durationSlot){

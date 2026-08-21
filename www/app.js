@@ -1319,8 +1319,11 @@ function viewGalaxy(){
   if(!slots){
     return `<h2>Galaxie</h2>${galaxyJumpFormHtml(gal, sys)}<div class="small">Lade Systemdaten vom Server…</div>`;
   }
+  const hasBlackHole = slots.some(s=>s.type==='blackhole');
+  const hazardBanner = hasBlackHole ? `<div class="card hazard-banner"><strong class="warn-text">⚠ Schwarzes Loch im System</strong><div class="small">Alle Flotten mit Start oder Ziel in [${gal}:${sys}] brauchen 25% länger und riskieren pro Flug den Verlust eines zufälligen Schiffes.</div></div>` : '';
   return `<h2>Galaxie</h2>${galaxyJumpFormHtml(gal, sys)}
   <div class="small" style="margin-bottom:10px">Aktuell: [${gal}:${sys}] · Universum: ${UNIVERSE.galaxies} Galaxien × ${UNIVERSE.systems} Systeme × ${UNIVERSE.positions} Positionen</div>
+  ${hazardBanner}
   <div class="galaxy-grid">${slots.map(s=>{
     const key2 = debrisKey([gal,sys,s.pos]); const debris = state.debrisFields[key2];
     const debrisRow = debris ? `<div class="sub">Trümmerfeld: ${fmt(resTotal(debris))} <button class="btn alt" data-mission-target="harvest:${gal}:${sys}:${s.pos}" style="margin-left:8px;padding:6px 10px;min-height:32px">Bergen</button></div>` : '';
@@ -1356,6 +1359,9 @@ function viewGalaxy(){
         ? `<button class="btn good" data-mission-target="mine:${gal}:${sys}:${s.pos}">Abbauen</button>`
         : `<span class="sub warn-text">Asteroidenbergbau Stufe ${s.tier} nötig</span>`;
       return `<div class="slot"><div>${s.pos}</div><div>Asteroidenfeld <span class="sub">Stufe ${s.tier} · ${compNames}</span><div class="sub">${stockText}</div></div><div><span class="badge asteroid">Asteroiden</span></div><div class="sub">—</div><div>${mineBtn}</div></div>`;
+    }
+    if(s.type==='blackhole'){
+      return `<div class="slot"><div>${s.pos}</div><div>Schwarzes Loch <span class="sub warn-text">Gefahrenzone für das gesamte System</span></div><div><span class="badge blackhole">Schwarzes Loch</span></div><div class="sub">—</div><div></div></div>`;
     }
     const emptyTypeName=(PLANET_TYPES[s.planetType]||PLANET_TYPES.rocky).name;
     return `<div class="slot empty"><div>${s.pos}</div><div>Freies Feld <span class="sub">(${emptyTypeName})</span>${debrisRow}</div><div><span class="badge empty">Leer</span></div><div class="sub">—</div><div><button class="btn good" data-mission-target="colonize:${gal}:${sys}:${s.pos}">Kolonisieren</button></div></div>`;
