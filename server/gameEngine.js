@@ -126,21 +126,44 @@ const defs = {
     coalMine:{name:'Kohlebergwerk', resource:'coal', costMagnitude:70, powerUse:l=>10*l, prod:l=>20*l*Math.pow(1.1,l)},
     freshwaterExtractor:{name:'Süßwassergewinnung', resource:'freshwater', costMagnitude:50, powerUse:l=>7*l, prod:l=>20*l*Math.pow(1.1,l)},
     saltwaterDesalinator:{name:'Meerwasserpumpe', resource:'saltwater', costMagnitude:43, powerUse:l=>6*l, prod:l=>22*l*Math.pow(1.1,l)},
-    // Jeder Spieler braucht IRGENDEINEN verlaesslichen Weg an Suess-/Salzwasser zu kommen,
-    // auch ohne Handel oder das Glueck, einen Eis-/Ozeanplaneten zu kolonisieren - sonst
-    // bleibt z.B. der Terraformer dauerhaft unerreichbar. Diese beiden nutzen bewusst
-    // `recipe` statt `resource`: ein zweites `resource:'freshwater'`-Gebaeude wuerde mit
-    // freshwaterExtractor um denselben Eintrag in MINE_BY_RESOURCE (1:1-Zuordnung) kollidieren.
-    // Ueber `recipe` (wie bei Fabriken, aber ohne `factory:true` -> bleibt im Gebaeude-Tab,
-    // nicht im Fabriken-Tab) laeuft die Produktion generisch durch applyFactories() und
-    // ADDIERT sich zu einer eventuell vorhandenen echten Mine dazu (leeres inputsPerUnit ->
-    // nie gedrosselt, kein Rohstoffverbrauch). Bewusst deutlich schwaecher und ohne
-    // Voraussetzung, damit sie von Anfang an sofort baubar sind.
+    lithiumExtractor:{name:'Lithium-Solefeld', resource:'lithium', costMagnitude:76, powerUse:l=>11*l, prod:l=>13*l*Math.pow(1.1,l)},
+    // Jeder Spieler braucht IRGENDEINEN verlaesslichen Weg an jeden nicht-heimischen
+    // Rohstoff zu kommen, auch ohne Handel oder das Glueck, den passenden Planetentyp zu
+    // kolonisieren - sonst bleiben Gebaeude/Forschungen, die davon abhaengen, dauerhaft
+    // unerreichbar (z.B. war der Terraformer wegen Suesswasser lange praktisch blockiert).
+    // Alle folgenden Gebaeude nutzen bewusst `recipe` statt `resource`: ein zweites
+    // `resource:'X'`-Gebaeude wuerde mit der bestehenden Mine um denselben Eintrag in
+    // MINE_BY_RESOURCE (1:1-Zuordnung) kollidieren. Ueber `recipe` (wie bei Fabriken, aber
+    // ohne `factory:true` -> bleibt im Gebaeude-Tab, nicht im Fabriken-Tab) laeuft die
+    // Produktion generisch durch applyFactories() und ADDIERT sich zu einer eventuell
+    // vorhandenen echten Mine dazu (leeres inputsPerUnit -> nie gedrosselt, kein
+    // Rohstoffverbrauch). Bewusst deutlich schwaecher (~25-30% der echten Minenrate) und
+    // ohne Voraussetzung, damit sie von Anfang an sofort baubar sind - Kolonisierung des
+    // passenden Planetentyps bleibt klar lohnenswerter, ist aber nicht mehr zwingend.
     atmosphericCondenser:{name:'Atmosphärischer Kondensator', base:{aluminium:300, copper:200}, powerUse:l=>10*l, factory:false,
       recipe:{output:'freshwater', prod:l=>6*l*Math.pow(1.1,l), inputsPerUnit:{}}},
     brineSynthesizer:{name:'Salzsyntheseanlage', base:{nickel:300, sulfur:200}, powerUse:l=>10*l, factory:false,
       recipe:{output:'saltwater', prod:l=>6*l*Math.pow(1.1,l), inputsPerUnit:{}}},
-    lithiumExtractor:{name:'Lithium-Solefeld', resource:'lithium', costMagnitude:76, powerUse:l=>11*l, prod:l=>13*l*Math.pow(1.1,l)},
+    traceGoldExtractor:{name:'Spurenelement-Goldgewinnung', base:{iron:300, copper:200}, powerUse:l=>10*l, factory:false,
+      recipe:{output:'gold', prod:l=>4*l*Math.pow(1.1,l), inputsPerUnit:{}}},
+    traceSilverExtractor:{name:'Spurenelement-Silbergewinnung', base:{copper:300, nickel:200}, powerUse:l=>10*l, factory:false,
+      recipe:{output:'silver', prod:l=>5*l*Math.pow(1.1,l), inputsPerUnit:{}}},
+    regolithUraniumExtractor:{name:'Regolith-Uranextraktion', base:{aluminium:300, iron:200}, powerUse:l=>10*l, factory:false,
+      recipe:{output:'uranium', prod:l=>3*l*Math.pow(1.1,l), inputsPerUnit:{}}},
+    regolithRareEarthsExtractor:{name:'Regolith-Separationsanlage', base:{nickel:300, aluminium:200}, powerUse:l=>10*l, factory:false,
+      recipe:{output:'rareEarths', prod:l=>4*l*Math.pow(1.1,l), inputsPerUnit:{}}},
+    sulfurSynthesizer:{name:'Schwefelsyntheseanlage', base:{limestone:300, iron:200}, powerUse:l=>10*l, factory:false,
+      recipe:{output:'sulfur', prod:l=>5*l*Math.pow(1.1,l), inputsPerUnit:{}}},
+    phosphateSynthesizer:{name:'Phosphatsyntheseanlage', base:{limestone:300, copper:200}, powerUse:l=>10*l, factory:false,
+      recipe:{output:'phosphate', prod:l=>5*l*Math.pow(1.1,l), inputsPerUnit:{}}},
+    syntheticOilPlant:{name:'Synthetische Ölanlage', base:{aluminium:300, nickel:200}, powerUse:l=>10*l, factory:false,
+      recipe:{output:'crudeOil', prod:l=>3*l*Math.pow(1.1,l), inputsPerUnit:{}}},
+    syntheticGasPlant:{name:'Synthesegasanlage', base:{iron:300, aluminium:200}, powerUse:l=>10*l, factory:false,
+      recipe:{output:'naturalGas', prod:l=>3*l*Math.pow(1.1,l), inputsPerUnit:{}}},
+    carbonSynthesizer:{name:'Kohlenstoffsyntheseanlage', base:{copper:300, limestone:200}, powerUse:l=>10*l, factory:false,
+      recipe:{output:'coal', prod:l=>6*l*Math.pow(1.1,l), inputsPerUnit:{}}},
+    regolithLithiumExtractor:{name:'Regolith-Lithiumgewinnung', base:{nickel:300, limestone:200}, powerUse:l=>10*l, factory:false,
+      recipe:{output:'lithium', prod:l=>4*l*Math.pow(1.1,l), inputsPerUnit:{}}},
     // Holz ist die einzige Ausnahme vom Planetentyp-System: keine natuerliche Quelle,
     // erfordert einen Terraformer (kuenstliche Biosphaere), dafuer auf JEDEM Typ danach baubar.
     sawmill:{name:'Forstplantage', resource:'wood', base:{iron:100, freshwater:60}, powerUse:l=>10*l, prod:l=>15*l*Math.pow(1.1,l), requires:{terraformer:1}},
