@@ -126,6 +126,20 @@ const defs = {
     coalMine:{name:'Kohlebergwerk', resource:'coal', costMagnitude:70, powerUse:l=>10*l, prod:l=>20*l*Math.pow(1.1,l)},
     freshwaterExtractor:{name:'Süßwassergewinnung', resource:'freshwater', costMagnitude:50, powerUse:l=>7*l, prod:l=>20*l*Math.pow(1.1,l)},
     saltwaterDesalinator:{name:'Meerwasserpumpe', resource:'saltwater', costMagnitude:43, powerUse:l=>6*l, prod:l=>22*l*Math.pow(1.1,l)},
+    // Jeder Spieler braucht IRGENDEINEN verlaesslichen Weg an Suess-/Salzwasser zu kommen,
+    // auch ohne Handel oder das Glueck, einen Eis-/Ozeanplaneten zu kolonisieren - sonst
+    // bleibt z.B. der Terraformer dauerhaft unerreichbar. Diese beiden nutzen bewusst
+    // `recipe` statt `resource`: ein zweites `resource:'freshwater'`-Gebaeude wuerde mit
+    // freshwaterExtractor um denselben Eintrag in MINE_BY_RESOURCE (1:1-Zuordnung) kollidieren.
+    // Ueber `recipe` (wie bei Fabriken, aber ohne `factory:true` -> bleibt im Gebaeude-Tab,
+    // nicht im Fabriken-Tab) laeuft die Produktion generisch durch applyFactories() und
+    // ADDIERT sich zu einer eventuell vorhandenen echten Mine dazu (leeres inputsPerUnit ->
+    // nie gedrosselt, kein Rohstoffverbrauch). Bewusst deutlich schwaecher und ohne
+    // Voraussetzung, damit sie von Anfang an sofort baubar sind.
+    atmosphericCondenser:{name:'Atmosphärischer Kondensator', base:{aluminium:300, copper:200}, powerUse:l=>10*l, factory:false,
+      recipe:{output:'freshwater', prod:l=>6*l*Math.pow(1.1,l), inputsPerUnit:{}}},
+    brineSynthesizer:{name:'Salzsyntheseanlage', base:{nickel:300, sulfur:200}, powerUse:l=>10*l, factory:false,
+      recipe:{output:'saltwater', prod:l=>6*l*Math.pow(1.1,l), inputsPerUnit:{}}},
     lithiumExtractor:{name:'Lithium-Solefeld', resource:'lithium', costMagnitude:76, powerUse:l=>11*l, prod:l=>13*l*Math.pow(1.1,l)},
     // Holz ist die einzige Ausnahme vom Planetentyp-System: keine natuerliche Quelle,
     // erfordert einen Terraformer (kuenstliche Biosphaere), dafuer auf JEDEM Typ danach baubar.
