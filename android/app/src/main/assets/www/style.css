@@ -302,6 +302,7 @@ button.slot{ font:inherit; color:inherit; width:100%; }
 .badge.own{ background-image:linear-gradient(180deg,#2a5484,#1c3f6b); color:#9cc7ff; }
 .badge.npc{ background-image:linear-gradient(180deg,#79293b,#5a1e2a); color:#ffb3c0; }
 .badge.empty{ background-image:linear-gradient(180deg,#255339,#1c3f2e); color:#9de6bb; }
+.badge.asteroid{ background-image:linear-gradient(180deg,#6b5a1f,#4a3d15); color:#ffe08a; }
 
 .market-grid{ display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; }
 

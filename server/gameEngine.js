@@ -272,6 +272,7 @@ const defs = {
     gravitonTech:{name:'Gravitationstechnik', base:{}, requires:{researchLab:12}},
     astrophysics:{name:'Astrophysik', base:{aluminium:5000, lithium:7000, crudeOil:4000, alloy:900}, requires:{researchLab:3, espionageTech:4, impulseDrive:3}},
     intergalacticNetwork:{name:'Intergalaktisches Forschungsnetzwerk', base:{aluminium:250000, rareEarths:400000, naturalGas:150000, machineParts:1500}, requires:{researchLab:10, computerTech:8}},
+    asteroidMiningTech:{name:'Asteroidenbergbau', base:{iron:2000, steel:600, electronics:300, machineParts:150}, requires:{researchLab:5, energyTech:2}},
   },
   ships: {
     smallCargo:{name:'Kleiner Transporter', cost:{iron:2500, aluminium:1500, steel:400}, cargo:5000, speed:1, fuel:12, attack:5, shield:10, hull:4000, role:'cargo', requires:{shipyard:2}},
@@ -294,6 +295,7 @@ const defs = {
     deathstar:{name:'Todesstern', cost:{iron:4000000, aluminium:3000000, rareEarths:2000000, precisionComponents:15000}, cargo:1000000, speed:0.4, fuel:1, attack:200000, shield:50000, hull:9000000, role:'combat', requires:{shipyard:12, hyperspaceTech:6, gravitonTech:1}},
     solarSatellite:{name:'Solarsatellit', cost:{silver:1800, crudeOil:700}, cargo:0, speed:0, fuel:0, attack:1, shield:1, hull:2000, role:'power', requires:{}},
     recycler:{name:'Recycler', cost:{iron:11000, aluminium:5000, crudeOil:2000, steel:800}, cargo:20000, speed:0.7, fuel:30, attack:1, shield:10, hull:16000, role:'recycler', requires:{shipyard:4, combustion:6}},
+    asteroidMiner:{name:'Asteroidenminer', cost:{iron:9000, aluminium:6000, crudeOil:2500, steel:1200, electronics:400}, cargo:18000, speed:0.6, fuel:35, attack:1, shield:15, hull:14000, role:'miner', requires:{shipyard:5, combustion:5, asteroidMiningTech:1}},
     researchProbe:{name:'Forschungssonde', cost:{lithium:1000, electronics:150}, cargo:5, speed:3, fuel:1, attack:0, shield:0, hull:1000, role:'research', requires:{shipyard:3, combustion:3}},
   },
   items: {
@@ -330,7 +332,7 @@ for(const [key, def] of Object.entries(defs.buildings)){ if(def.resource) MINE_B
 // Reverse-Lookup analog zu MINE_BY_RESOURCE: alle Gebaeude mit einem `recipe`-Feld.
 const FACTORY_KEYS = Object.keys(defs.buildings).filter(k=>defs.buildings[k].recipe);
 
-const missionLabels = {transport:'Transport', spy:'Spionage', attack:'Angriff', colonize:'Kolonisierung', harvest:'Trümmerfeld-Bergung'};
+const missionLabels = {transport:'Transport', spy:'Spionage', attack:'Angriff', colonize:'Kolonisierung', harvest:'Trümmerfeld-Bergung', mine:'Asteroiden-Abbau'};
 const UNIVERSE = { galaxies: 9, systems: 499, positions: 15 };
 const AUCTION_DURATION_MS = 20*60*1000;
 const EVENT_DURATION_MS = 30*60*1000;
@@ -421,7 +423,7 @@ function eventResourceMultiplier(universe, resource){
   return (RESOURCE_INFO[resource] && RESOURCE_INFO[resource].group===e.group) ? e.multiplier : 1;
 }
 
-function createUniverse(){ const u = { accounts: {}, players: {}, alliances: {} }; ensureAuction(u); return u; }
+function createUniverse(){ const u = { accounts: {}, players: {}, alliances: {}, asteroidFields: {} }; ensureAuction(u); return u; }
 
 function coordStr(c){ return '['+c[0]+':'+c[1]+':'+c[2]+']'; }
 function coordLinkHtml(coord, label){ return `<button type="button" class="coord-link" data-coord="${coord[0]}:${coord[1]}:${coord[2]}">${label!=null?label:coordStr(coord)}</button>`; }
@@ -509,6 +511,58 @@ function findPlanetOwner(universe, coord, excludeUsername){
 function npcSeedRandom(galaxy, system, pos, salt){
   let x = Math.sin((pos*131 + system*13 + galaxy*104729) * 999 + salt*7919.13) * 10000;
   return x - Math.floor(x);
+}
+
+// Asteroidenfelder: rein deterministische Fakten (Stufe/Zusammensetzung/Kapazitaet)
+// werden wie NPCs NIE persistiert, sondern bei jedem Zugriff frisch aus (galaxy,system,pos)
+// berechnet. Nur der veraenderliche Bestand (stock/lastRegen) lebt in
+// universe.asteroidFields, faul beim ersten Zugriff erzeugt (siehe readAsteroidField).
+// Rohe (nicht gefertigte) Rohstoffe fuer die Zusammensetzung - alles vor 'steel' in
+// RESOURCE_KEYS (siehe Kommentar dort: Zwischenprodukte beginnen ab 'steel').
+const RAW_RESOURCE_KEYS = RESOURCE_KEYS.slice(0, 18);
+const ASTEROID_FIELD_CHANCE = 0.22;   // Anteil der LEEREN Felder, die stattdessen ein Asteroidenfeld werden
+const ASTEROID_REGEN_PER_HOUR = 0.05; // 5% der Kapazitaet je Realzeitstunde -> volle Auffuellung in 20h
+
+function asteroidFieldSeed(galaxy, system, pos){
+  const tierRoll = npcSeedRandom(galaxy, system, pos, 101);
+  const tier = tierRoll < 0.60 ? 1 : (tierRoll < 0.90 ? 2 : 3); // 60% / 30% / 10%
+  const count = tier===1 ? 2 : 3;
+  const pool = RAW_RESOURCE_KEYS.slice();
+  const composition = [];
+  for(let i=0; i<count; i++){
+    const r = npcSeedRandom(galaxy, system, pos, 102+i);
+    const idx = Math.min(pool.length-1, Math.floor(r*pool.length));
+    composition.push(pool.splice(idx,1)[0]);
+  }
+  const capacity = {};
+  composition.forEach((k,i)=>{
+    const base = 3000 + tier*4000; // Tier1 ~7000, Tier2 ~11000, Tier3 ~15000 Basis
+    capacity[k] = Math.round(base * (0.7 + npcSeedRandom(galaxy, system, pos, 105+i)*0.6));
+  });
+  return { tier, composition, capacity };
+}
+
+// Liest (und regeneriert bei Bedarf) den veraenderlichen Bestand eines Feldes. Erzeugt den
+// Eintrag beim ersten Zugriff voll gefuellt. Lazy-on-read-Regeneration ueber Date.now() -
+// analog zu p.lastRenamed/report.timestamp/event.endsAt, kein neuer Scheduler noetig.
+function readAsteroidField(universe, key, seed){
+  const now = Date.now();
+  let field = universe.asteroidFields[key];
+  if(!field){
+    field = { stock: {...seed.capacity}, lastRegen: now };
+    universe.asteroidFields[key] = field;
+  } else {
+    const elapsedHours = Math.max(0, (now - field.lastRegen) / 3600000);
+    if(elapsedHours > 0){
+      for(const k of seed.composition){
+        const cap = seed.capacity[k] || 0;
+        const cur = field.stock[k] || 0;
+        field.stock[k] = Math.min(cap, cur + cap * ASTEROID_REGEN_PER_HOUR * elapsedHours);
+      }
+      field.lastRegen = now;
+    }
+  }
+  return field;
 }
 
 const npcNamePrefixes = ['Kolonie','Außenposten','Bergwerk','Zitadelle','Forschungsstation','Handelsposten','Bastion','Siedlung','Werft','Relais','Vorposten','Garnison'];
@@ -612,7 +666,14 @@ function seedGalaxy(universe, galaxy, system, viewerUsername){
       PLANET_TYPES[planetType].resources.forEach(res=>{ resAmounts[res] = Math.floor(150*level); });
       slots.push({pos, type:'npc', name, level, planetType, resources:resAmounts, buildings, research, defenseShips, fleet});
     } else {
-      slots.push({pos, type:'empty', planetType});
+      const asteroidRoll = npcSeedRandom(galaxy, system, pos, 100);
+      if(asteroidRoll < ASTEROID_FIELD_CHANCE){
+        const seed = asteroidFieldSeed(galaxy, system, pos);
+        const field = readAsteroidField(universe, debrisKey([galaxy, system, pos]), seed);
+        slots.push({pos, type:'asteroid', planetType, tier: seed.tier, composition: seed.composition, capacity: seed.capacity, stock: field.stock, lastRegen: field.lastRegen});
+      } else {
+        slots.push({pos, type:'empty', planetType});
+      }
     }
   }
   return slots;
@@ -1068,7 +1129,7 @@ function normalizePlayerState(data){
 }
 
 function normalizeUniverse(data){
-  const universe = { accounts: (data && data.accounts) || {}, players: {}, alliances: (data && data.alliances) || {}, auction: (data && data.auction) || null, event: (data && data.event) || null, nextEventAt: (data && data.nextEventAt) || null };
+  const universe = { accounts: (data && data.accounts) || {}, players: {}, alliances: (data && data.alliances) || {}, auction: (data && data.auction) || null, event: (data && data.event) || null, nextEventAt: (data && data.nextEventAt) || null, asteroidFields: (data && data.asteroidFields) || {} };
   const playersData = (data && data.players) || {};
   for(const [username, pstate] of Object.entries(playersData)){
     ensureAllDefaults(pstate);
@@ -1158,14 +1219,14 @@ function sendFleet(universe, username, planetIndex, params){
   const toCoord = [gal, sys, pos];
   const ownIdx = state.planets.findIndex(pl=>pl.coords[0]===gal && pl.coords[1]===sys && pl.coords[2]===pos);
   if(mission==='attack' && ownIdx>=0) return fail(state, 'Eigene Planeten können nicht angegriffen werden');
-  let toPlanetIndex=null, toOwner=null, npcSlot=null, emptySlot=null;
+  let toPlanetIndex=null, toOwner=null, npcSlot=null, emptySlot=null, asteroidSlot=null;
   if(ownIdx>=0) toPlanetIndex = ownIdx;
   else {
     const owner = findPlanetOwner(universe, toCoord, username);
     if(owner){ toPlanetIndex = owner.planetIndex; toOwner = owner.username; }
     else {
       const slots = seedGalaxy(universe, gal, sys, username); const slot = slots.find(s=>s.pos===pos);
-      if(slot.type==='npc') npcSlot = slot; else if(slot.type==='empty') emptySlot = slot;
+      if(slot.type==='npc') npcSlot = slot; else if(slot.type==='empty') emptySlot = slot; else if(slot.type==='asteroid') asteroidSlot = slot;
     }
   }
   const ships = {};
@@ -1181,6 +1242,9 @@ function sendFleet(universe, username, planetIndex, params){
   if(mission==='attack' && combatPower<1) return fail(state, 'Angriff braucht Kampfschiffe');
   if(mission==='harvest' && ships.recycler<1) return fail(state, 'Bergung braucht mindestens einen Recycler');
   if(mission==='harvest' && !state.debrisFields[debrisKey(toCoord)]) return fail(state, 'Kein Trümmerfeld auf diesem Feld');
+  if(mission==='mine' && ships.asteroidMiner<1) return fail(state, 'Asteroidenabbau braucht mindestens einen Asteroidenminer');
+  if(mission==='mine' && !asteroidSlot) return fail(state, 'Kein Asteroidenfeld auf diesem Feld');
+  if(mission==='mine' && asteroidSlot && asteroidSlot.tier > (p.research.asteroidMiningTech||0)) return fail(state, 'Asteroidenbergbau-Forschung Stufe '+asteroidSlot.tier+' erforderlich (aktuell Stufe '+(p.research.asteroidMiningTech||0)+')');
 
   const cargo = zeroResources();
   const cargoParam = params.cargo||{};
@@ -1726,6 +1790,18 @@ function resolveArrival(universe, username, f){
       f.cargo = gained;
       log(state, 'Trümmerfeld bei '+coordLinkHtml(f.toCoord)+' geborgen: '+resTotal(gained));
     } else { f.cargo=zeroResources(); }
+    f.phase='return';
+  } else if(f.mission==='mine'){
+    const seed = asteroidFieldSeed(f.toCoord[0], f.toCoord[1], f.toCoord[2]);
+    const key = debrisKey(f.toCoord);
+    const field = readAsteroidField(universe, key, seed);
+    const cap = capacityForShips(f.ships); const total = resTotal(field.stock);
+    const take = Math.min(cap, total);
+    const ratio = total>0 ? take/total : 0;
+    const gained = zeroResources();
+    for(const k of seed.composition){ gained[k]=Math.floor((field.stock[k]||0)*ratio); field.stock[k]=(field.stock[k]||0)-gained[k]; }
+    f.cargo = gained;
+    log(state, 'Asteroidenfeld bei '+coordLinkHtml(f.toCoord)+' abgebaut: '+resTotal(gained));
     f.phase='return';
   } else if(f.mission==='colonize'){
     if(f.emptySlot){

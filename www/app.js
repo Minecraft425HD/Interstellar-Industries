@@ -177,6 +177,7 @@ const defs = {
     gravitonTech:{name:'Gravitationstechnik', desc:'Extrem aufwendige Forschung, Voraussetzung für den Todesstern.', base:{}, requires:{researchLab:12}},
     astrophysics:{name:'Astrophysik', desc:'Erhöht die maximale Anzahl an Kolonien und gleichzeitigen Expeditionen.', base:{aluminium:5000, lithium:7000, crudeOil:4000, alloy:900}, requires:{researchLab:3, espionageTech:4, impulseDrive:3}},
     intergalacticNetwork:{name:'Intergalaktisches Forschungsnetzwerk', desc:'Beschleunigt die Forschung durch ein Netzwerk verbundener Forschungslabore.', base:{aluminium:250000, rareEarths:400000, naturalGas:150000, machineParts:1500}, requires:{researchLab:10, computerTech:8}},
+    asteroidMiningTech:{name:'Asteroidenbergbau', desc:'Erlaubt dem Asteroidenminer den Abbau höherstufiger Asteroidenfelder (Stufe = maximale Feldstufe).', base:{iron:2000, steel:600, electronics:300, machineParts:150}, requires:{researchLab:5, energyTech:2}},
   },
   ships: {
     smallCargo:{name:'Kleiner Transporter', desc:'Günstiger Transporter für kleinere Ladungen.', cost:{iron:2500, aluminium:1500, steel:400}, cargo:5000, speed:1, fuel:12, attack:5, shield:10, hull:4000, role:'cargo', requires:{shipyard:2}},
@@ -195,6 +196,7 @@ const defs = {
     deathstar:{name:'Todesstern', desc:'Die mächtigste Waffe im Universum - extrem teuer und stark.', cost:{iron:4000000, aluminium:3000000, rareEarths:2000000, precisionComponents:15000}, cargo:1000000, speed:0.4, fuel:1, attack:200000, shield:50000, hull:9000000, role:'combat', requires:{shipyard:12, hyperspaceTech:6, gravitonTech:1}},
     solarSatellite:{name:'Solarsatellit', desc:'Liefert zusätzliche Energie, kann sich nicht bewegen oder kämpfen.', cost:{silver:1800, crudeOil:700}, cargo:0, speed:0, fuel:0, attack:1, shield:1, hull:2000, role:'power', requires:{}},
     recycler:{name:'Recycler', desc:'Sammelt Trümmerfelder nach Schlachten ein.', cost:{iron:11000, aluminium:5000, crudeOil:2000, steel:800}, cargo:20000, speed:0.7, fuel:30, attack:1, shield:10, hull:16000, role:'recycler', requires:{shipyard:4, combustion:6}},
+    asteroidMiner:{name:'Asteroidenminer', desc:'Baut Rohstoffe aus Asteroidenfeldern ab (erreichbare Stufe hängt von der Asteroidenbergbau-Forschung ab).', cost:{iron:9000, aluminium:6000, crudeOil:2500, steel:1200, electronics:400}, cargo:18000, speed:0.6, fuel:35, attack:1, shield:15, hull:14000, role:'miner', requires:{shipyard:5, combustion:5, asteroidMiningTech:1}},
     researchProbe:{name:'Forschungssonde', desc:'Baugleich mit der Spionagesonde, ermöglicht aber bei Spionage gegen NPC-Kolonien den Diebstahl fremder Forschung.', cost:{lithium:1000, electronics:150}, cargo:5, speed:3, fuel:1, attack:0, shield:0, hull:1000, role:'research', requires:{shipyard:3, combustion:3}},
   },
   items: {
@@ -218,7 +220,7 @@ const defs = {
     kaeleshOracle:{name:'Orakel', desc:'Prophetische Voraussicht optimiert die Energieträger-Förderung. +2% pro Stufe.', species:'kaelesh', boostsGroup:'fuel', base:{crudeOil:3600, coal:3100}},
   },
 };
-const missionLabels = {transport:'Transport', spy:'Spionage', attack:'Angriff', colonize:'Kolonisierung', harvest:'Trümmerfeld-Bergung'};
+const missionLabels = {transport:'Transport', spy:'Spionage', attack:'Angriff', colonize:'Kolonisierung', harvest:'Trümmerfeld-Bergung', mine:'Asteroiden-Abbau'};
 
 // Client-local UI state. Everything game-related (planets, fleets, resources, ...) is
 // authoritative on the server and only ever written here via applyServerState().
@@ -266,7 +268,7 @@ function closeCoordMenu(){ const m=document.getElementById('coordMenu'); if(m) m
 function openCoordMenu(anchorEl){
   closeCoordMenu();
   const [gal,sys,pos] = anchorEl.dataset.coord.split(':').map(Number);
-  const missions = [['transport','Transport'],['spy','Spionage'],['attack','Angriff'],['colonize','Kolonisierung'],['harvest','Trümmerfeld-Bergung']];
+  const missions = [['transport','Transport'],['spy','Spionage'],['attack','Angriff'],['colonize','Kolonisierung'],['harvest','Trümmerfeld-Bergung'],['mine','Asteroiden-Abbau']];
   const menu = document.createElement('div');
   menu.id = 'coordMenu';
   menu.className = 'coord-menu';
@@ -1281,7 +1283,7 @@ function viewFleet(){
   const shipOptions = (key)=>Array.from({length:(p.ships[key]||0)+1},(_,i)=>`<option>${i}</option>`).join('');
   return `<h2>Flotte versenden</h2><div class="grid2">
   <div class="card"><h3>Missionsformular</h3><form class="fleet-form" id="fleetForm">
-    <label>Mission<select name="mission" id="missionSelect">${missionOpt('transport','Transport')}${missionOpt('spy','Spionage')}${missionOpt('attack','Angriff')}${missionOpt('colonize','Kolonisierung')}${missionOpt('harvest','Trümmerfeld-Bergung')}</select></label>
+    <label>Mission<select name="mission" id="missionSelect">${missionOpt('transport','Transport')}${missionOpt('spy','Spionage')}${missionOpt('attack','Angriff')}${missionOpt('colonize','Kolonisierung')}${missionOpt('harvest','Trümmerfeld-Bergung')}${missionOpt('mine','Asteroiden-Abbau')}</select></label>
     <label>Zielgalaxie (1-${UNIVERSE.galaxies})<input type="number" name="galaxy" min="1" max="${UNIVERSE.galaxies}" value="${galVal}"></label>
     <label>Zielsystem (1-${UNIVERSE.systems})<input type="number" name="system" min="1" max="${UNIVERSE.systems}" value="${sysVal}"></label>
     <label>Zielposition (1-${UNIVERSE.positions})<input type="number" name="position" min="1" max="${UNIVERSE.positions}" value="${posVal}"></label>
@@ -1309,6 +1311,7 @@ function galaxyJumpFormHtml(gal, sys){
   </form></div>`;
 }
 function viewGalaxy(){
+  const p = active();
   const gal = state.galaxyIndex, sys = state.galaxySystem;
   const key = galaxyCacheKey(gal, sys);
   const slots = galaxyCache[key];
@@ -1343,6 +1346,16 @@ function viewGalaxy(){
       const slotHtml = `<div class="slot" data-slot-toggle="${s.pos}"><div>${s.pos}</div><div><strong>${s.name}</strong><div class="sub">Stufe ${s.level} · ${ptName}</div>${debrisRow}</div><div><span class="badge npc">NPC</span></div><div class="sub">Def ${fmt(defPower)}</div><div><button class="btn danger" data-mission-target="attack:${gal}:${sys}:${s.pos}">Angriff</button> <button class="btn alt" data-mission-target="spy:${gal}:${sys}:${s.pos}">Spionage</button></div></div>`;
       const detail = expanded ? `<div class="card" style="margin-top:8px"><div class="small">Rohstoffe: ${fmt(resTotal(s.resources))}</div><div class="small" style="margin-top:6px">Gebäude: ${Object.entries(s.buildings).map(([k,v])=>v && defs.buildings[k] ? defs.buildings[k].name+' '+v : null).filter(Boolean).join(', ')||'keine'}</div><div class="small" style="margin-top:4px">Forschung: ${Object.entries(s.research).map(([k,v])=>v && defs.research[k] ? defs.research[k].name+' '+v : null).filter(Boolean).join(', ')||'keine'}</div><div class="small" style="margin-top:4px">Verteidigung: ${Object.entries(s.defenseShips).map(([k,v])=>v && defs.buildings[k] ? defs.buildings[k].name+' x'+v : null).filter(Boolean).join(', ')||'keine'}</div><div class="small" style="margin-top:4px">Flotte: ${Object.entries(s.fleet).map(([k,v])=>v && defs.ships[k] ? defs.ships[k].name+' x'+v : null).filter(Boolean).join(', ')||'keine'}</div></div>` : '';
       return slotHtml+detail;
+    }
+    if(s.type==='asteroid'){
+      const compNames = s.composition.map(k=>RESOURCE_INFO[k].name).join(', ');
+      const myLevel = p.research.asteroidMiningTech||0;
+      const canMine = myLevel>=s.tier;
+      const stockText = s.composition.map(k=>`${RESOURCE_INFO[k].name} ${fmt(Math.floor(s.stock[k]||0))}/${fmt(s.capacity[k])}`).join(' · ');
+      const mineBtn = canMine
+        ? `<button class="btn good" data-mission-target="mine:${gal}:${sys}:${s.pos}">Abbauen</button>`
+        : `<span class="sub warn-text">Asteroidenbergbau Stufe ${s.tier} nötig</span>`;
+      return `<div class="slot"><div>${s.pos}</div><div>Asteroidenfeld <span class="sub">Stufe ${s.tier} · ${compNames}</span><div class="sub">${stockText}</div></div><div><span class="badge asteroid">Asteroiden</span></div><div class="sub">—</div><div>${mineBtn}</div></div>`;
     }
     const emptyTypeName=(PLANET_TYPES[s.planetType]||PLANET_TYPES.rocky).name;
     return `<div class="slot empty"><div>${s.pos}</div><div>Freies Feld <span class="sub">(${emptyTypeName})</span>${debrisRow}</div><div><span class="badge empty">Leer</span></div><div class="sub">—</div><div><button class="btn good" data-mission-target="colonize:${gal}:${sys}:${s.pos}">Kolonisieren</button></div></div>`;
