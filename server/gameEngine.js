@@ -58,12 +58,24 @@ const RESOURCE_GROUPS = {
   goods: {name:'Industriegüter', storageBuilding:'goodsStorage'},
 };
 const PLANET_TYPES = {
-  rocky: {name:'Gesteinsplanet', desc:'Fester, mineralreicher Untergrund - der Standard-Planetentyp für Heimatwelten.', resources:['iron','copper','aluminium','nickel','limestone']},
-  desert: {name:'Wüstenplanet', desc:'Heiß, trocken, geologisch alt - reich an Edelmetallen und radioaktiven Ablagerungen.', resources:['gold','silver','uranium','rareEarths','sulfur','phosphate']},
-  ice: {name:'Eiswelt', desc:'Gefrorene Wassereis- und Gashydrat-Vorkommen unter der Oberfläche.', resources:['freshwater','lithium','naturalGas']},
-  ocean: {name:'Ozeanplanet', desc:'Selten - noch immer flüssiges Wasser, sedimentäre Ablagerungen.', resources:['saltwater','freshwater','limestone','phosphate']},
-  volcanic: {name:'Vulkanplanet', desc:'Geologisch hochaktiv, reich an fossilen und mineralischen Tiefenvorkommen.', resources:['coal','crudeOil','sulfur','rareEarths']},
-  gasMoon: {name:'Gasriesenmond', desc:'Dünne Atmosphäre im Orbit eines Gasriesen, Sole-Ablagerungen und Gaslecks.', resources:['naturalGas','aluminium','lithium']},
+  rocky: {name:'Gesteinsplanet', desc:'Fester, mineralreicher Untergrund - der Standard-Planetentyp für Heimatwelten.', resources:['iron','copper','aluminium','nickel','limestone'],
+    pros:'Reich an Eisen, Kupfer, Aluminium, Nickel und Kalkstein - die autarke Grundlage für Frühindustrie, ohne auf Handel angewiesen zu sein.',
+    cons:'Kein natürliches Wasser, keine Edelmetalle, kein Uran und keine fossilen Brennstoffe - dafür ist Handel oder eine Kolonie mit anderem Planetentyp nötig.'},
+  desert: {name:'Wüstenplanet', desc:'Heiß, trocken, geologisch alt - reich an Edelmetallen und radioaktiven Ablagerungen.', resources:['gold','silver','uranium','rareEarths','sulfur','phosphate'],
+    pros:'Reich an Gold, Silber, Uran, Seltenen Erden, Schwefel und Phosphat - wichtig für Energietechnik und hochwertige Elektronik.',
+    cons:'Kein Wasser und keine fossilen Brennstoffe (Kohle, Rohöl) - müssen importiert werden.'},
+  ice: {name:'Eiswelt', desc:'Gefrorene Wassereis- und Gashydrat-Vorkommen unter der Oberfläche.', resources:['freshwater','lithium','naturalGas'],
+    pros:'Süßwasser, Lithium und Erdgas im Überfluss - ideal für Batterieproduktion und Treibstoffversorgung.',
+    cons:'Keine Metallerze und keine Edelmetalle - Grundmetalle müssen importiert werden.'},
+  ocean: {name:'Ozeanplanet', desc:'Selten - noch immer flüssiges Wasser, sedimentäre Ablagerungen.', resources:['saltwater','freshwater','limestone','phosphate'],
+    pros:'Salzwasser, Süßwasser, Kalkstein und Phosphat - die einzige natürliche Quelle für Salzwasser im ganzen Universum.',
+    cons:'Sehr selten anzutreffen, kaum Metallerze außer Kalkstein - stark handelsabhängig.'},
+  volcanic: {name:'Vulkanplanet', desc:'Geologisch hochaktiv, reich an fossilen und mineralischen Tiefenvorkommen.', resources:['coal','crudeOil','sulfur','rareEarths'],
+    pros:'Kohle, Rohöl, Schwefel und Seltene Erden - die wichtigste Quelle für fossile Brennstoffe im Universum.',
+    cons:'Kein Wasser und keine Edelmetalle - geologisch instabile, riskante Umgebung.'},
+  gasMoon: {name:'Gasriesenmond', desc:'Dünne Atmosphäre im Orbit eines Gasriesen, Sole-Ablagerungen und Gaslecks.', resources:['naturalGas','aluminium','lithium'],
+    pros:'Erdgas, Aluminium und Lithium - guter Kompromiss zwischen Metall- und Treibstoffversorgung.',
+    cons:'Dünne Atmosphäre, kein Wasser, keine Edelmetalle oder fossilen Brennstoffe.'},
 };
 function planetTypesForResource(resource){
   return Object.entries(PLANET_TYPES).filter(([,t])=>t.resources.includes(resource)).map(([k])=>k);

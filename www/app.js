@@ -29,12 +29,24 @@ const RESOURCE_GROUPS = {
 // vorher hatte jede Stelle ihre eigene (teils unvollstaendige, 'goods' fehlte) Sortierung.
 const RESOURCE_GROUP_ORDER = ['ore','tech','fuel','special','water','goods'];
 const PLANET_TYPES = {
-  rocky: {name:'Gesteinsplanet', desc:'Fester, mineralreicher Untergrund - der Standard-Planetentyp für Heimatwelten.', resources:['iron','copper','aluminium','nickel','limestone']},
-  desert: {name:'Wüstenplanet', desc:'Heiß, trocken, geologisch alt - reich an Edelmetallen und radioaktiven Ablagerungen.', resources:['gold','silver','uranium','rareEarths','sulfur','phosphate']},
-  ice: {name:'Eiswelt', desc:'Gefrorene Wassereis- und Gashydrat-Vorkommen unter der Oberfläche.', resources:['freshwater','lithium','naturalGas']},
-  ocean: {name:'Ozeanplanet', desc:'Selten - noch immer flüssiges Wasser, sedimentäre Ablagerungen.', resources:['saltwater','freshwater','limestone','phosphate']},
-  volcanic: {name:'Vulkanplanet', desc:'Geologisch hochaktiv, reich an fossilen und mineralischen Tiefenvorkommen.', resources:['coal','crudeOil','sulfur','rareEarths']},
-  gasMoon: {name:'Gasriesenmond', desc:'Dünne Atmosphäre im Orbit eines Gasriesen, Sole-Ablagerungen und Gaslecks.', resources:['naturalGas','aluminium','lithium']},
+  rocky: {name:'Gesteinsplanet', desc:'Fester, mineralreicher Untergrund - der Standard-Planetentyp für Heimatwelten.', resources:['iron','copper','aluminium','nickel','limestone'],
+    pros:'Reich an Eisen, Kupfer, Aluminium, Nickel und Kalkstein - die autarke Grundlage für Frühindustrie, ohne auf Handel angewiesen zu sein.',
+    cons:'Kein natürliches Wasser, keine Edelmetalle, kein Uran und keine fossilen Brennstoffe - dafür ist Handel oder eine Kolonie mit anderem Planetentyp nötig.'},
+  desert: {name:'Wüstenplanet', desc:'Heiß, trocken, geologisch alt - reich an Edelmetallen und radioaktiven Ablagerungen.', resources:['gold','silver','uranium','rareEarths','sulfur','phosphate'],
+    pros:'Reich an Gold, Silber, Uran, Seltenen Erden, Schwefel und Phosphat - wichtig für Energietechnik und hochwertige Elektronik.',
+    cons:'Kein Wasser und keine fossilen Brennstoffe (Kohle, Rohöl) - müssen importiert werden.'},
+  ice: {name:'Eiswelt', desc:'Gefrorene Wassereis- und Gashydrat-Vorkommen unter der Oberfläche.', resources:['freshwater','lithium','naturalGas'],
+    pros:'Süßwasser, Lithium und Erdgas im Überfluss - ideal für Batterieproduktion und Treibstoffversorgung.',
+    cons:'Keine Metallerze und keine Edelmetalle - Grundmetalle müssen importiert werden.'},
+  ocean: {name:'Ozeanplanet', desc:'Selten - noch immer flüssiges Wasser, sedimentäre Ablagerungen.', resources:['saltwater','freshwater','limestone','phosphate'],
+    pros:'Salzwasser, Süßwasser, Kalkstein und Phosphat - die einzige natürliche Quelle für Salzwasser im ganzen Universum.',
+    cons:'Sehr selten anzutreffen, kaum Metallerze außer Kalkstein - stark handelsabhängig.'},
+  volcanic: {name:'Vulkanplanet', desc:'Geologisch hochaktiv, reich an fossilen und mineralischen Tiefenvorkommen.', resources:['coal','crudeOil','sulfur','rareEarths'],
+    pros:'Kohle, Rohöl, Schwefel und Seltene Erden - die wichtigste Quelle für fossile Brennstoffe im Universum.',
+    cons:'Kein Wasser und keine Edelmetalle - geologisch instabile, riskante Umgebung.'},
+  gasMoon: {name:'Gasriesenmond', desc:'Dünne Atmosphäre im Orbit eines Gasriesen, Sole-Ablagerungen und Gaslecks.', resources:['naturalGas','aluminium','lithium'],
+    pros:'Erdgas, Aluminium und Lithium - guter Kompromiss zwischen Metall- und Treibstoffversorgung.',
+    cons:'Dünne Atmosphäre, kein Wasser, keine Edelmetalle oder fossilen Brennstoffe.'},
 };
 function planetTypesForResource(resource){ return Object.entries(PLANET_TYPES).filter(([,t])=>t.resources.includes(resource)).map(([k])=>k); }
 function zeroResources(){ const r={}; RESOURCE_KEYS.forEach(k=>r[k]=0); return r; }
@@ -1125,19 +1137,12 @@ const navItems = [['overview','Übersicht'],['buildings','Gebäude'],['facilitie
 
 function unreadMailCount(){ return (state.mail||[]).filter(m=>m.direction==='in' && !m.read).length; }
 function renderNav(){ const unread=unreadMailCount(); $('#nav').innerHTML = navItems.map(([id,label])=>`<button class="${state.view===id?'active':''}" data-view="${id}">${label}${id==='messages'&&unread>0?` <span class="pill active" style="padding:1px 6px;font-size:11px">${unread}</span>`:''}</button>`).join(''); document.querySelectorAll('[data-view]').forEach(b=>b.onclick=()=>{ if(b.dataset.view!=='fleet') state.fleetPrefill=null; if(b.dataset.view==='highscore') highscoreCache=null; if(b.dataset.view==='galaxy') galaxyCache={}; state.view=b.dataset.view; if(b.dataset.view==='messages' && unreadMailCount()>0) postAction('markMailRead', {}); render(); }); }
+// Die Rohstoff-/Energieanzeige lebt bewusst nur noch im Übersicht-Tab (viewOverview) -
+// die obere Leiste zeigt nur noch Planetname/Koordinaten, um Dopplung zu vermeiden.
 function renderTop(){
   const p=active(); if(!p) return;
-  const inc=hourly(p), e=energyStats(p);
   $('#planetName').textContent=p.name;
   $('#planetCoords').innerHTML=coordLinkHtml(p.coords)+' · '+(PLANET_TYPES[p.planetType]||PLANET_TYPES.rocky).name;
-  // Zeigt IMMER alle 18 Rohstoffe, unabhaengig vom Planetentyp - ein neuer Spieler startet
-  // mit einem Grundbestand jedes Rohstoffs und soll jederzeit seinen gesamten Vorrat auf
-  // einen Blick sehen, nicht nur das, was der aktuelle Planet selbst abbaut.
-  // Die "0/h"-Zeile wird weggelassen, wenn gerade nichts produziert wird (bei 18 Rohstoffen
-  // meist der Großteil) - spart eine Zeile pro Chip und haelt die Leiste kompakter.
-  const orderedKeys = RESOURCE_GROUP_ORDER.flatMap(g=>RESOURCE_KEYS.filter(k=>RESOURCE_INFO[k].group===g));
-  const resHtml = orderedKeys.map(k=>`<div class="res-item"><span class="res-label">${RESOURCE_INFO[k].name}</span><span>${fmt(p.resources[k]||0)}</span>${inc[k]?`<span class="rate">${fmt1(inc[k])}/h</span>`:''}</div>`).join('');
-  $('#resourcesTop').innerHTML = resHtml + `<div class="res-item"><span class="res-label">Energie</span><span id="energyTop">${fmt(e.prod)}</span><span class="rate" id="energyUse">${fmt(e.use)} genutzt</span></div>`;
 }
 function renderSide(){
   $('#planetTabs').innerHTML = state.planets.map((p,i)=>p.destroyed?'':`<button class="pill ${state.activePlanet===i?'active':''}" data-planet="${i}">${p.name}</button>`).join('');
@@ -1163,8 +1168,11 @@ function viewOverview(){ const p=active(), e=energyStats(p), inc=hourly(p), cap=
   }).join('');
   return `${eventBanner}
   <div class="hero">
-    <div class="card"><h2>Planetenübersicht</h2><p>Planetentyp: <strong>${planetType.name}</strong> - ${planetType.desc}</p>
-      <form id="renamePlanetForm" class="market-form" style="margin-top:4px"><label>Planet umbenennen<input type="text" name="name" maxlength="30" value="${escapeHtml(p.name)}"></label><button class="btn alt" type="submit">Speichern</button></form>
+    <div class="card"><h2>${escapeHtml(p.name)}</h2><div class="small">${coordLinkHtml(p.coords)} · ${planetType.name}</div>
+      <p style="margin-top:8px">${planetType.desc}</p>
+      <div class="small" style="margin-top:6px">✓ <strong>Vorteil:</strong> ${planetType.pros}</div>
+      <div class="small warn-text" style="margin-top:4px">✕ <strong>Nachteil:</strong> ${planetType.cons}</div>
+      <form id="renamePlanetForm" class="market-form" style="margin-top:10px"><label>Planet umbenennen<input type="text" name="name" maxlength="30" value="${escapeHtml(p.name)}"></label><button class="btn alt" type="submit">Speichern</button></form>
     </div>
     <div class="card"><h2>Energie</h2><div class="small">Ohne genug Energie sinkt die Produktion proportional.</div><div style="height:10px"></div><div class="bar"><span style="width:${Math.min(100,(e.prod/Math.max(1,e.use))*100)}%"></span></div><div style="height:10px"></div><div class="small">Produktion ${fmt(e.prod)} · Verbrauch ${fmt(e.use)} · Faktor ${fmt1(e.ratio*100)}%</div></div>
   </div>
