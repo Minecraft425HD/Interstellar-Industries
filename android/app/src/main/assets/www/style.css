@@ -283,6 +283,7 @@ table th{
 }
 
 .galaxy-grid{ display:flex; flex-direction:column; gap:6px; }
+.slot[data-slot-toggle]{ cursor:pointer; }
 .slot{
   display:grid; grid-template-columns:28px 2fr 70px 1fr auto; gap:10px; align-items:center;
   background-image: var(--tex-grid), linear-gradient(180deg, var(--panel2), #0a1120);

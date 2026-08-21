@@ -590,7 +590,10 @@ function seedGalaxy(universe, galaxy, system, viewerUsername){
     const o = occupied[pos];
     const planetType = planetTypeForCoord(galaxy, system, pos);
     if(o){
-      if(o.username===viewerUsername) slots.push({pos, type:'own', planet:o.planet});
+      if(o.username===viewerUsername){
+        const moon = findMoonAt(universe.players[o.username], o.planet.coords);
+        slots.push({pos, type:'own', planet:o.planet, moon});
+      }
       else slots.push({pos, type:'player', ownerUsername:o.username, planetName:o.planet.name, coords:o.planet.coords});
       continue;
     }
@@ -727,6 +730,9 @@ function networkSpeed(p){ const lvl=(p.research.intergalacticNetwork)||0; return
 function buildingCost(state, base, level){ const c=scaledCost(base, level); const d=commanderDiscount(state); const r={}; for(const k of RESOURCE_KEYS) r[k]=Math.floor((c[k]||0)*d); return r; }
 function maxColonies(p){ const lvl=(p.research.astrophysics)||0; return 1+Math.floor((lvl+1)/2); }
 function maxExpeditions(p){ const lvl=(p.research.astrophysics)||0; return 1+Math.floor(lvl/2); }
+function findMoonAt(playerState, coord){
+  return (playerState.moons||[]).find(m=>m.coord[0]===coord[0]&&m.coord[1]===coord[1]&&m.coord[2]===coord[2]) || null;
+}
 function moonChanceFromDebris(debrisTotal){ return Math.min(0.20, Math.floor(debrisTotal/50000)*0.01); }
 function maybeCreateMoon(state, coord, debrisTotal){
   const chance = moonChanceFromDebris(debrisTotal);
@@ -1611,11 +1617,16 @@ function espionageReportTiers(atkEsp, defEsp){
 function espionageTierCount(tiers){ return Object.values(tiers).filter(Boolean).length; }
 function buildEspionageReport(opts){
   const tiers = opts.tiers;
-  const report = { time:new Date().toLocaleTimeString('de-DE'), target:opts.target, coords:opts.coords, coordArr:opts.coordArr, resources:opts.resources, tier:espionageTierCount(tiers), tiers };
+  const report = { time:new Date().toLocaleTimeString('de-DE'), timestamp:Date.now(), target:opts.target, coords:opts.coords, coordArr:opts.coordArr, resources:opts.resources, tier:espionageTierCount(tiers), tiers };
   if(tiers.fleet) report.fleet = opts.fleetShips;
   if(tiers.defense){ report.defense = sidePower(opts.defenseShips, defs.buildings).attack; report.defenderPower = combinedDefenderPower(opts.fleetShips, opts.defenseShips); }
   if(tiers.buildings) report.buildings = opts.buildings;
   if(tiers.research) report.research = opts.research;
+  if(opts.moon){
+    report.moon = { coord:[...opts.moon.coord], size:opts.moon.size };
+    if(tiers.fleet) report.moon.ships = {...opts.moon.ships};
+    if(tiers.buildings) report.moon.buildings = {...opts.moon.buildings};
+  }
   return report;
 }
 function attemptResearchTheft(state, p, npcSlot){
@@ -1685,6 +1696,7 @@ function resolveArrival(universe, username, f){
           state.reports.unshift(buildEspionageReport({
             target:t.name+' ('+f.toOwner+')', coords:coordStr(t.coords), coordArr:t.coords,
             resources:{...t.resources}, fleetShips:t.ships, defenseShips:extractDefense(t.buildings), buildings:t.buildings, research:t.research, tiers,
+            moon: findMoonAt(targetState, t.coords),
           }));
           log(state, 'Spionagebericht über '+t.name+' ('+f.toOwner+') erhalten (Stufe '+espionageTierCount(tiers)+'/5)');
           message(targetState, 'Dein Planet '+t.name+' wurde von '+username+' ausspioniert.');
@@ -1697,6 +1709,7 @@ function resolveArrival(universe, username, f){
       state.reports.unshift(buildEspionageReport({
         target:t.name, coords:coordStr(t.coords), coordArr:t.coords,
         resources:{...t.resources}, fleetShips:t.ships, defenseShips:extractDefense(t.buildings), buildings:t.buildings, research:t.research, tiers,
+        moon: findMoonAt(state, t.coords),
       }));
       log(state, 'Spionagebericht über '+t.name+' erhalten (Stufe '+espionageTierCount(tiers)+'/5)');
     }

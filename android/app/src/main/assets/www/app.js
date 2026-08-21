@@ -245,6 +245,7 @@ const state = {
   logs: [],
   galaxyIndex: 1,
   galaxySystem: 145,
+  expandedGalaxySlot: null,
   fleetPrefill: null,
   username: null,
   isAdmin: false,
@@ -1320,9 +1321,29 @@ function viewGalaxy(){
   <div class="galaxy-grid">${slots.map(s=>{
     const key2 = debrisKey([gal,sys,s.pos]); const debris = state.debrisFields[key2];
     const debrisRow = debris ? `<div class="sub">Trümmerfeld: ${fmt(resTotal(debris))} <button class="btn alt" data-mission-target="harvest:${gal}:${sys}:${s.pos}" style="margin-left:8px;padding:6px 10px;min-height:32px">Bergen</button></div>` : '';
-    if(s.type==='own') return `<div class="slot own"><div>${s.pos}</div><div><strong>${s.planet.name}</strong><div class="sub">${coordLinkHtml(s.planet.coords)} · ${(PLANET_TYPES[s.planet.planetType]||PLANET_TYPES.rocky).name}</div>${debrisRow}</div><div><span class="badge own">Eigen</span></div><div class="sub">Rohstoffe ${fmt(resTotal(s.planet.resources))}</div><div></div></div>`;
-    if(s.type==='player') return `<div class="slot"><div>${s.pos}</div><div><strong>${s.planetName}</strong><div class="sub">Spieler: ${s.ownerUsername}</div>${debrisRow}</div><div><span class="badge npc">Spieler</span></div><div class="sub">—</div><div><button class="btn danger" data-mission-target="attack:${gal}:${sys}:${s.pos}">Angriff</button> <button class="btn alt" data-mission-target="spy:${gal}:${sys}:${s.pos}">Spionage</button> <button class="btn" data-mission-target="transport:${gal}:${sys}:${s.pos}">Transport</button></div></div>`;
-    if(s.type==='npc'){ const defPower = sidePower(s.defenseShips, defs.buildings).attack; const ptName=(PLANET_TYPES[s.planetType]||PLANET_TYPES.rocky).name; return `<div class="slot"><div>${s.pos}</div><div><strong>${s.name}</strong><div class="sub">Stufe ${s.level} · ${ptName}</div>${debrisRow}</div><div><span class="badge npc">NPC</span></div><div class="sub">Def ${fmt(defPower)}</div><div><button class="btn danger" data-mission-target="attack:${gal}:${sys}:${s.pos}">Angriff</button> <button class="btn alt" data-mission-target="spy:${gal}:${sys}:${s.pos}">Spionage</button></div></div>`; }
+    const expanded = state.expandedGalaxySlot===s.pos;
+    if(s.type==='own'){
+      const slotHtml = `<div class="slot own" data-slot-toggle="${s.pos}"><div>${s.pos}</div><div><strong>${s.planet.name}</strong><div class="sub">${coordLinkHtml(s.planet.coords)} · ${(PLANET_TYPES[s.planet.planetType]||PLANET_TYPES.rocky).name}</div>${debrisRow}</div><div><span class="badge own">Eigen</span></div><div class="sub">Rohstoffe ${fmt(resTotal(s.planet.resources))}</div><div></div></div>`;
+      const detail = expanded ? `<div class="card" style="margin-top:8px">${s.moon ? moonFactsHtml(s.moon) : '<div class="small">Kein Mond an dieser Position.</div>'}</div>` : '';
+      return slotHtml+detail;
+    }
+    if(s.type==='player'){
+      const slotHtml = `<div class="slot" data-slot-toggle="${s.pos}"><div>${s.pos}</div><div><strong>${s.planetName}</strong><div class="sub">Spieler: ${s.ownerUsername}</div>${debrisRow}</div><div><span class="badge npc">Spieler</span></div><div class="sub">—</div><div><button class="btn danger" data-mission-target="attack:${gal}:${sys}:${s.pos}">Angriff</button> <button class="btn alt" data-mission-target="spy:${gal}:${sys}:${s.pos}">Spionage</button> <button class="btn" data-mission-target="transport:${gal}:${sys}:${s.pos}">Transport</button></div></div>`;
+      let detail = '';
+      if(expanded){
+        const report = state.reports.find(r=>r.type!=='phalanx' && r.coordArr && r.coordArr[0]===gal && r.coordArr[1]===sys && r.coordArr[2]===s.pos);
+        detail = `<div class="card" style="margin-top:8px">${report
+          ? `<div class="small">${reportAgeHtml(report)}</div>${moonFactsHtml(report.moon)}${espionageReportFactsHtml(report)}`
+          : '<div class="small">Keine Erkenntnisse - Spionage nötig.</div>'}</div>`;
+      }
+      return slotHtml+detail;
+    }
+    if(s.type==='npc'){
+      const defPower = sidePower(s.defenseShips, defs.buildings).attack; const ptName=(PLANET_TYPES[s.planetType]||PLANET_TYPES.rocky).name;
+      const slotHtml = `<div class="slot" data-slot-toggle="${s.pos}"><div>${s.pos}</div><div><strong>${s.name}</strong><div class="sub">Stufe ${s.level} · ${ptName}</div>${debrisRow}</div><div><span class="badge npc">NPC</span></div><div class="sub">Def ${fmt(defPower)}</div><div><button class="btn danger" data-mission-target="attack:${gal}:${sys}:${s.pos}">Angriff</button> <button class="btn alt" data-mission-target="spy:${gal}:${sys}:${s.pos}">Spionage</button></div></div>`;
+      const detail = expanded ? `<div class="card" style="margin-top:8px"><div class="small">Rohstoffe: ${fmt(resTotal(s.resources))}</div><div class="small" style="margin-top:6px">Gebäude: ${Object.entries(s.buildings).map(([k,v])=>v && defs.buildings[k] ? defs.buildings[k].name+' '+v : null).filter(Boolean).join(', ')||'keine'}</div><div class="small" style="margin-top:4px">Forschung: ${Object.entries(s.research).map(([k,v])=>v && defs.research[k] ? defs.research[k].name+' '+v : null).filter(Boolean).join(', ')||'keine'}</div><div class="small" style="margin-top:4px">Verteidigung: ${Object.entries(s.defenseShips).map(([k,v])=>v && defs.buildings[k] ? defs.buildings[k].name+' x'+v : null).filter(Boolean).join(', ')||'keine'}</div><div class="small" style="margin-top:4px">Flotte: ${Object.entries(s.fleet).map(([k,v])=>v && defs.ships[k] ? defs.ships[k].name+' x'+v : null).filter(Boolean).join(', ')||'keine'}</div></div>` : '';
+      return slotHtml+detail;
+    }
     const emptyTypeName=(PLANET_TYPES[s.planetType]||PLANET_TYPES.rocky).name;
     return `<div class="slot empty"><div>${s.pos}</div><div>Freies Feld <span class="sub">(${emptyTypeName})</span>${debrisRow}</div><div><span class="badge empty">Leer</span></div><div class="sub">—</div><div><button class="btn good" data-mission-target="colonize:${gal}:${sys}:${s.pos}">Kolonisieren</button></div></div>`;
   }).join('')}</div>`; }
@@ -1491,6 +1512,36 @@ function viewMarket(){ const r=state.marketRate; const initialAmount=1000; const
   const rateCards = RESOURCE_KEYS.map(k=>`<div class="card"><div class="label">${RESOURCE_INFO[k].name}</div><div class="value">${fmt1(r[k]||0)}</div></div>`).join('');
   return `<h2>Markt</h2><div class="small">Kurswerte (relativer Tauschwert pro Einheit; 10% Marktabschlag beim Tausch):</div><div style="height:8px"></div><div class="grid4">${rateCards}</div><div style="height:16px"></div><div class="grid2"><div class="card"><h3>Ressourcen handeln</h3><form class="market-form" id="marketForm"><label>Abgeben<select name="give">${resOptions}</select></label><label>Erhalten<select name="want">${resOptions}</select></label><label>Menge<input type="number" min="1" value="100" name="amount"></label><button class="btn good" type="submit">Am Markt tauschen</button></form></div><div class="card"><h3>Händler (Dunkle Materie)</h3><div class="small">Tausche Dunkle Materie sofort gegen Ressourcen. Kurs: 5 Einheiten pro 1 DM.</div><div style="height:10px"></div><form class="market-form" id="merchantForm"><label>Ressource<select name="resource">${resOptions}</select></label><label>Menge<input type="number" min="1" value="${initialAmount}" name="amount" id="merchantAmount"></label><div class="small" id="merchantCostHint">Kosten: ${fmt(initialCost)} Dunkle Materie</div><button class="btn warn" type="submit" id="merchantBuyBtn" ${initialAffordable?'':'disabled'}>Kaufen</button></form><div class="small" style="margin-top:8px">Dunkle Materie: ${fmt(state.darkMatter)}</div></div>${auctionCard}</div>`; }
 
+// Mond-Fakten eines Spionageberichts (oder des eigenen Mondes) - Mond erscheint immer an
+// erster Stelle, wo verfuegbar, wie vom Nutzer explizit gewuenscht. Gebaeude/Flotte des
+// Mondes folgen denselben Spionagestufen wie die des Planeten (kein eigenes Stufensystem
+// fuer Monde - sie haben keine eigene Spionageabwehr/Forschung).
+function moonFactsHtml(moon){
+  if(!moon) return '';
+  const buildText = moon.buildings ? ['lunarBase','sensorPhalanx','jumpGate'].map(k=>defs.buildings[k].name+' '+(moon.buildings[k]||0)).join(' · ') : 'Unbekannt (höhere Spionagetechnik nötig)';
+  const shipText = moon.ships ? (Object.entries(moon.ships).map(([k,v])=>v&&defs.ships[k]?defs.ships[k].name+' x'+v:null).filter(Boolean).join(', ')||'keine') : 'Unbekannt (höhere Spionagetechnik nötig)';
+  return `<div class="small" style="margin-top:6px"><strong>Mond ${coordStr(moon.coord)}</strong> · Größe ${fmt(moon.size)}</div><div class="small" style="margin-top:2px">Mondgebäude: ${buildText}</div><div class="small" style="margin-top:2px">Mondflotte: ${shipText}</div>`;
+}
+// Gestaffelte Planeten-Fakten eines Spionageberichts - aus viewReports() extrahiert, damit
+// die "Unbekannt"-Fallback-Texte in viewReports() UND im Galaxie-Aufklapp-Panel identisch
+// bleiben statt zweimal gepflegt werden zu muessen.
+function espionageReportFactsHtml(r){
+  const buildingsHtml = r.buildings ? `<div class="small" style="margin-top:6px">Gebäude: ${Object.entries(r.buildings).map(([k,v])=>v && defs.buildings[k] ? defs.buildings[k].name+' '+v : null).filter(Boolean).join(', ')||'keine'}</div>` : (r.tiers ? `<div class="small" style="margin-top:6px">Gebäude: Unbekannt (höhere Spionagetechnik nötig)</div>` : '');
+  const researchHtml = r.research ? `<div class="small" style="margin-top:4px">Forschung: ${Object.entries(r.research).map(([k,v])=>v && defs.research[k] ? defs.research[k].name+' '+v : null).filter(Boolean).join(', ')||'keine'}</div>` : (r.tiers ? `<div class="small" style="margin-top:4px">Forschung: Unbekannt (höhere Spionagetechnik nötig)</div>` : '');
+  const defenseText = r.defense!=null ? fmt(r.defense) : 'Unbekannt (höhere Spionagetechnik nötig)';
+  const fleetText = r.fleet ? (Object.entries(r.fleet).map(([k,v])=>v?defs.ships[k].name+' x'+v:null).filter(Boolean).join(', ')||'keine') : 'Unbekannt (höhere Spionagetechnik nötig)';
+  const resCards = RESOURCE_KEYS.filter(k=>(r.resources[k]||0)>0).map(k=>`<div class="card"><div class="label">${RESOURCE_INFO[k].name}</div><div class="value">${fmt(r.resources[k]||0)}</div></div>`).join('') || '<div class="small">Keine Rohstoffe.</div>';
+  return `<div class="grid4" style="margin-top:8px">${resCards}</div><div class="small" style="margin-top:8px">Verteidigung: ${defenseText} · Flotte: ${fleetText}</div>${buildingsHtml}${researchHtml}`;
+}
+// Berichtsalter: neue Berichte tragen ein timestamp-Feld (Date.now()), alte Berichte ohne
+// dieses Feld gelten als "Alter unbekannt" statt einen Fehler zu werfen. Ueber 30 Minuten
+// alt wird als "veraltet/vermutet" gekennzeichnet - der Nutzer-Wortwahl folgend.
+function reportAgeHtml(r){
+  if(r.timestamp==null) return '<span class="small">Alter unbekannt</span>';
+  const ageMs = Date.now()-r.timestamp;
+  const stale = ageMs > 30*60*1000;
+  return `<span class="small${stale?' warn-text':''}">${stale?'Veraltet/vermutet · ':''}vor ${formatDuration(ageMs)}</span>`;
+}
 function viewReports(){
   if(state.reports.length===0) return `<h2>Berichte</h2><div class="small">Noch keine Spionageberichte vorhanden.</div>`;
   return `<h2>Berichte</h2>${state.reports.map((r,i)=>{
@@ -1498,14 +1549,9 @@ function viewReports(){
       const rows = r.movements.length ? r.movements.map(m=>`<div class="row"><div><strong>${m.username}</strong><div class="sub">${missionLabels[m.mission]||m.mission} · ${m.direction==='incoming'?'kommend':'gehend'}</div></div><div><div>${m.shipTotal} Schiff(e)</div><div class="sub">Ankunft in ${formatDuration(m.etaSeconds*1000)}</div></div></div>`).join('') : '<div class="small">Keine Flottenbewegungen entdeckt.</div>';
       return `<div class="report"><div class="row" style="border:none;background:none;padding:0"><strong>Sensorphalanx-Scan: ${r.target}</strong><span class="small">${r.time}</span></div><div class="small">${r.coordArr?coordLinkHtml(r.coordArr):r.target}</div><div style="height:8px"></div><div class="list">${rows}</div></div>`;
     }
-    const buildingsHtml = r.buildings ? `<div class="small" style="margin-top:6px">Gebäude: ${Object.entries(r.buildings).map(([k,v])=>v && defs.buildings[k] ? defs.buildings[k].name+' '+v : null).filter(Boolean).join(', ')||'keine'}</div>` : (r.tiers ? `<div class="small" style="margin-top:6px">Gebäude: Unbekannt (höhere Spionagetechnik nötig)</div>` : '');
-    const researchHtml = r.research ? `<div class="small" style="margin-top:4px">Forschung: ${Object.entries(r.research).map(([k,v])=>v && defs.research[k] ? defs.research[k].name+' '+v : null).filter(Boolean).join(', ')||'keine'}</div>` : (r.tiers ? `<div class="small" style="margin-top:4px">Forschung: Unbekannt (höhere Spionagetechnik nötig)</div>` : '');
     const simBtn = r.defenderPower ? `<button type="button" class="btn alt" data-battle-sim="${i}" style="margin-top:8px">Kampf simulieren</button>` : '';
     const tierBadge = typeof r.tier==='number' ? ` <span class="pill active" style="padding:1px 8px;font-size:11px">Spionagestufe ${r.tier}/5</span>` : '';
-    const defenseText = r.defense!=null ? fmt(r.defense) : 'Unbekannt (höhere Spionagetechnik nötig)';
-    const fleetText = r.fleet ? (Object.entries(r.fleet).map(([k,v])=>v?defs.ships[k].name+' x'+v:null).filter(Boolean).join(', ')||'keine') : 'Unbekannt (höhere Spionagetechnik nötig)';
-    const resCards = RESOURCE_KEYS.filter(k=>(r.resources[k]||0)>0).map(k=>`<div class="card"><div class="label">${RESOURCE_INFO[k].name}</div><div class="value">${fmt(r.resources[k]||0)}</div></div>`).join('') || '<div class="small">Keine Rohstoffe.</div>';
-    return `<div class="report"><div class="row" style="border:none;background:none;padding:0"><strong>${r.target}</strong><span class="small">${r.time}${tierBadge}</span></div><div class="small">${r.coordArr?coordLinkHtml(r.coordArr):r.coords}</div><div class="grid4" style="margin-top:8px">${resCards}</div><div class="small" style="margin-top:8px">Verteidigung: ${defenseText} · Flotte: ${fleetText}</div>${buildingsHtml}${researchHtml}${simBtn}</div>`;
+    return `<div class="report"><div class="row" style="border:none;background:none;padding:0"><strong>${r.target}</strong><span class="small">${r.time} · ${reportAgeHtml(r)}${tierBadge}</span></div><div class="small">${r.coordArr?coordLinkHtml(r.coordArr):r.coords}</div>${moonFactsHtml(r.moon)}${espionageReportFactsHtml(r)}${simBtn}</div>`;
   }).join('')}`;
 }
 
@@ -1558,6 +1604,7 @@ function renderView(bind=true){
       const g=Number(gj.galaxy.value), s=Number(gj.system.value);
       if(Number.isInteger(g) && g>=1 && g<=UNIVERSE.galaxies) state.galaxyIndex=g;
       if(Number.isInteger(s) && s>=1 && s<=UNIVERSE.systems) state.galaxySystem=s;
+      state.expandedGalaxySlot = null;
       renderView();
     };
     const grb=$('#galaxyRefreshBtn'); if(grb) grb.onclick=()=>{ delete galaxyCache[galaxyCacheKey(state.galaxyIndex, state.galaxySystem)]; renderView(true); };
@@ -1565,6 +1612,12 @@ function renderView(bind=true){
       const [mission,gal,sys,pos]=b.dataset.missionTarget.split(':');
       state.fleetPrefill = {mission, gal:Number(gal), sys:Number(sys), pos:Number(pos)};
       state.view='fleet'; render();
+    });
+    document.querySelectorAll('[data-slot-toggle]').forEach(el=>el.onclick=(e)=>{
+      if(e.target.closest('button')) return;
+      const pos = Number(el.dataset.slotToggle);
+      state.expandedGalaxySlot = state.expandedGalaxySlot===pos ? null : pos;
+      renderView(true);
     });
     const saveBtn=$('#saveBtn'); if(saveBtn) saveBtn.onclick=saveGame;
     const loadInput=$('#loadInput'); if(loadInput) loadInput.onchange=e=>{ if(e.target.files[0]) loadGame(e.target.files[0]); };
