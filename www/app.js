@@ -258,7 +258,8 @@ const state = {
   isAdmin: false,
   adminMode: false,
   factoryTab: 'all',
-  buildingTab: 'all'
+  buildingTab: 'all',
+  facilityTab: 'planet'
 };
 
 const UNIVERSE = { galaxies: 9, systems: 499, positions: 15 };
@@ -1022,7 +1023,7 @@ function telescopeAsteroidRows(p){
     const key = galaxyCacheKey(gal, sys);
     const slots = galaxyCache[key];
     if(!slots){ if(!galaxyLoadingKeys.has(key)) fetchGalaxySlots(gal, sys); anyLoading = true; continue; }
-    slots.filter(s=>s.type==='asteroid').forEach(s=>rows.push({gal, sys, ...s}));
+    slots.filter(s=>s.asteroid).forEach(s=>rows.push({gal, sys, ...s}));
   }
   return {rows, anyLoading};
 }
@@ -1184,7 +1185,7 @@ function computePoints(p){
 }
 function totalPlayerPoints(){ return Math.floor(state.planets.filter(p=>!p.destroyed).reduce((s,p)=>s+computePoints(p),0)/1000); }
 
-const navItems = [['overview','Übersicht'],['buildings','Gebäude'],['facilities','Anlagen'],['factories','Fabriken'],['defense','Verteidigung'],['research','Forschung'],['shipyard','Werft'],['fleet','Flotte'],['expeditions','Expeditionen'],['galaxy','Galaxie'],['moons','Monde'],['alliance','Allianz'],['officers','Offiziere'],['lifeform','Lebensform'],['market','Markt'],['reports','Berichte'],['messages','Nachrichten'],['empire','Imperium'],['highscore','Rangliste'],['settings','Einstellungen']];
+const navItems = [['overview','Übersicht'],['buildings','Gebäude'],['facilities','Anlagen'],['factories','Fabriken'],['defense','Verteidigung'],['research','Forschung'],['shipyard','Werft'],['fleet','Flotte'],['expeditions','Expeditionen'],['galaxy','Galaxie'],['alliance','Allianz'],['officers','Offiziere'],['lifeform','Lebensform'],['market','Markt'],['reports','Berichte'],['messages','Nachrichten'],['empire','Imperium'],['highscore','Rangliste'],['settings','Einstellungen']];
 
 function unreadMailCount(){ return (state.mail||[]).filter(m=>m.direction==='in' && !m.read).length; }
 function renderNav(){ const unread=unreadMailCount(); $('#nav').innerHTML = navItems.map(([id,label])=>`<button class="${state.view===id?'active':''}" data-view="${id}">${label}${id==='messages'&&unread>0?` <span class="pill active" style="padding:1px 6px;font-size:11px">${unread}</span>`:''}</button>`).join(''); document.querySelectorAll('[data-view]').forEach(b=>b.onclick=()=>{ if(b.dataset.view!=='fleet') state.fleetPrefill=null; if(b.dataset.view==='highscore') highscoreCache=null; if(b.dataset.view==='galaxy') galaxyCache={}; state.view=b.dataset.view; if(b.dataset.view==='messages' && unreadMailCount()>0) postAction('markMailRead', {}); render(); }); }
@@ -1274,7 +1275,17 @@ function viewBuildings(){
   return `<h2>Gebäude</h2>${tabHtml}<div style="height:12px"></div><div class="list">${rows}</div>`;
 }
 
-function viewFacilities(){ const p=active(); const facKeys = Object.entries(defs.buildings).filter(([,d])=>d.facility && !d.moonOnly); return `<h2>Anlagen</h2><div class="list">${facKeys.map(([k,d])=>{ const lvl=(p.buildings[k]||0)+1; const c=buildingCost(costBaseFor(d,p),lvl); const ok=meetsRequirements(p,d.requires); const queued=p.buildQueue.some(q=>q.key===k); return `<div class="row"><div><strong>${d.name}</strong><div class="sub">Stufe ${p.buildings[k]||0}</div><div class="sub">Kosten: ${resCostText(c)}</div>${queued?`<div class="sub warn-text">Wird bereits gebaut (Stufe ${lvl})</div>`:''}${!ok?`<div class="sub warn-text">Benötigt: ${requirementText(d.requires)}</div>`:''}</div><div style="display:flex;gap:6px;align-items:center">${infoIconHtml('building',k,p.buildings[k]||0)}<button class="btn alt" data-build="${k}" ${ok&&!queued?'':'disabled'}>Ausbauen</button></div></div>`; }).join('')}</div>`; }
+function planetFacilitySection(p, facKeys){
+  return `<div class="list">${facKeys.map(([k,d])=>{ const lvl=(p.buildings[k]||0)+1; const c=buildingCost(costBaseFor(d,p),lvl); const ok=meetsRequirements(p,d.requires); const queued=p.buildQueue.some(q=>q.key===k); return `<div class="row"><div><strong>${d.name}</strong><div class="sub">Stufe ${p.buildings[k]||0}</div><div class="sub">Kosten: ${resCostText(c)}</div>${queued?`<div class="sub warn-text">Wird bereits gebaut (Stufe ${lvl})</div>`:''}${!ok?`<div class="sub warn-text">Benötigt: ${requirementText(d.requires)}</div>`:''}</div><div style="display:flex;gap:6px;align-items:center">${infoIconHtml('building',k,p.buildings[k]||0)}<button class="btn alt" data-build="${k}" ${ok&&!queued?'':'disabled'}>Ausbauen</button></div></div>`; }).join('')}</div>`;
+}
+function viewFacilities(){
+  const p = active();
+  const facKeys = Object.entries(defs.buildings).filter(([,d])=>d.facility && !d.moonOnly);
+  const tabs = [['planet','Planet'],['moons','Monde']];
+  const tabHtml = `<div class="subnav">${tabs.map(([id,label])=>`<button class="${state.facilityTab===id?'active':''}" data-facility-tab="${id}">${label}</button>`).join('')}</div>`;
+  const body = state.facilityTab==='moons' ? moonFacilitySection() : planetFacilitySection(p, facKeys);
+  return `<h2>Anlagen</h2>${tabHtml}<div style="height:12px"></div>${body}`;
+}
 
 // Ist ein Fabrik-Rezept Tier 2 (verbraucht mind. ein anderes Industriegut statt nur
 // Rohstoffe)? Wird ueber die Rohstoffgruppe der Eingaben erkannt, kein Extra-Flag noetig.
@@ -1387,8 +1398,8 @@ function viewGalaxy(){
     const {rows, anyLoading} = telescopeAsteroidRows(p);
     const body = rows.length
       ? `<div class="list">${rows.map(r=>{
-          const compNames = r.composition.map(k=>RESOURCE_INFO[k].name).join(', ');
-          return `<div class="row"><div>[${r.gal}:${r.sys}:${r.pos}]</div><div>Stufe ${r.tier} <span class="sub">${compNames}</span></div><div><button class="btn alt" data-telescope-jump="${r.gal}:${r.sys}">Ansehen</button></div></div>`;
+          const compNames = r.asteroid.composition.map(k=>RESOURCE_INFO[k].name).join(', ');
+          return `<div class="row"><div>[${r.gal}:${r.sys}:${r.pos}]</div><div>Stufe ${r.asteroid.tier} <span class="sub">${compNames}</span></div><div><button class="btn alt" data-telescope-jump="${r.gal}:${r.sys}">Ansehen</button></div></div>`;
         }).join('')}</div>`
       : (anyLoading ? '<div class="small">Lade Systemdaten…</div>' : '<div class="small">Keine Asteroidenfelder in Reichweite gefunden.</div>');
     return `<div class="card" style="margin-bottom:12px"><h3>Asteroidenfelder in Reichweite (Teleskop Stufe ${telescopeLevel}, ±${range} Systeme)</h3>${body}</div>`;
@@ -1400,14 +1411,26 @@ function viewGalaxy(){
   <div class="galaxy-grid">${slots.map(s=>{
     const key2 = debrisKey([gal,sys,s.pos]); const debris = state.debrisFields[key2];
     const debrisRow = debris ? `<div class="sub">Trümmerfeld: ${fmt(resTotal(debris))} <button class="btn alt" data-mission-target="harvest:${gal}:${sys}:${s.pos}" style="margin-left:8px;padding:6px 10px;min-height:32px">Bergen</button></div>` : '';
+    // Asteroidenfelder sind kein eigener Slot-Typ mehr, sondern ein Overlay - kann auf JEDER
+    // Positionsart auftreten (auch own/player/npc/blackhole), analog zu debrisRow oben.
+    const asteroidRow = s.asteroid ? (()=>{
+      const a = s.asteroid;
+      const compNames = a.composition.map(k=>RESOURCE_INFO[k].name).join(', ');
+      const myLevel = p.research.asteroidMiningTech||0;
+      const stockText = a.composition.map(k=>`${RESOURCE_INFO[k].name} ${fmt(Math.floor(a.stock[k]||0))}/${fmt(a.capacity[k])}`).join(' · ');
+      const mineBtn = myLevel>=a.tier
+        ? `<button class="btn good" data-mission-target="mine:${gal}:${sys}:${s.pos}" style="margin-left:8px;padding:6px 10px;min-height:32px">Abbauen</button>`
+        : `<span class="sub warn-text">Asteroidenbergbau Stufe ${a.tier} nötig</span>`;
+      return `<div class="sub">Asteroidenfeld (Stufe ${a.tier}, ${compNames}): ${stockText} ${mineBtn}</div>`;
+    })() : '';
     const expanded = state.expandedGalaxySlot===s.pos;
     if(s.type==='own'){
-      const slotHtml = `<div class="slot own" data-slot-toggle="${s.pos}"><div>${s.pos}</div><div><strong>${s.planet.name}</strong><div class="sub">${coordLinkHtml(s.planet.coords)} · ${(PLANET_TYPES[s.planet.planetType]||PLANET_TYPES.rocky).name}</div>${debrisRow}</div><div><span class="badge own">Eigen</span></div><div class="sub">Rohstoffe ${fmt(resTotal(s.planet.resources))}</div><div></div></div>`;
+      const slotHtml = `<div class="slot own" data-slot-toggle="${s.pos}"><div>${s.pos}</div><div><strong>${s.planet.name}</strong><div class="sub">${coordLinkHtml(s.planet.coords)} · ${(PLANET_TYPES[s.planet.planetType]||PLANET_TYPES.rocky).name}</div>${debrisRow}${asteroidRow}</div><div><span class="badge own">Eigen</span></div><div class="sub">Rohstoffe ${fmt(resTotal(s.planet.resources))}</div><div></div></div>`;
       const detail = expanded ? `<div class="card" style="margin-top:8px">${s.moon ? moonFactsHtml(s.moon) : '<div class="small">Kein Mond an dieser Position.</div>'}</div>` : '';
       return slotHtml+detail;
     }
     if(s.type==='player'){
-      const slotHtml = `<div class="slot" data-slot-toggle="${s.pos}"><div>${s.pos}</div><div><strong>${s.planetName}</strong><div class="sub">Spieler: ${s.ownerUsername}</div>${debrisRow}</div><div><span class="badge npc">Spieler</span></div><div class="sub">—</div><div><button class="btn danger" data-mission-target="attack:${gal}:${sys}:${s.pos}">Angriff</button> <button class="btn alt" data-mission-target="spy:${gal}:${sys}:${s.pos}">Spionage</button> <button class="btn" data-mission-target="transport:${gal}:${sys}:${s.pos}">Transport</button></div></div>`;
+      const slotHtml = `<div class="slot" data-slot-toggle="${s.pos}"><div>${s.pos}</div><div><strong>${s.planetName}</strong><div class="sub">Spieler: ${s.ownerUsername}</div>${debrisRow}${asteroidRow}</div><div><span class="badge npc">Spieler</span></div><div class="sub">—</div><div><button class="btn danger" data-mission-target="attack:${gal}:${sys}:${s.pos}">Angriff</button> <button class="btn alt" data-mission-target="spy:${gal}:${sys}:${s.pos}">Spionage</button> <button class="btn" data-mission-target="transport:${gal}:${sys}:${s.pos}">Transport</button></div></div>`;
       let detail = '';
       if(expanded){
         const report = state.reports.find(r=>r.type!=='phalanx' && r.coordArr && r.coordArr[0]===gal && r.coordArr[1]===sys && r.coordArr[2]===s.pos);
@@ -1418,26 +1441,22 @@ function viewGalaxy(){
       return slotHtml+detail;
     }
     if(s.type==='npc'){
-      const defPower = sidePower(s.defenseShips, defs.buildings).attack; const ptName=(PLANET_TYPES[s.planetType]||PLANET_TYPES.rocky).name;
-      const slotHtml = `<div class="slot" data-slot-toggle="${s.pos}"><div>${s.pos}</div><div><strong>${s.name}</strong><div class="sub">Stufe ${s.level} · ${ptName}</div>${debrisRow}</div><div><span class="badge npc">NPC</span></div><div class="sub">Def ${fmt(defPower)}</div><div><button class="btn danger" data-mission-target="attack:${gal}:${sys}:${s.pos}">Angriff</button> <button class="btn alt" data-mission-target="spy:${gal}:${sys}:${s.pos}">Spionage</button></div></div>`;
-      const detail = expanded ? `<div class="card" style="margin-top:8px"><div class="small">Rohstoffe: ${fmt(resTotal(s.resources))}</div><div class="small" style="margin-top:6px">Gebäude: ${Object.entries(s.buildings).map(([k,v])=>v && defs.buildings[k] ? defs.buildings[k].name+' '+v : null).filter(Boolean).join(', ')||'keine'}</div><div class="small" style="margin-top:4px">Forschung: ${Object.entries(s.research).map(([k,v])=>v && defs.research[k] ? defs.research[k].name+' '+v : null).filter(Boolean).join(', ')||'keine'}</div><div class="small" style="margin-top:4px">Verteidigung: ${Object.entries(s.defenseShips).map(([k,v])=>v && defs.buildings[k] ? defs.buildings[k].name+' x'+v : null).filter(Boolean).join(', ')||'keine'}</div><div class="small" style="margin-top:4px">Flotte: ${Object.entries(s.fleet).map(([k,v])=>v && defs.ships[k] ? defs.ships[k].name+' x'+v : null).filter(Boolean).join(', ')||'keine'}</div></div>` : '';
+      const ptName=(PLANET_TYPES[s.planetType]||PLANET_TYPES.rocky).name;
+      const slotHtml = `<div class="slot" data-slot-toggle="${s.pos}"><div>${s.pos}</div><div><strong>${s.name}</strong><div class="sub">Stufe ${s.level} · ${ptName}</div>${debrisRow}${asteroidRow}</div><div><span class="badge npc">NPC</span></div><div class="sub">—</div><div><button class="btn danger" data-mission-target="attack:${gal}:${sys}:${s.pos}">Angriff</button> <button class="btn alt" data-mission-target="spy:${gal}:${sys}:${s.pos}">Spionage</button></div></div>`;
+      let detail = '';
+      if(expanded){
+        const report = state.reports.find(r=>r.type!=='phalanx' && r.coordArr && r.coordArr[0]===gal && r.coordArr[1]===sys && r.coordArr[2]===s.pos);
+        detail = `<div class="card" style="margin-top:8px">${report
+          ? `<div class="small">${reportAgeHtml(report)}</div>${espionageReportFactsHtml(report)}`
+          : '<div class="small">Keine Erkenntnisse - Spionage nötig.</div>'}</div>`;
+      }
       return slotHtml+detail;
     }
-    if(s.type==='asteroid'){
-      const compNames = s.composition.map(k=>RESOURCE_INFO[k].name).join(', ');
-      const myLevel = p.research.asteroidMiningTech||0;
-      const canMine = myLevel>=s.tier;
-      const stockText = s.composition.map(k=>`${RESOURCE_INFO[k].name} ${fmt(Math.floor(s.stock[k]||0))}/${fmt(s.capacity[k])}`).join(' · ');
-      const mineBtn = canMine
-        ? `<button class="btn good" data-mission-target="mine:${gal}:${sys}:${s.pos}">Abbauen</button>`
-        : `<span class="sub warn-text">Asteroidenbergbau Stufe ${s.tier} nötig</span>`;
-      return `<div class="slot"><div>${s.pos}</div><div>Asteroidenfeld <span class="sub">Stufe ${s.tier} · ${compNames}</span><div class="sub">${stockText}</div></div><div><span class="badge asteroid">Asteroiden</span></div><div class="sub">—</div><div>${mineBtn}</div></div>`;
-    }
     if(s.type==='blackhole'){
-      return `<div class="slot"><div>${s.pos}</div><div>Schwarzes Loch <span class="sub warn-text">Gefahrenzone für das gesamte System</span></div><div><span class="badge blackhole">Schwarzes Loch</span></div><div class="sub">—</div><div></div></div>`;
+      return `<div class="slot"><div>${s.pos}</div><div>Schwarzes Loch <span class="sub warn-text">Gefahrenzone für das gesamte System</span>${asteroidRow}</div><div><span class="badge blackhole">Schwarzes Loch</span></div><div class="sub">—</div><div></div></div>`;
     }
     const emptyTypeName=(PLANET_TYPES[s.planetType]||PLANET_TYPES.rocky).name;
-    return `<div class="slot empty"><div>${s.pos}</div><div>Freies Feld <span class="sub">(${emptyTypeName})</span>${debrisRow}</div><div><span class="badge empty">Leer</span></div><div class="sub">—</div><div><button class="btn good" data-mission-target="colonize:${gal}:${sys}:${s.pos}">Kolonisieren</button></div></div>`;
+    return `<div class="slot empty"><div>${s.pos}</div><div>Freies Feld <span class="sub">(${emptyTypeName})</span>${debrisRow}${asteroidRow}</div><div><span class="badge empty">Leer</span></div><div class="sub">—</div><div><button class="btn good" data-mission-target="colonize:${gal}:${sys}:${s.pos}">Kolonisieren</button></div></div>`;
   }).join('')}</div>`; }
 
 function missileLaunchFormHtml(p){
@@ -1517,8 +1536,8 @@ function viewExpeditions(){ const p=active(); const shipOptions=(key)=>Array.fro
   <div class="card"><h3>Laufende Expeditionen</h3><div class="list">${state.expeditions.length? state.expeditions.map(e=>`<div class="row"><div>Von ${state.planets[e.from]?state.planets[e.from].name:'?'}</div><div>${secsLeft(e.done)} s</div></div>`).join('') : '<div class="small">Keine aktiven Expeditionen.</div>'}</div></div>
   </div>`; }
 
-function viewMoons(){
-  if(state.moons.length===0) return `<h2>Monde</h2><div class="small">Noch keine Monde entstanden. Monde entstehen mit einer Chance nach Schlachten mit großem Trümmerfeld (Angriff auf NPC-Kolonien, gewonnen oder verloren).</div>`;
+function moonFacilitySection(){
+  if(state.moons.length===0) return `<div class="small">Noch keine Monde entstanden. Monde entstehen mit einer Chance nach Schlachten mit großem Trümmerfeld (Angriff auf NPC-Kolonien, gewonnen oder verloren).</div>`;
   const moonKeys = ['lunarBase','sensorPhalanx','jumpGate'];
   const tabs = state.moons.map((m,i)=>`<button class="pill ${state.activeMoonIndex===i?'active':''}" data-moon-select="${i}">Mond ${coordStr(m.coord)}</button>`).join('');
   const m = activeMoon();
@@ -1560,7 +1579,7 @@ function viewMoons(){
       ${sentinelCard}
     </div>`;
   }
-  return `<h2>Monde</h2><div class="planet-tabs">${tabs}</div><div style="height:14px"></div>${detail}`;
+  return `<div class="planet-tabs">${tabs}</div><div style="height:14px"></div>${detail}`;
 }
 
 function viewAlliance(){
@@ -1673,11 +1692,12 @@ function viewHighscore(){
 }
 
 function renderView(bind=true){
-  const views={overview:viewOverview,buildings:viewBuildings,facilities:viewFacilities,factories:viewFactories,defense:viewDefense,research:viewResearch,shipyard:viewShipyard,fleet:viewFleet,expeditions:viewExpeditions,galaxy:viewGalaxy,moons:viewMoons,alliance:viewAlliance,officers:viewOfficers,lifeform:viewLifeform,market:viewMarket,reports:viewReports,messages:viewMessages,empire:viewEmpire,highscore:viewHighscore,settings:viewSettings};
+  const views={overview:viewOverview,buildings:viewBuildings,facilities:viewFacilities,factories:viewFactories,defense:viewDefense,research:viewResearch,shipyard:viewShipyard,fleet:viewFleet,expeditions:viewExpeditions,galaxy:viewGalaxy,alliance:viewAlliance,officers:viewOfficers,lifeform:viewLifeform,market:viewMarket,reports:viewReports,messages:viewMessages,empire:viewEmpire,highscore:viewHighscore,settings:viewSettings};
   $('#view').innerHTML = views[state.view]();
   if(bind){
     document.querySelectorAll('[data-factory-tab]').forEach(b=>b.onclick=()=>{ state.factoryTab=b.dataset.factoryTab; renderView(); });
     document.querySelectorAll('[data-building-tab]').forEach(b=>b.onclick=()=>{ state.buildingTab=b.dataset.buildingTab; renderView(); });
+    document.querySelectorAll('[data-facility-tab]').forEach(b=>b.onclick=()=>{ state.facilityTab=b.dataset.facilityTab; renderView(); });
     document.querySelectorAll('[data-build]').forEach(b=>b.onclick=()=>enqueueBuild(b.dataset.build));
     document.querySelectorAll('[data-research]').forEach(b=>b.onclick=()=>enqueueResearch(b.dataset.research));
     document.querySelectorAll('[data-ship]').forEach(b=>b.onclick=()=>enqueueShip(b.dataset.ship));

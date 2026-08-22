@@ -153,7 +153,7 @@ app.get('/api/galaxy', (req, res) => {
   const galaxy = Number(req.query.galaxy), system = Number(req.query.system);
   if(!engine.validCoord(galaxy, system, 1)) return res.status(400).json({ ok:false, error:'Ungültige Koordinaten' });
   const session = sessionFromHeader(req);
-  const slots = engine.seedGalaxy(universe, galaxy, system, session ? session.username : null);
+  const slots = engine.sanitizeGalaxySlotsForClient(engine.seedGalaxy(universe, galaxy, system, session ? session.username : null));
   res.json({ ok:true, slots });
 });
 

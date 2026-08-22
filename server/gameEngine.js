@@ -681,22 +681,40 @@ function seedGalaxy(universe, galaxy, system, viewerUsername){
       PLANET_TYPES[planetType].resources.forEach(res=>{ resAmounts[res] = Math.floor(150*level); });
       slots.push({pos, type:'npc', name, level, planetType, resources:resAmounts, buildings, research, defenseShips, fleet});
     } else {
-      const asteroidRoll = npcSeedRandom(galaxy, system, pos, 100);
-      if(asteroidRoll < ASTEROID_FIELD_CHANCE){
-        const seed = asteroidFieldSeed(galaxy, system, pos);
-        const field = readAsteroidField(universe, debrisKey([galaxy, system, pos]), seed);
-        slots.push({pos, type:'asteroid', planetType, tier: seed.tier, composition: seed.composition, capacity: seed.capacity, stock: field.stock, lastRegen: field.lastRegen});
+      const blackholeRoll = npcSeedRandom(galaxy, system, pos, 108);
+      if(blackholeRoll < BLACKHOLE_CHANCE){
+        slots.push({pos, type:'blackhole', planetType});
       } else {
-        const blackholeRoll = npcSeedRandom(galaxy, system, pos, 108);
-        if(blackholeRoll < BLACKHOLE_CHANCE){
-          slots.push({pos, type:'blackhole', planetType});
-        } else {
-          slots.push({pos, type:'empty', planetType});
-        }
+        slots.push({pos, type:'empty', planetType});
       }
     }
   }
+  // Asteroidenfelder sind KEIN eigener, exklusiver Positions-Typ mehr, sondern ein Overlay,
+  // das auf JEDER Positionsart auftreten kann (auch besetzten) - analog zu Truemmerfeldern,
+  // die ebenfalls unabhaengig vom Slot-Typ existieren. Laeuft deshalb NACH der Typ-Entscheidung,
+  // fuer jede Position unbedingt.
+  for(const slot of slots){
+    const asteroidRoll = npcSeedRandom(galaxy, system, slot.pos, 100);
+    if(asteroidRoll < ASTEROID_FIELD_CHANCE){
+      const seed = asteroidFieldSeed(galaxy, system, slot.pos);
+      const field = readAsteroidField(universe, debrisKey([galaxy, system, slot.pos]), seed);
+      slot.asteroid = { tier: seed.tier, composition: seed.composition, capacity: seed.capacity, stock: field.stock, lastRegen: field.lastRegen };
+    }
+  }
   return slots;
+}
+
+// Nur fuer die Client-Antwort: NPC-Rohdaten (Ressourcen/Gebaeude/Forschung/Verteidigung/Flotte)
+// sind intern noetig (sendFleet -> f.npcSlot -> resolveArrival Kampf/Spionage/Diebstahl), duerfen
+// aber NICHT ungegated an den Client gehen - das entspraeche keiner Spionage. Sensible NPC-Fakten
+// kommen ausschliesslich ueber gestaffelte Spionageberichte (buildEspionageReport), exakt wie bei
+// fremden Spielerplaneten.
+function sanitizeGalaxySlotsForClient(slots){
+  return slots.map(slot=>{
+    if(slot.type!=='npc') return slot;
+    const { resources, buildings, research, defenseShips, fleet, ...rest } = slot;
+    return rest;
+  });
 }
 
 function systemHasBlackHole(universe, galaxy, system){
@@ -1276,13 +1294,17 @@ function sendFleet(universe, username, planetIndex, params){
   const ownIdx = state.planets.findIndex(pl=>!pl.destroyed && pl.coords[0]===gal && pl.coords[1]===sys && pl.coords[2]===pos);
   if(mission==='attack' && ownIdx>=0) return fail(state, 'Eigene Planeten können nicht angegriffen werden');
   let toPlanetIndex=null, toOwner=null, npcSlot=null, emptySlot=null, asteroidSlot=null;
+  // Asteroiden-Overlays koennen auf JEDER Positionsart liegen (auch own/player), deshalb wird
+  // der Ziel-Slot unabhaengig vom own/player/npc/empty-Zweig unten nachgeschlagen.
+  const slotsAtTarget = seedGalaxy(universe, gal, sys, username);
+  const targetSlot = slotsAtTarget.find(s=>s.pos===pos);
+  if(targetSlot && targetSlot.asteroid) asteroidSlot = targetSlot.asteroid;
   if(ownIdx>=0) toPlanetIndex = ownIdx;
   else {
     const owner = findPlanetOwner(universe, toCoord, username);
     if(owner){ toPlanetIndex = owner.planetIndex; toOwner = owner.username; }
     else {
-      const slots = seedGalaxy(universe, gal, sys, username); const slot = slots.find(s=>s.pos===pos);
-      if(slot.type==='npc') npcSlot = slot; else if(slot.type==='empty') emptySlot = slot; else if(slot.type==='asteroid') asteroidSlot = slot;
+      if(targetSlot.type==='npc') npcSlot = targetSlot; else if(targetSlot.type==='empty') emptySlot = targetSlot;
     }
   }
   const ships = {};
@@ -2171,7 +2193,7 @@ module.exports = {
   RESOURCE_KEYS, RESOURCE_INFO, RESOURCE_GROUPS, PLANET_TYPES, MINE_BY_RESOURCE, FACTORY_KEYS,
   createUniverse, normalizeUniverse, normalizePlayerState, createStarterEmpire,
   registerAccount, findPlanetOwner, isPositionFree,
-  seedGalaxy, validCoord, coordStr, coordLinkHtml, debrisKey,
+  seedGalaxy, sanitizeGalaxySlotsForClient, validCoord, coordStr, coordLinkHtml, debrisKey,
   computeHighscore, adminListPlayers, adminDeletePlayer, adminGrantResources,
   applyAction, tick, getPublicAuctionView, getPublicEventView,
   getPlayerAllianceView, getAlliancesListView,
