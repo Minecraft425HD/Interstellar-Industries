@@ -187,6 +187,9 @@ const defs = {
     // fuer seine ersten Minen bekommt, ohne von Anfang an auf Handel angewiesen zu sein.
     solarPlant:{name:'Solarkraftwerk', costMagnitude:105, power:l=>40*l*Math.pow(1.05,l)},
     nuclearReactor:{name:'Kernreaktor', base:{iron:700, aluminium:300, uranium:120}, power:l=>30*l*Math.pow(1.05,l), uraniumUse:l=>Math.floor(10*l*Math.pow(1.1,l)), requires:{uraniumMine:5, energyTech:3}},
+    solarSailI:{name:'Solarsegel I', base:{silver:1200, aluminium:800, crudeOil:400}, power:15, multiBuild:true, requires:{solarPlant:5}},
+    solarSailII:{name:'Solarsegel II', base:{silver:3000, aluminium:2200, electronics:600, crudeOil:900}, power:35, multiBuild:true, requires:{solarPlant:10, solarSailI:1}},
+    solarSailIII:{name:'Solarsegel III', base:{silver:7000, aluminium:5000, electronics:1800, crudeOil:2000, alloy:500}, power:70, multiBuild:true, requires:{solarPlant:15, solarSailII:1}},
 
     // ---- Lager (gruppiert statt 18 Einzeltanks) ----
     // Selbstversorgend wie die Minen: das ERSTE Lager, das ein neuer Spieler braucht,
@@ -240,6 +243,7 @@ const defs = {
     terraformer:{name:'Terraformer', base:{lithium:20000, freshwater:5000, concrete:8000}, requires:{naniteFactory:1, energyTech:12}, facility:true},
     allianceDepot:{name:'Allianzdepot', base:{limestone:30000, gold:30000, phosphate:5000, concrete:6000}, requires:{shipyard:3}, facility:true},
     missileSilo:{name:'Raketensilo', base:{iron:30000, sulfur:11000, steel:3000}, requires:{shipyard:1}, facility:true},
+    spaceTelescope:{name:'Weltraum-Teleskop', base:{copper:20000, silver:24000, naturalGas:10000, electronics:4000}, requires:{researchLab:6, espionageTech:4}, facility:true},
     sensorPhalanx:{name:'Sensorphalanx', base:{copper:30000, silver:35000, naturalGas:15000, electronics:6000}, requires:{naniteFactory:1}, moonOnly:true, facility:true},
     jumpGate:{name:'Sprungtor', base:{aluminium:2000000, lithium:3500000, uranium:1300000, precisionComponents:5000}, requires:{naniteFactory:1, hyperspaceTech:7}, moonOnly:true, facility:true},
     lunarBase:{name:'Lunarbasis', base:{limestone:40000, aluminium:40000, concrete:10000}, requires:{}, moonOnly:true, facility:true},
@@ -294,6 +298,7 @@ const defs = {
     pathfinder:{name:'Pfadfinder', cost:{aluminium:10000, lithium:14000, crudeOil:7000, electronics:1500}, cargo:10000, speed:1.6, fuel:20, attack:200, shield:100, hull:23000, role:'combat', requires:{shipyard:5, spaceDock:1, hyperspaceDrive:2, hyperspaceTech:3}},
     deathstar:{name:'Todesstern', cost:{iron:4000000, aluminium:3000000, rareEarths:2000000, precisionComponents:15000}, cargo:1000000, speed:0.4, fuel:1, attack:200000, shield:50000, hull:9000000, role:'combat', requires:{shipyard:12, hyperspaceTech:6, gravitonTech:1}},
     solarSatellite:{name:'Solarsatellit', cost:{silver:1800, crudeOil:700}, cargo:0, speed:0, fuel:0, attack:1, shield:1, hull:2000, role:'power', requires:{}},
+    sentinelSatellite:{name:'Frühwarn-Satellit', cost:{silver:2200, lithium:1200, electronics:800}, cargo:0, speed:0, fuel:0, attack:1, shield:1, hull:2000, role:'sentinel', requires:{shipyard:6, espionageTech:5}},
     recycler:{name:'Recycler', cost:{iron:11000, aluminium:5000, crudeOil:2000, steel:800}, cargo:20000, speed:0.7, fuel:30, attack:1, shield:10, hull:16000, role:'recycler', requires:{shipyard:4, combustion:6}},
     asteroidMiner:{name:'Asteroidenminer', cost:{iron:9000, aluminium:6000, crudeOil:2500, steel:1200, electronics:400}, cargo:18000, speed:0.6, fuel:35, attack:1, shield:15, hull:14000, role:'miner', requires:{shipyard:5, combustion:5, asteroidMiningTech:1}},
     researchProbe:{name:'Forschungssonde', cost:{lithium:1000, electronics:150}, cargo:5, speed:3, fuel:1, attack:0, shield:0, hull:1000, role:'research', requires:{shipyard:3, combustion:3}},
@@ -904,7 +909,10 @@ function energyStats(state, p){
   const solar=defs.buildings.solarPlant.power(p.buildings.solarPlant);
   const nuclear=defs.buildings.nuclearReactor.power(p.buildings.nuclearReactor||0);
   const satellites=(p.ships.solarSatellite||0)*20;
-  const prod=(solar+nuclear+satellites)*engineerBonus(state);
+  const sails = (p.buildings.solarSailI||0)*defs.buildings.solarSailI.power
+              + (p.buildings.solarSailII||0)*defs.buildings.solarSailII.power
+              + (p.buildings.solarSailIII||0)*defs.buildings.solarSailIII.power;
+  const prod=(solar+nuclear+satellites+sails)*engineerBonus(state);
   let use=0;
   for(const [res, mineKey] of Object.entries(MINE_BY_RESOURCE)){
     if(defs.buildings[mineKey].powerUse) use += defs.buildings[mineKey].powerUse(p.buildings[mineKey]||0);
@@ -1221,6 +1229,30 @@ function enqueueDefense(state, planetIndex, key){
   p.buildQueue.push({type:'defense', key, name:def.name, done:Date.now()+secs*1000});
   return ok(state, def.name+' in Bau');
 }
+function multiBuildCap(p, key){
+  // Jede Stufe hat ihre eigene, unabhaengige Obergrenze - woertliche Auslegung der
+  // Spezifikation ("sie sollen sich ... +1 mehr bauen lassen" bezogen auf jede der 3
+  // Stufen einzeln), kein gemeinsamer Pool ueber alle 3 Stufen.
+  const solarLvl = p.buildings.solarPlant||0;
+  if(key==='solarSailI' || key==='solarSailII' || key==='solarSailIII') return Math.floor(solarLvl/5);
+  return Infinity;
+}
+function enqueueMultiBuild(state, planetIndex, key){
+  const p = requirePlanet(state, planetIndex);
+  const def = defs.buildings[key];
+  if(!def || !def.multiBuild) return fail(state, 'Unbekannte Mehrfachbau-Struktur');
+  if(!meetsRequirements(p, def.requires)) return fail(state, def.name+' benötigt: '+requirementText(def.requires));
+  const count = p.buildings[key]||0;
+  const cap = multiBuildCap(p, key);
+  if(count>=cap) return fail(state, def.name+'-Kapazität erreicht ('+count+'/'+cap+', Solarkraftwerk ausbauen)');
+  const d = commanderDiscount(state);
+  const cost = {}; for(const k of RESOURCE_KEYS) cost[k]=Math.floor((def.base[k]||0)*d);
+  if(!hasRes(p,cost)) return fail(state, 'Nicht genug Ressourcen für '+def.name);
+  spend(p,cost);
+  const secs = Math.max(5, Math.round(resTotal(cost)/(300*(1+p.buildings.shipyard))));
+  p.buildQueue.push({type:'multibuild', key, name:def.name, done:Date.now()+secs*1000});
+  return ok(state, def.name+' in Bau');
+}
 
 function sendFleet(universe, username, planetIndex, params){
   const state = universe.players[username];
@@ -1243,7 +1275,7 @@ function sendFleet(universe, username, planetIndex, params){
     }
   }
   const ships = {};
-  Object.keys(defs.ships).forEach(k=>{ if(defs.ships[k].role!=='power') ships[k]=Number((params.ships||{})[k])||0; });
+  Object.keys(defs.ships).forEach(k=>{ if(defs.ships[k].role!=='power' && defs.ships[k].role!=='sentinel') ships[k]=Number((params.ships||{})[k])||0; });
   const totalShips = Object.values(ships).reduce((a,b)=>a+b,0);
   if(totalShips<=0) return fail(state, 'Keine Schiffe ausgewählt');
   for(const [k,v] of Object.entries(ships)){ if(v>(p.ships[k]||0)) return fail(state, 'Zu wenige '+defs.ships[k].name); }
@@ -1319,6 +1351,40 @@ function sendFleet(universe, username, planetIndex, params){
   }
 
   state.fleets.push({from:planetIndex, toCoord, toPlanetIndex, toOwner, npcSlot, emptySlot, ships, cargo:mission==='transport'?cargo:zeroResources(), mission, arrive, returnAt:Date.now()+dur*2000, phase:'outbound', fuel, acsId, acsAllianceTag});
+
+  // Fruehwarn-Satelliten: bei mission==='attack' wird JETZT (Abflugzeitpunkt) geprueft, ob
+  // irgendein Spieler (auch ein unbeteiligter Dritter, "Umgebungsradar") einen Sentinel in
+  // Reichweite des Ziels [gal:sys:pos] hat. Fixiert bei Abflug, da tick() keinen
+  // Zwischenzustand kennt - dieselbe Begruendung wie die Schwarzes-Loch-Gefahrenzone oben.
+  // Feuert hoechstens einmal pro betroffenem Spieler (dedupe via detected+break).
+  if(mission==='attack'){
+    const etaSeconds = Math.max(0, Math.round((arrive-Date.now())/1000));
+    for(const [ownerUsername, ownerState] of Object.entries(universe.players)){
+      if(ownerUsername===username) continue; // Angreifer wird nicht ueber die eigene Flotte gewarnt
+      let detected = false;
+      // Planeten-Umlaufbahn: 4 Nachbarpositionen INKLUSIVE der eigenen Position, 25% Chance.
+      for(const pl of ownerState.planets){
+        if(detected || pl.destroyed) break;
+        if((pl.ships.sentinelSatellite||0)<=0) continue;
+        if(pl.coords[0]!==gal || pl.coords[1]!==sys) continue;
+        if(Math.abs(pl.coords[2]-pos)<=2 && Math.random()<0.25) detected = true;
+      }
+      // Mond-Umlaufbahn: nur wenn der Mond mit einem eigenen Planeten co-lokalisiert ist.
+      // Deckt das GESAMTE System ab, 50% Chance.
+      if(!detected){
+        for(const pl of ownerState.planets){
+          if(detected || pl.destroyed) break;
+          if(pl.coords[0]!==gal || pl.coords[1]!==sys) continue;
+          const moon = findMoonAt(ownerState, pl.coords);
+          if(moon && (moon.ships.sentinelSatellite||0)>0 && Math.random()<0.5) detected = true;
+        }
+      }
+      if(detected){
+        message(ownerState, 'Frühwarn-Satellit meldet: Angriffsflotte von '+username+' auf '+coordLinkHtml(toCoord)+' erkannt. Ankunft in ca. '+etaSeconds+' s.');
+      }
+    }
+  }
+
   const acsNote = acsId ? ' (ACS-Welle "'+acsId+'", Ankunft synchronisiert)' : '';
   return ok(state, missionLabels[mission]+'-Flotte nach '+coordLinkHtml(toCoord)+' gestartet'+acsNote+hazardNote);
 }
@@ -1395,6 +1461,24 @@ function jumpGateTransfer(state, fromMoonIdx, toMoonIdx, shipsMap){
   for(const [k,v] of Object.entries(ships)){ if(v>(from.ships[k]||0)) return fail(state, 'Zu wenige '+defs.ships[k].name+' auf dem Mond'); }
   for(const [k,v] of Object.entries(ships)){ from.ships[k]-=v; to.ships[k]=(to.ships[k]||0)+v; }
   return ok(state, 'Sprungtor-Transfer nach '+coordLinkHtml(to.coord)+' abgeschlossen (sofort)');
+}
+function transferSentinelOrbit(state, planetIndex, toMoon, count){
+  const p = requirePlanet(state, planetIndex);
+  const moon = findMoonAt(state, p.coords);
+  if(!moon) return fail(state, 'Kein Mond an dieser Position - Frühwarn-Satelliten können nur zu einem Mond transferiert werden, der sich am selben Ort wie dieser Planet befindet');
+  const n = Math.floor(Number(count))||0;
+  if(n<=0) return fail(state, 'Ungültige Anzahl');
+  if(toMoon){
+    if(n>(p.ships.sentinelSatellite||0)) return fail(state, 'Zu wenige Frühwarn-Satelliten auf dem Planeten');
+    p.ships.sentinelSatellite -= n;
+    moon.ships.sentinelSatellite = (moon.ships.sentinelSatellite||0) + n;
+    return ok(state, n+' Frühwarn-Satellit(en) in Mondumlaufbahn transferiert (sofort)');
+  } else {
+    if(n>(moon.ships.sentinelSatellite||0)) return fail(state, 'Zu wenige Frühwarn-Satelliten auf dem Mond');
+    moon.ships.sentinelSatellite -= n;
+    p.ships.sentinelSatellite = (p.ships.sentinelSatellite||0) + n;
+    return ok(state, n+' Frühwarn-Satellit(en) in Planetenumlaufbahn zurückgeholt (sofort)');
+  }
 }
 const PHALANX_SCAN_COST = {crudeOil: 5000};
 function scanSystem(universe, username, payload){
@@ -2040,11 +2124,13 @@ function applyAction(universe, username, type, payload){
     case 'enqueueResearch': return enqueueResearch(state, payload.planetIndex, payload.key);
     case 'enqueueShip': return enqueueShip(state, payload.planetIndex, payload.key);
     case 'enqueueDefense': return enqueueDefense(state, payload.planetIndex, payload.key);
+    case 'enqueueMultiBuild': return enqueueMultiBuild(state, payload.planetIndex, payload.key);
     case 'sendFleet': return sendFleet(universe, username, payload.planetIndex, payload);
     case 'bidAuction': return bidAuction(universe, username, payload.amount);
     case 'sendExpedition': return sendExpedition(state, payload.planetIndex, payload.ships, payload.durationSlot);
     case 'enqueueMoonBuild': return enqueueMoonBuild(state, payload.planetIndex, payload.moonIndex, payload.key);
     case 'jumpGateTransfer': return jumpGateTransfer(state, payload.fromMoonIndex, payload.toMoonIndex, payload.ships);
+    case 'transferSentinelOrbit': return transferSentinelOrbit(state, payload.planetIndex, !!payload.toMoon, payload.count);
     case 'scanSystem': return scanSystem(universe, username, payload);
     case 'sendDirectMessage': return sendDirectMessage(universe, username, payload);
     case 'markMailRead': return markMailRead(state);

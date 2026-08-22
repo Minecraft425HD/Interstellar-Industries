@@ -108,6 +108,9 @@ const defs = {
     sawmill:{name:'Forstplantage', desc:'Erntet Holz aus der künstlich angelegten Biosphäre nach der Terraformierung.', resource:'wood', base:{iron:100, freshwater:60}, powerUse:l=>10*l, prod:l=>15*l*Math.pow(1.1,l), requires:{terraformer:1}},
     solarPlant:{name:'Solarkraftwerk', desc:'Erzeugt Energie durch Sonnenlicht, die von den Minen zum Betrieb benötigt wird. Überall nutzbar - selbstversorgend aus lokalen Rohstoffen finanziert.', costMagnitude:105, power:l=>40*l*Math.pow(1.05,l)},
     nuclearReactor:{name:'Kernreaktor', desc:'Erzeugt zusätzliche Energie durch Kernspaltung - unabhängig vom Sonnenlicht, verbraucht aber laufend Uran.', base:{iron:700, aluminium:300, uranium:120}, power:l=>30*l*Math.pow(1.05,l), uraniumUse:l=>Math.floor(10*l*Math.pow(1.1,l)), requires:{uraniumMine:5, energyTech:3}},
+    solarSailI:{name:'Solarsegel I', desc:'Ein Segel an einem Satelliten, das Energie per Laser zum Planeten sendet. Mehrfach baubar, Kapazität steigt mit dem Solarkraftwerk.', base:{silver:1200, aluminium:800, crudeOil:400}, power:15, multiBuild:true, requires:{solarPlant:5}},
+    solarSailII:{name:'Solarsegel II', desc:'Ausbaustufe des Solarsegels mit höherer Energieausbeute je Stück.', base:{silver:3000, aluminium:2200, electronics:600, crudeOil:900}, power:35, multiBuild:true, requires:{solarPlant:10, solarSailI:1}},
+    solarSailIII:{name:'Solarsegel III', desc:'Höchste Ausbaustufe des Solarsegels mit maximaler Energieausbeute je Stück.', base:{silver:7000, aluminium:5000, electronics:1800, crudeOil:2000, alloy:500}, power:70, multiBuild:true, requires:{solarPlant:15, solarSailII:1}},
     oreStorage:{name:'Erzlager', desc:'Erhöht die maximale Lagerkapazität für alle Erze. Selbstversorgend baubar.', costMagnitude:1000},
     techStorage:{name:'Technologielager', desc:'Erhöht die maximale Lagerkapazität für alle Technologiemetalle.', base:{gold:700, silver:700}, },
     fuelStorage:{name:'Energielager', desc:'Erhöht die maximale Lagerkapazität für alle Energieträger.', base:{iron:800, crudeOil:600}, },
@@ -147,6 +150,7 @@ const defs = {
     terraformer:{name:'Terraformer', desc:'Formt die Planetenoberfläche um, schafft eine künstliche Biosphäre und ermöglicht den Holzanbau. Erfordert vor allem Lithium und Süßwasser.', base:{lithium:20000, freshwater:5000, concrete:8000}, requires:{naniteFactory:1, energyTech:12}, facility:true},
     allianceDepot:{name:'Allianzdepot', desc:'Lagerplatz für Ressourcen, die der Allianz zur Verfügung gestellt werden.', base:{limestone:30000, gold:30000, phosphate:5000, concrete:6000}, requires:{shipyard:3}, facility:true},
     missileSilo:{name:'Raketensilo', desc:'Lagert und startet interplanetare Raketen zum Fernangriff auf gegnerische Verteidigung.', base:{iron:30000, sulfur:11000, steel:3000}, requires:{shipyard:1}, facility:true},
+    spaceTelescope:{name:'Weltraum-Teleskop', desc:'Zeigt Asteroidenfelder aus mehreren benachbarten Systemen gesammelt an, ohne dass man jedes System einzeln ansteuern muss.', base:{copper:20000, silver:24000, naturalGas:10000, electronics:4000}, requires:{researchLab:6, espionageTech:4}, facility:true},
     sensorPhalanx:{name:'Sensorphalanx', desc:'Ermöglicht die Überwachung fremder Systeme von einem Mond aus.', base:{copper:30000, silver:35000, naturalGas:15000, electronics:6000}, requires:{naniteFactory:1}, moonOnly:true, facility:true},
     jumpGate:{name:'Sprungtor', desc:'Verbindet zwei eigene Monde für verzögerungsfreien Flottentransfer.', base:{aluminium:2000000, lithium:3500000, uranium:1300000, precisionComponents:5000}, requires:{naniteFactory:1, hyperspaceTech:7}, moonOnly:true, facility:true},
     lunarBase:{name:'Lunarbasis', desc:'Grundlegende Infrastruktur auf einem Mond, Voraussetzung für weitere Mondgebäude.', base:{limestone:40000, aluminium:40000, concrete:10000}, requires:{}, moonOnly:true, facility:true},
@@ -195,6 +199,7 @@ const defs = {
     pathfinder:{name:'Pfadfinder', desc:'Schnelles, vielseitiges Schiff mit hoher Ladekapazität.', cost:{aluminium:10000, lithium:14000, crudeOil:7000, electronics:1500}, cargo:10000, speed:1.6, fuel:20, attack:200, shield:100, hull:23000, role:'combat', requires:{shipyard:5, spaceDock:1, hyperspaceDrive:2, hyperspaceTech:3}},
     deathstar:{name:'Todesstern', desc:'Die mächtigste Waffe im Universum - extrem teuer und stark.', cost:{iron:4000000, aluminium:3000000, rareEarths:2000000, precisionComponents:15000}, cargo:1000000, speed:0.4, fuel:1, attack:200000, shield:50000, hull:9000000, role:'combat', requires:{shipyard:12, hyperspaceTech:6, gravitonTech:1}},
     solarSatellite:{name:'Solarsatellit', desc:'Liefert zusätzliche Energie, kann sich nicht bewegen oder kämpfen.', cost:{silver:1800, crudeOil:700}, cargo:0, speed:0, fuel:0, attack:1, shield:1, hull:2000, role:'power', requires:{}},
+    sentinelSatellite:{name:'Frühwarn-Satellit', desc:'Erkennt mit einer gewissen Chance eingehende Angriffe im Umkreis, bevor sie ankommen. Kann sich nicht bewegen oder kämpfen; wird über einen Umlaufbahn-Transfer zwischen Planet und Mond bewegt.', cost:{silver:2200, lithium:1200, electronics:800}, cargo:0, speed:0, fuel:0, attack:1, shield:1, hull:2000, role:'sentinel', requires:{shipyard:6, espionageTech:5}},
     recycler:{name:'Recycler', desc:'Sammelt Trümmerfelder nach Schlachten ein.', cost:{iron:11000, aluminium:5000, crudeOil:2000, steel:800}, cargo:20000, speed:0.7, fuel:30, attack:1, shield:10, hull:16000, role:'recycler', requires:{shipyard:4, combustion:6}},
     asteroidMiner:{name:'Asteroidenminer', desc:'Baut Rohstoffe aus Asteroidenfeldern ab (erreichbare Stufe hängt von der Asteroidenbergbau-Forschung ab).', cost:{iron:9000, aluminium:6000, crudeOil:2500, steel:1200, electronics:400}, cargo:18000, speed:0.6, fuel:35, attack:1, shield:15, hull:14000, role:'miner', requires:{shipyard:5, combustion:5, asteroidMiningTech:1}},
     researchProbe:{name:'Forschungssonde', desc:'Baugleich mit der Spionagesonde, ermöglicht aber bei Spionage gegen NPC-Kolonien den Diebstahl fremder Forschung.', cost:{lithium:1000, electronics:150}, cargo:5, speed:3, fuel:1, attack:0, shield:0, hull:1000, role:'research', requires:{shipyard:3, combustion:3}},
@@ -406,7 +411,7 @@ function openBattleSimulator(reportIndex){
   closeBattleSimModal();
   const r = state.reports[reportIndex];
   if(!r || !r.defenderPower) return;
-  const sendableShips = Object.entries(defs.ships).filter(([,d])=>d.role!=='power');
+  const sendableShips = Object.entries(defs.ships).filter(([,d])=>d.role!=='power' && d.role!=='sentinel');
   const modal = document.createElement('div');
   modal.id = 'battleSimModal';
   modal.className = 'info-modal';
@@ -985,6 +990,30 @@ async function fetchGalaxySlots(g,s){
   if(state.view==='galaxy') renderView(true);
 }
 
+// Weltraum-Teleskop: aggregiert Asteroidenfelder über mehrere Systeme, indem der
+// bereits vorhandene fetchGalaxySlots()-Einzelsystem-Aufruf schlicht mehrfach (aus dem
+// galaxyCache) ausgeloest wird - kein neuer Server-Endpunkt noetig.
+function telescopeRange(p){ return (p.buildings.spaceTelescope||0)*3; }
+function telescopeSystems(p){
+  const range = telescopeRange(p);
+  if(range<=0) return [];
+  const gal = p.coords[0], centerSys = p.coords[1];
+  const lo = Math.max(1, centerSys-range), hi = Math.min(UNIVERSE.systems, centerSys+range);
+  const systems = [];
+  for(let s=lo; s<=hi; s++) systems.push(s);
+  return systems.map(s=>({gal, sys:s}));
+}
+function telescopeAsteroidRows(p){
+  const rows = []; let anyLoading = false;
+  for(const {gal, sys} of telescopeSystems(p)){
+    const key = galaxyCacheKey(gal, sys);
+    const slots = galaxyCache[key];
+    if(!slots){ if(galaxyLoadingKey!==key) fetchGalaxySlots(gal, sys); anyLoading = true; continue; }
+    slots.filter(s=>s.type==='asteroid').forEach(s=>rows.push({gal, sys, ...s}));
+  }
+  return {rows, anyLoading};
+}
+
 // ---- Highscore data (real registered players) ----
 let highscoreCache = null;
 let highscoreLoading = false;
@@ -1002,10 +1031,11 @@ function enqueueBuild(key){ postAction('enqueueBuild', {planetIndex: state.activ
 function enqueueResearch(key){ postAction('enqueueResearch', {planetIndex: state.activePlanet, key}); }
 function enqueueShip(key){ postAction('enqueueShip', {planetIndex: state.activePlanet, key}); }
 function enqueueDefense(key){ postAction('enqueueDefense', {planetIndex: state.activePlanet, key}); }
+function enqueueMultiBuild(key){ postAction('enqueueMultiBuild', {planetIndex: state.activePlanet, key}); }
 function sendFleet(form){
   const gal = Number(form.galaxy.value), sys = Number(form.system.value), pos = Number(form.position.value);
   const ships = {};
-  Object.keys(defs.ships).forEach(k=>{ if(defs.ships[k].role!=='power' && form[k]) ships[k]=Number(form[k].value)||0; });
+  Object.keys(defs.ships).forEach(k=>{ if(defs.ships[k].role!=='power' && defs.ships[k].role!=='sentinel' && form[k]) ships[k]=Number(form[k].value)||0; });
   const cargo = {}; RESOURCE_KEYS.forEach(k=>{ if(form['cargo_'+k]) cargo[k]=Number(form['cargo_'+k].value)||0; });
   const acsId = (form.mission.value==='attack' && form.acsId) ? form.acsId.value.trim() : '';
   postAction('sendFleet', {planetIndex: state.activePlanet, mission: form.mission.value, gal, sys, pos, ships, cargo, acsId});
@@ -1019,6 +1049,7 @@ function enqueueMoonBuild(key){
 function jumpGateTransfer(fromMoonIdx, toMoonIdx, cargo, ships){
   postAction('jumpGateTransfer', {fromMoonIndex: fromMoonIdx, toMoonIndex: toMoonIdx, ships});
 }
+function transferSentinelOrbit(planetIdx, toMoon, count){ postAction('transferSentinelOrbit', {planetIndex: planetIdx, toMoon, count}); }
 function depositAlliance(){ postAction('depositAlliance', {planetIndex: state.activePlanet}); }
 function marketTrade(giveType, wantType, amount){ postAction('marketTrade', {planetIndex: state.activePlanet, give: giveType, want: wantType, amount}); }
 function merchantBuy(resourceType, amount){ postAction('merchantBuy', {planetIndex: state.activePlanet, resourceType, amount}); }
@@ -1202,6 +1233,13 @@ function viewBuildings(){
   const tabHtml = `<div class="subnav">${tabs.map(([id,label])=>`<button class="${state.buildingTab===id?'active':''}" data-building-tab="${id}">${label}</button>`).join('')}</div>`;
   const shown = state.buildingTab==='all' ? buildable : buildable.filter(([k])=>buildingCategory(k)===state.buildingTab);
   const rows = shown.map(([k,d])=>{
+    if(d.multiBuild){
+      const count = p.buildings[k]||0;
+      const cap = Math.floor((p.buildings.solarPlant||0)/5);
+      const mok = meetsRequirements(p,d.requires);
+      const atCap = count>=cap;
+      return `<div class="row"><div><strong>${d.name}</strong><div class="sub">Vorhanden ${fmt(count)}/${fmt(cap)} (Solarkraftwerk ${p.buildings.solarPlant||0})</div><div class="sub">Energie je Stück: ${d.power}</div><div class="sub">Kosten: ${resCostText(d.base)}</div>${!mok?`<div class="sub warn-text">Benötigt: ${requirementText(d.requires)}</div>`:''}${atCap?'<div class="sub warn-text">Kapazität erreicht - Solarkraftwerk ausbauen</div>':''}</div><div style="display:flex;gap:6px;align-items:center">${infoIconHtml('building',k,count)}<button class="btn" data-multibuild="${k}" ${mok&&!atCap?'':'disabled'}>Bauen</button></div></div>`;
+    }
     const lvl=(p.buildings[k]||0)+1;
     const c=buildingCost(costBaseFor(d,p),lvl);
     const ok=meetsRequirements(p,d.requires);
@@ -1279,7 +1317,7 @@ function viewFleet(){
   const sysVal = pre ? pre.sys : p.coords[1];
   const posVal = pre ? pre.pos : 1;
   const missionOpt = (v,label)=>`<option value="${v}" ${missionVal===v?'selected':''}>${label}</option>`;
-  const sendableShips = Object.entries(defs.ships).filter(([,d])=>d.role!=='power');
+  const sendableShips = Object.entries(defs.ships).filter(([,d])=>d.role!=='power' && d.role!=='sentinel');
   const shipOptions = (key)=>Array.from({length:(p.ships[key]||0)+1},(_,i)=>`<option>${i}</option>`).join('');
   return `<h2>Flotte versenden</h2><div class="grid2">
   <div class="card"><h3>Missionsformular</h3><form class="fleet-form" id="fleetForm">
@@ -1321,9 +1359,22 @@ function viewGalaxy(){
   }
   const hasBlackHole = slots.some(s=>s.type==='blackhole');
   const hazardBanner = hasBlackHole ? `<div class="card hazard-banner"><strong class="warn-text">⚠ Schwarzes Loch im System</strong><div class="small">Alle Flotten mit Start oder Ziel in [${gal}:${sys}] brauchen 25% länger und riskieren pro Flug den Verlust eines zufälligen Schiffes.</div></div>` : '';
+  const telescopeLevel = p.buildings.spaceTelescope||0;
+  const telescopeCard = telescopeLevel>=1 ? (()=>{
+    const range = telescopeRange(p);
+    const {rows, anyLoading} = telescopeAsteroidRows(p);
+    const body = rows.length
+      ? `<div class="list">${rows.map(r=>{
+          const compNames = r.composition.map(k=>RESOURCE_INFO[k].name).join(', ');
+          return `<div class="row"><div>[${r.gal}:${r.sys}:${r.pos}]</div><div>Stufe ${r.tier} <span class="sub">${compNames}</span></div><div><button class="btn alt" data-telescope-jump="${r.gal}:${r.sys}">Ansehen</button></div></div>`;
+        }).join('')}</div>`
+      : (anyLoading ? '<div class="small">Lade Systemdaten…</div>' : '<div class="small">Keine Asteroidenfelder in Reichweite gefunden.</div>');
+    return `<div class="card" style="margin-bottom:12px"><h3>Asteroidenfelder in Reichweite (Teleskop Stufe ${telescopeLevel}, ±${range} Systeme)</h3>${body}</div>`;
+  })() : '';
   return `<h2>Galaxie</h2>${galaxyJumpFormHtml(gal, sys)}
   <div class="small" style="margin-bottom:10px">Aktuell: [${gal}:${sys}] · Universum: ${UNIVERSE.galaxies} Galaxien × ${UNIVERSE.systems} Systeme × ${UNIVERSE.positions} Positionen</div>
   ${hazardBanner}
+  ${telescopeCard}
   <div class="galaxy-grid">${slots.map(s=>{
     const key2 = debrisKey([gal,sys,s.pos]); const debris = state.debrisFields[key2];
     const debrisRow = debris ? `<div class="sub">Trümmerfeld: ${fmt(resTotal(debris))} <button class="btn alt" data-mission-target="harvest:${gal}:${sys}:${s.pos}" style="margin-left:8px;padding:6px 10px;min-height:32px">Bergen</button></div>` : '';
@@ -1466,6 +1517,11 @@ function viewMoons(){
       <label>Zielposition<input type="number" name="position" min="1" max="${UNIVERSE.positions}" value="1"></label>
       <button class="btn good" type="submit">Scannen</button>
     </form></div>` : `<div class="card"><h3>Sensorphalanx-Scan</h3><div class="small">Baue die Sensorphalanx (mindestens Stufe 1) aus, um Flottenbewegungen fremder Planeten einsehen zu können.</div></div>`;
+    const coPlanet = state.planets.find(pl=>pl.coords[0]===m.coord[0]&&pl.coords[1]===m.coord[1]&&pl.coords[2]===m.coord[2]);
+    const coPlanetIdx = coPlanet ? state.planets.indexOf(coPlanet) : -1;
+    const sentinelCard = coPlanet
+      ? `<div class="card"><h3>Frühwarn-Satelliten-Orbit</h3><div class="small">Planet: ${fmt(coPlanet.ships.sentinelSatellite||0)} · Mond: ${fmt(m.ships.sentinelSatellite||0)}</div><div style="height:10px"></div><form class="fleet-form" id="sentinelToMoonForm"><label>Zum Mond transferieren<input type="number" min="1" max="${coPlanet.ships.sentinelSatellite||0}" name="count" value="1"></label><button class="btn alt" type="submit" ${(coPlanet.ships.sentinelSatellite||0)>0?'':'disabled'}>Transferieren</button></form><div style="height:8px"></div><form class="fleet-form" id="sentinelToPlanetForm"><label>Zum Planeten zurückholen<input type="number" min="1" max="${m.ships.sentinelSatellite||0}" name="count" value="1"></label><button class="btn alt" type="submit" ${(m.ships.sentinelSatellite||0)>0?'':'disabled'}>Zurückholen</button></form></div>`
+      : `<div class="card"><h3>Frühwarn-Satelliten-Orbit</h3><div class="small">Dieser Mond liegt nicht am selben Ort wie einer deiner eigenen Planeten - kein Orbit-Transfer möglich.</div></div>`;
     detail = `<div class="small" style="margin-bottom:10px">Koordinaten: ${coordLinkHtml(m.coord)}</div><div class="grid2">
       <div class="card"><h3>Mondgebäude</h3><div class="list">${buildRows}</div></div>
       <div class="card"><h3>Baustatus</h3><div class="queue">${queueRows}</div></div>
@@ -1474,6 +1530,10 @@ function viewMoons(){
     <div class="grid2">
       <div class="card"><h3>Sprungtor-Transfer</h3><div class="small">Sprungtore verbinden zwei Monde und transferieren Flotten verzögerungsfrei, sofern beide ein Sprungtor der Stufe 1 besitzen.</div><div style="height:10px"></div>${jumpForm}</div>
       ${phalanxCard}
+    </div>
+    <div style="height:16px"></div>
+    <div class="grid2">
+      ${sentinelCard}
     </div>`;
   }
   return `<h2>Monde</h2><div class="planet-tabs">${tabs}</div><div style="height:14px"></div>${detail}`;
@@ -1598,6 +1658,7 @@ function renderView(bind=true){
     document.querySelectorAll('[data-research]').forEach(b=>b.onclick=()=>enqueueResearch(b.dataset.research));
     document.querySelectorAll('[data-ship]').forEach(b=>b.onclick=()=>enqueueShip(b.dataset.ship));
     document.querySelectorAll('[data-defense]').forEach(b=>b.onclick=()=>enqueueDefense(b.dataset.defense));
+    document.querySelectorAll('[data-multibuild]').forEach(b=>b.onclick=()=>enqueueMultiBuild(b.dataset.multibuild));
     const ff=$('#fleetForm'); if(ff){
       ff.onsubmit=e=>{e.preventDefault(); const gal=Number(ff.galaxy.value), sys=Number(ff.system.value), pos=Number(ff.position.value); $('#targetField').value = gal+':'+sys+':'+pos; state.fleetPrefill=null; sendFleet(ff)};
       ff.mission.onchange=()=>{ state.fleetPrefill=null; const acsField=$('#acsField'); if(acsField) acsField.style.display = ff.mission.value==='attack' ? 'block' : 'none'; };
@@ -1638,6 +1699,10 @@ function renderView(bind=true){
       state.expandedGalaxySlot = state.expandedGalaxySlot===pos ? null : pos;
       renderView(true);
     });
+    document.querySelectorAll('[data-telescope-jump]').forEach(b=>b.onclick=()=>{
+      const [g,s] = b.dataset.telescopeJump.split(':').map(Number);
+      state.galaxyIndex=g; state.galaxySystem=s; state.expandedGalaxySlot=null; renderView(true);
+    });
     const saveBtn=$('#saveBtn'); if(saveBtn) saveBtn.onclick=saveGame;
     const loadInput=$('#loadInput'); if(loadInput) loadInput.onchange=e=>{ if(e.target.files[0]) loadGame(e.target.files[0]); };
     const loadBtnNative=$('#loadBtnNative'); if(loadBtnNative) loadBtnNative.onclick=requestNativeLoad;
@@ -1658,6 +1723,8 @@ function renderView(bind=true){
     document.querySelectorAll('[data-moon-build]').forEach(b=>b.onclick=()=>enqueueMoonBuild(b.dataset.moonBuild));
     const jgf=$('#jumpGateForm'); if(jgf) jgf.onsubmit=e=>{e.preventDefault(); const toIdx=Number(jgf.targetMoon.value); const ships={lightFighter:Number(jgf.lightFighter.value)||0, cruiser:Number(jgf.cruiser.value)||0}; jumpGateTransfer(state.activeMoonIndex, toIdx, {}, ships); };
     const phf=$('#phalanxForm'); if(phf) phf.onsubmit=e=>{e.preventDefault(); postAction('scanSystem', {moonIndex: state.activeMoonIndex, planetIndex: state.activePlanet, gal: Number(phf.galaxy.value), sys: Number(phf.system.value), pos: Number(phf.position.value)}).then(()=>{ state.view='reports'; render(); }); };
+    const stmf=$('#sentinelToMoonForm'); if(stmf){ const am=activeMoon(); const coPl=am?state.planets.find(pl=>pl.coords[0]===am.coord[0]&&pl.coords[1]===am.coord[1]&&pl.coords[2]===am.coord[2]):null; const coIdx=coPl?state.planets.indexOf(coPl):-1; stmf.onsubmit=e=>{e.preventDefault(); transferSentinelOrbit(coIdx, true, Number(stmf.count.value)||0); }; }
+    const stpf=$('#sentinelToPlanetForm'); if(stpf){ const am=activeMoon(); const coPl=am?state.planets.find(pl=>pl.coords[0]===am.coord[0]&&pl.coords[1]===am.coord[1]&&pl.coords[2]===am.coord[2]):null; const coIdx=coPl?state.planets.indexOf(coPl):-1; stpf.onsubmit=e=>{e.preventDefault(); transferSentinelOrbit(coIdx, false, Number(stpf.count.value)||0); }; }
     const mailForm=$('#mailForm'); if(mailForm) mailForm.onsubmit=e=>{e.preventDefault(); postAction('sendDirectMessage', {toUsername: mailForm.toUsername.value.trim(), text: mailForm.text.value}).then(()=>{ renderView(true); }); };
     const renameForm=$('#renamePlanetForm'); if(renameForm) renameForm.onsubmit=e=>{e.preventDefault(); postAction('renamePlanet', {planetIndex: state.activePlanet, name: renameForm.name.value}); };
   }
