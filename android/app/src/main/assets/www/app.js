@@ -1537,8 +1537,11 @@ function viewExpeditions(){ const p=active(); const shipOptions=(key)=>Array.fro
   </div>`; }
 
 function moonFacilitySection(){
-  if(state.moons.length===0) return `<div class="small">Noch keine Monde entstanden. Monde entstehen mit einer Chance nach Schlachten mit großem Trümmerfeld (Angriff auf NPC-Kolonien, gewonnen oder verloren).</div>`;
   const moonKeys = ['lunarBase','sensorPhalanx','jumpGate'];
+  if(state.moons.length===0){
+    const catalog = moonKeys.map(k=>{ const def=defs.buildings[k]; return `<div class="row"><div><strong>${def.name}</strong><div class="sub">${def.desc||''}</div><div class="sub">Kosten Stufe 1 (vom gewählten Planeten): ${resCostText(def.base)}</div>${def.requires && Object.keys(def.requires).length ? `<div class="sub warn-text">Benötigt: ${requirementText(def.requires)}</div>` : ''}</div><div>${infoIconHtml('building',k)}</div></div>`; }).join('');
+    return `<div class="small">Noch keine Monde entstanden. Monde entstehen mit einer Chance nach Schlachten mit großem Trümmerfeld (Angriff auf NPC-Kolonien, gewonnen oder verloren).</div><div style="height:14px"></div><div class="small" style="margin-bottom:8px">Sobald ein Mond entsteht, lassen sich dort folgende Gebäude ausbauen:</div><div class="list">${catalog}</div>`;
+  }
   const tabs = state.moons.map((m,i)=>`<button class="pill ${state.activeMoonIndex===i?'active':''}" data-moon-select="${i}">Mond ${coordStr(m.coord)}</button>`).join('');
   const m = activeMoon();
   let detail = '<div class="small">Wähle oben einen Mond aus.</div>';
