@@ -324,7 +324,7 @@ function openInfoModal(type, key, level){
   const storageGroupEntry = Object.entries(RESOURCE_GROUPS).find(([,g])=>g.storageBuilding===key);
   if(storageGroupEntry) d.storageGroup = storageGroupEntry[0];
   const p = active();
-  const isLeveled = type==='research' || type==='lifeformBuilding' || (type==='building' && !d.isDefense);
+  const isLeveled = type==='research' || type==='lifeformBuilding' || (type==='building' && !d.isDefense && !d.multiBuild);
   const statsRows = [];
   let levelTableHtml = '';
   if(isLeveled){
@@ -353,13 +353,23 @@ function openInfoModal(type, key, level){
     }
     if(d.requires && Object.keys(d.requires).length) statsRows.push(['Voraussetzung', requirementText(d.requires)]);
   } else {
-    const cost = d.cost || d.base;
+    const rawCost = d.cost || d.base;
+    const isDefenseItem = type==='building' && (d.isDefense || d.multiBuild);
+    // Verteidigungs-/Mehrfachbau-Gebäude werden serverseitig immer mit dem Commander-Rabatt
+    // abgerechnet (enqueueDefense/enqueueMultiBuild) - der angezeigte Preis muss das
+    // widerspiegeln, sonst weicht die Info-Modal-Anzeige vom tatsächlichen Preis ab.
+    let cost = rawCost;
+    if(isDefenseItem && rawCost){ const disc=commanderDiscount(); cost={}; for(const k of RESOURCE_KEYS) cost[k]=Math.floor((rawCost[k]||0)*disc); }
     if(cost) statsRows.push(['Kosten', resCostText(cost)]);
     if(cost && p){
-      const isDefenseItem = type==='building' && d.isDefense;
-      let timeCost = cost;
-      if(isDefenseItem){ const disc=commanderDiscount(); timeCost={}; for(const k of RESOURCE_KEYS) timeCost[k]=Math.floor((cost[k]||0)*disc); }
-      statsRows.push(['Bauzeit', formatDuration(buildSeconds(isDefenseItem?'defense':'ship', timeCost, p, 1)*1000)]);
+      statsRows.push(['Bauzeit', formatDuration(buildSeconds(isDefenseItem?'defense':'ship', cost, p, 1)*1000)]);
+    }
+    if(d.multiBuild){
+      if(d.power!=null) statsRows.push(['Energie pro Stück', '+'+fmt(d.power)]);
+      if(p){
+        const queued = p.buildQueue.filter(q=>q.key===key).length;
+        statsRows.push(['Vorhanden / Kapazität', fmt((p.buildings[key]||0)+queued)+' / '+fmt(Math.floor((p.buildings.solarPlant||0)/5))]);
+      }
     }
     if(d.attack!=null) statsRows.push(['Angriff', fmt(d.attack)]);
     if(d.shield!=null) statsRows.push(['Schild', fmt(d.shield)]);
@@ -977,16 +987,19 @@ function renderAdminPanel(){
 
 // ---- Galaxy view data (fetched from the server so real players show up) ----
 let galaxyCache = {};
-let galaxyLoadingKey = null;
+// Set (not a single key) since the Weltraum-Teleskop can have several systems in flight
+// at once - a single shared "currently loading" variable would get overwritten by each
+// new fetch before the previous one resolves, defeating the dedup entirely.
+let galaxyLoadingKeys = new Set();
 function galaxyCacheKey(g,s){ return g+':'+s; }
 async function fetchGalaxySlots(g,s){
   const key = galaxyCacheKey(g,s);
-  galaxyLoadingKey = key;
+  galaxyLoadingKeys.add(key);
   try {
     const data = await apiFetch('/api/galaxy?galaxy='+g+'&system='+s);
     galaxyCache[key] = data.slots;
   } catch(err){ showError('Galaxie konnte nicht geladen werden: '+err.message); }
-  if(galaxyLoadingKey===key) galaxyLoadingKey = null;
+  galaxyLoadingKeys.delete(key);
   if(state.view==='galaxy') renderView(true);
 }
 
@@ -1008,7 +1021,7 @@ function telescopeAsteroidRows(p){
   for(const {gal, sys} of telescopeSystems(p)){
     const key = galaxyCacheKey(gal, sys);
     const slots = galaxyCache[key];
-    if(!slots){ if(galaxyLoadingKey!==key) fetchGalaxySlots(gal, sys); anyLoading = true; continue; }
+    if(!slots){ if(!galaxyLoadingKeys.has(key)) fetchGalaxySlots(gal, sys); anyLoading = true; continue; }
     slots.filter(s=>s.type==='asteroid').forEach(s=>rows.push({gal, sys, ...s}));
   }
   return {rows, anyLoading};
@@ -1093,7 +1106,10 @@ function energyStats(p){
   const solar=defs.buildings.solarPlant.power(p.buildings.solarPlant||0);
   const nuclear=defs.buildings.nuclearReactor.power(p.buildings.nuclearReactor||0);
   const satellites=(p.ships.solarSatellite||0)*20;
-  const prod=(solar+nuclear+satellites)*engineerBonus();
+  const sails = (p.buildings.solarSailI||0)*defs.buildings.solarSailI.power
+              + (p.buildings.solarSailII||0)*defs.buildings.solarSailII.power
+              + (p.buildings.solarSailIII||0)*defs.buildings.solarSailIII.power;
+  const prod=(solar+nuclear+satellites+sails)*engineerBonus();
   let use=0;
   for(const [k,d] of Object.entries(defs.buildings)){ if(d.resource && d.powerUse) use += d.powerUse(p.buildings[k]||0); }
   for(const k of FACTORY_KEYS){ if(defs.buildings[k].powerUse) use += defs.buildings[k].powerUse(p.buildings[k]||0); }
@@ -1234,11 +1250,17 @@ function viewBuildings(){
   const shown = state.buildingTab==='all' ? buildable : buildable.filter(([k])=>buildingCategory(k)===state.buildingTab);
   const rows = shown.map(([k,d])=>{
     if(d.multiBuild){
-      const count = p.buildings[k]||0;
+      // count zaehlt fertige UND bereits wartende Bauqueue-Eintraege desselben Keys - muss
+      // mit der serverseitigen Cap-Pruefung (enqueueMultiBuild) uebereinstimmen, sonst zeigt
+      // der Button "verfuegbar", obwohl der Server die Anfrage ablehnen wuerde.
+      const queued = p.buildQueue.filter(q=>q.key===k).length;
+      const count = (p.buildings[k]||0) + queued;
       const cap = Math.floor((p.buildings.solarPlant||0)/5);
       const mok = meetsRequirements(p,d.requires);
       const atCap = count>=cap;
-      return `<div class="row"><div><strong>${d.name}</strong><div class="sub">Vorhanden ${fmt(count)}/${fmt(cap)} (Solarkraftwerk ${p.buildings.solarPlant||0})</div><div class="sub">Energie je Stück: ${d.power}</div><div class="sub">Kosten: ${resCostText(d.base)}</div>${!mok?`<div class="sub warn-text">Benötigt: ${requirementText(d.requires)}</div>`:''}${atCap?'<div class="sub warn-text">Kapazität erreicht - Solarkraftwerk ausbauen</div>':''}</div><div style="display:flex;gap:6px;align-items:center">${infoIconHtml('building',k,count)}<button class="btn" data-multibuild="${k}" ${mok&&!atCap?'':'disabled'}>Bauen</button></div></div>`;
+      const disc = commanderDiscount();
+      const c = {}; for(const rk of RESOURCE_KEYS) c[rk]=Math.floor((d.base[rk]||0)*disc);
+      return `<div class="row"><div><strong>${d.name}</strong><div class="sub">Vorhanden ${fmt(count)}/${fmt(cap)} (Solarkraftwerk ${p.buildings.solarPlant||0})</div><div class="sub">Energie je Stück: ${d.power}</div><div class="sub">Kosten: ${resCostText(c)}</div>${!mok?`<div class="sub warn-text">Benötigt: ${requirementText(d.requires)}</div>`:''}${atCap?'<div class="sub warn-text">Kapazität erreicht - Solarkraftwerk ausbauen</div>':''}</div><div style="display:flex;gap:6px;align-items:center">${infoIconHtml('building',k,count)}<button class="btn" data-multibuild="${k}" ${mok&&!atCap?'':'disabled'}>Bauen</button></div></div>`;
     }
     const lvl=(p.buildings[k]||0)+1;
     const c=buildingCost(costBaseFor(d,p),lvl);
@@ -1353,7 +1375,7 @@ function viewGalaxy(){
   const gal = state.galaxyIndex, sys = state.galaxySystem;
   const key = galaxyCacheKey(gal, sys);
   const slots = galaxyCache[key];
-  if(!slots && galaxyLoadingKey!==key){ fetchGalaxySlots(gal, sys); }
+  if(!slots && !galaxyLoadingKeys.has(key)){ fetchGalaxySlots(gal, sys); }
   if(!slots){
     return `<h2>Galaxie</h2>${galaxyJumpFormHtml(gal, sys)}<div class="small">Lade Systemdaten vom Server…</div>`;
   }
@@ -1426,7 +1448,9 @@ function viewDefense(){
   const defenseKeys = Object.entries(defs.buildings).filter(([,d])=>d.isDefense);
   const missileCap = (p.buildings.missileSilo||0)*10;
   const rows = defenseKeys.map(([k,d])=>{
-    const count=p.buildings[k]||0; const ok=meetsRequirements(p,d.requires);
+    // count zaehlt fertige UND bereits wartende Bauqueue-Eintraege desselben Keys - muss mit
+    // der serverseitigen Cap-Pruefung (enqueueDefense) uebereinstimmen.
+    const count=(p.buildings[k]||0) + p.buildQueue.filter(q=>q.key===k).length; const ok=meetsRequirements(p,d.requires);
     const uniqueBlocked = d.unique && count>=1;
     const missileBlocked = k==='interplanetaryMissile' && count>=missileCap;
     const disabled = !ok || uniqueBlocked || missileBlocked;

@@ -449,6 +449,13 @@ function planetTypeForCoord(galaxy, system, pos){
   return PLANET_TYPE_KEYS[Math.min(idx, PLANET_TYPE_KEYS.length-1)];
 }
 
+// Planetennamen werden an mehreren Stellen ungeschuetzt (ohne HTML-Escaping) in den Client
+// eingebettet, u.a. gemischt mit bereits vertrauenswuerdigem HTML wie coordLinkHtml()-
+// Buttons in system-generierten Nachrichten - ein serverseitiges Escaping bei jeder
+// einzelnen Ausgabe waere daher unvollstaendig/fehleranfaellig. Stattdessen wird der Name
+// direkt bei der Vergabe (Registrierung UND Umbenennung) von HTML-Metazeichen befreit, das
+// macht jede heutige und kuenftige Ausgabestelle automatisch sicher.
+function sanitizePlanetName(name){ return String(name||'').replace(/[<>&"']/g, ''); }
 function createStarterEmpire(coord, name){
   const planetType = 'rocky';
   // Ein neuer Spieler bekommt von Anfang an Zugang zu ALLEN 18 Rohstoffen, nicht nur den
@@ -460,7 +467,7 @@ function createStarterEmpire(coord, name){
   const startRes = zeroResources();
   for(const k of RESOURCE_KEYS) startRes[k] = 500;
   const planet = {
-    name: (name && String(name).trim()) || 'Heimatwelt',
+    name: sanitizePlanetName(name).trim().slice(0, 30) || 'Heimatwelt',
     coords: coord,
     planetType,
     resources: startRes,
@@ -1218,7 +1225,9 @@ function enqueueDefense(state, planetIndex, key){
   const def = defs.buildings[key];
   if(!def || !def.isDefense) return fail(state, 'Unbekannte Verteidigungsanlage');
   if(!meetsRequirements(p, def.requires)) return fail(state, def.name+' benötigt: '+requirementText(def.requires));
-  const count = p.buildings[key]||0;
+  // Zaehlt fertige UND bereits in der Bauqueue wartende Exemplare - sonst liesse sich der
+  // Cap durch mehrere schnelle Klicks umgehen, bevor der erste Bau abgeschlossen ist.
+  const count = (p.buildings[key]||0) + p.buildQueue.filter(q=>q.key===key).length;
   if(def.unique && count>=1) return fail(state, def.name+' ist bereits vorhanden (nur 1 pro Planet)');
   if(key==='interplanetaryMissile'){ const cap=(p.buildings.missileSilo||0)*10; if(count>=cap) return fail(state, 'Raketensilo-Kapazität erreicht ('+cap+')'); }
   const d = commanderDiscount(state);
@@ -1242,7 +1251,9 @@ function enqueueMultiBuild(state, planetIndex, key){
   const def = defs.buildings[key];
   if(!def || !def.multiBuild) return fail(state, 'Unbekannte Mehrfachbau-Struktur');
   if(!meetsRequirements(p, def.requires)) return fail(state, def.name+' benötigt: '+requirementText(def.requires));
-  const count = p.buildings[key]||0;
+  // Zaehlt fertige UND bereits in der Bauqueue wartende Exemplare - sonst liesse sich der
+  // Cap durch mehrere schnelle Klicks umgehen, bevor der erste Bau abgeschlossen ist.
+  const count = (p.buildings[key]||0) + p.buildQueue.filter(q=>q.key===key).length;
   const cap = multiBuildCap(p, key);
   if(count>=cap) return fail(state, def.name+'-Kapazität erreicht ('+count+'/'+cap+', Solarkraftwerk ausbauen)');
   const d = commanderDiscount(state);
@@ -1262,7 +1273,7 @@ function sendFleet(universe, username, planetIndex, params){
   const gal = Number(params.gal), sys = Number(params.sys), pos = Number(params.pos);
   if(!validCoord(gal,sys,pos)) return fail(state, 'Ungültiges Ziel: Galaxie (1-'+UNIVERSE.galaxies+'), System (1-'+UNIVERSE.systems+') und Position (1-'+UNIVERSE.positions+') angeben');
   const toCoord = [gal, sys, pos];
-  const ownIdx = state.planets.findIndex(pl=>pl.coords[0]===gal && pl.coords[1]===sys && pl.coords[2]===pos);
+  const ownIdx = state.planets.findIndex(pl=>!pl.destroyed && pl.coords[0]===gal && pl.coords[1]===sys && pl.coords[2]===pos);
   if(mission==='attack' && ownIdx>=0) return fail(state, 'Eigene Planeten können nicht angegriffen werden');
   let toPlanetIndex=null, toOwner=null, npcSlot=null, emptySlot=null, asteroidSlot=null;
   if(ownIdx>=0) toPlanetIndex = ownIdx;
@@ -1275,7 +1286,7 @@ function sendFleet(universe, username, planetIndex, params){
     }
   }
   const ships = {};
-  Object.keys(defs.ships).forEach(k=>{ if(defs.ships[k].role!=='power' && defs.ships[k].role!=='sentinel') ships[k]=Number((params.ships||{})[k])||0; });
+  Object.keys(defs.ships).forEach(k=>{ if(defs.ships[k].role!=='power' && defs.ships[k].role!=='sentinel') ships[k]=Math.max(0, Math.floor(Number((params.ships||{})[k])||0)); });
   const totalShips = Object.values(ships).reduce((a,b)=>a+b,0);
   if(totalShips<=0) return fail(state, 'Keine Schiffe ausgewählt');
   for(const [k,v] of Object.entries(ships)){ if(v>(p.ships[k]||0)) return fail(state, 'Zu wenige '+defs.ships[k].name); }
@@ -1293,7 +1304,7 @@ function sendFleet(universe, username, planetIndex, params){
 
   const cargo = zeroResources();
   const cargoParam = params.cargo||{};
-  for(const k of RESOURCE_KEYS) cargo[k] = Number(cargoParam[k])||0;
+  for(const k of RESOURCE_KEYS) cargo[k] = Math.max(0, Number(cargoParam[k])||0);
   const cap = capacityForShips(ships); const totalCargo = resTotal(cargo);
   if(mission==='transport' && totalCargo>cap) return fail(state, 'Zu wenig Ladekapazität');
   let dur = fleetDuration(state, p.coords, toCoord, ships);
@@ -1364,7 +1375,8 @@ function sendFleet(universe, username, planetIndex, params){
       let detected = false;
       // Planeten-Umlaufbahn: 4 Nachbarpositionen INKLUSIVE der eigenen Position, 25% Chance.
       for(const pl of ownerState.planets){
-        if(detected || pl.destroyed) break;
+        if(detected) break;
+        if(pl.destroyed) continue;
         if((pl.ships.sentinelSatellite||0)<=0) continue;
         if(pl.coords[0]!==gal || pl.coords[1]!==sys) continue;
         if(Math.abs(pl.coords[2]-pos)<=2 && Math.random()<0.25) detected = true;
@@ -1373,7 +1385,8 @@ function sendFleet(universe, username, planetIndex, params){
       // Deckt das GESAMTE System ab, 50% Chance.
       if(!detected){
         for(const pl of ownerState.planets){
-          if(detected || pl.destroyed) break;
+          if(detected) break;
+          if(pl.destroyed) continue;
           if(pl.coords[0]!==gal || pl.coords[1]!==sys) continue;
           const moon = findMoonAt(ownerState, pl.coords);
           if(moon && (moon.ships.sentinelSatellite||0)>0 && Math.random()<0.5) detected = true;
@@ -1394,7 +1407,7 @@ function sendExpedition(state, planetIndex, shipsMap, durationSlot){
   const maxExp = maxExpeditions(p);
   if(state.expeditions.length>=maxExp) return fail(state, 'Keine Expeditions-Plätze frei (max '+maxExp+', Astrophysik ausbauen)');
   const ships = {};
-  Object.keys(shipsMap||{}).forEach(k=>{ if(defs.ships[k]) ships[k]=Number(shipsMap[k])||0; });
+  Object.keys(shipsMap||{}).forEach(k=>{ if(defs.ships[k]) ships[k]=Math.max(0, Math.floor(Number(shipsMap[k])||0)); });
   for(const [k,v] of Object.entries(ships)){ if(v>(p.ships[k]||0)) return fail(state, 'Zu wenige '+defs.ships[k].name); }
   const total = Object.values(ships).reduce((a,b)=>a+b,0);
   if(total<1) return fail(state, 'Keine Schiffe für Expedition gewählt');
@@ -1440,11 +1453,12 @@ function enqueueMoonBuild(state, planetIndex, moonIndex, key){
   const m = state.moons[moonIndex];
   if(!m) return fail(state, 'Kein Mond ausgewählt');
   const def = defs.buildings[key];
-  if(!def) return fail(state, 'Unbekanntes Mondgebäude');
+  if(!def || !def.moonOnly) return fail(state, 'Unbekanntes Mondgebäude');
+  const p = requirePlanet(state, planetIndex);
+  if(!meetsRequirements(p, def.requires)) return fail(state, def.name+' benötigt: '+requirementText(def.requires));
   if(m.buildQueue.some(q=>q.key===key)) return fail(state, def.name+' wird bereits gebaut');
   const lvl = (m.buildings[key]||0)+1;
   const cost = scaledCost(def.base, lvl);
-  const p = requirePlanet(state, planetIndex);
   if(!hasRes(p,cost)) return fail(state, 'Nicht genug Ressourcen auf dem Heimatplaneten für '+def.name);
   spend(p,cost);
   const secs = Math.max(10, Math.round(resTotal(cost)/300));
@@ -1457,7 +1471,9 @@ function jumpGateTransfer(state, fromMoonIdx, toMoonIdx, shipsMap){
   if(!from || !to) return fail(state, 'Ungültiger Mond');
   if(!jumpGateReady(from) || !jumpGateReady(to)) return fail(state, 'Beide Monde brauchen ein Sprungtor');
   const ships = {};
-  Object.keys(shipsMap||{}).forEach(k=>{ if(defs.ships[k]) ships[k]=Number(shipsMap[k])||0; });
+  Object.keys(shipsMap||{}).forEach(k=>{ if(defs.ships[k]) ships[k]=Math.max(0, Math.floor(Number(shipsMap[k])||0)); });
+  const totalTransfer = Object.values(ships).reduce((a,b)=>a+b,0);
+  if(totalTransfer<1) return fail(state, 'Keine Schiffe für den Transfer gewählt');
   for(const [k,v] of Object.entries(ships)){ if(v>(from.ships[k]||0)) return fail(state, 'Zu wenige '+defs.ships[k].name+' auf dem Mond'); }
   for(const [k,v] of Object.entries(ships)){ from.ships[k]-=v; to.ships[k]=(to.ships[k]||0)+v; }
   return ok(state, 'Sprungtor-Transfer nach '+coordLinkHtml(to.coord)+' abgeschlossen (sofort)');
@@ -1694,7 +1710,7 @@ function launchMissiles(universe, username, planetIndex, targetPos, count){
   targetPos = Math.floor(Number(targetPos))||0;
   if(count<1 || count>(p.buildings.interplanetaryMissile||0)) return fail(state, 'Ungültige Raketenanzahl');
   if(targetPos<1 || targetPos>UNIVERSE.positions) return fail(state, 'Ungültige Zielposition');
-  const ownIdx = state.planets.findIndex(pl=>pl.coords[0]===p.coords[0] && pl.coords[1]===p.coords[1] && pl.coords[2]===targetPos);
+  const ownIdx = state.planets.findIndex(pl=>!pl.destroyed && pl.coords[0]===p.coords[0] && pl.coords[1]===p.coords[1] && pl.coords[2]===targetPos);
   if(ownIdx>=0) return fail(state, 'Eigene Planeten können nicht angegriffen werden');
   const targetCoord = [p.coords[0], p.coords[1], targetPos];
   const owner = findPlanetOwner(universe, targetCoord, username);
@@ -1765,7 +1781,7 @@ const PLANET_NAME_MAX_LEN = 30;
 const PLANET_RENAME_COOLDOWN_MS = 7*24*60*60*1000;
 function renamePlanet(state, planetIndex, name){
   const p = requirePlanet(state, planetIndex);
-  const trimmed = String(name||'').trim();
+  const trimmed = sanitizePlanetName(name).trim();
   if(!trimmed) return fail(state, 'Planetenname darf nicht leer sein');
   if(trimmed.length>PLANET_NAME_MAX_LEN) return fail(state, 'Planetenname zu lang (max. '+PLANET_NAME_MAX_LEN+' Zeichen)');
   const last = p.lastRenamed || 0;
