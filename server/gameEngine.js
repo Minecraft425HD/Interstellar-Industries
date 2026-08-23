@@ -14,7 +14,7 @@ const RESOURCE_KEYS = [
   // ---- Zwischenprodukte (Industriegueter) - werden nicht abgebaut, sondern in
   // Fabriken aus Rohstoffen (und teils aus anderen Zwischenprodukten) gefertigt.
   // Tier 1 (direkt aus Rohstoffen):
-  'steel','electronics','plastic','alloy','concrete','batteryCells',
+  'steel','electronics','plastic','alloy','concrete','batteryCells','hydrogen','oxygen','refinedFuel',
   // Tier 2 (aus Tier-1-Guetern):
   'machineParts','compositeMaterial',
   // Tier 3 (aus Tier-2-Guetern + einem Rohstoff):
@@ -45,6 +45,9 @@ const RESOURCE_INFO = {
   alloy: {name:'Legierung', group:'goods'},
   concrete: {name:'Beton', group:'goods'},
   batteryCells: {name:'Batteriezellen', group:'goods'},
+  hydrogen: {name:'Wasserstoff', group:'goods'},
+  oxygen: {name:'Sauerstoff', group:'goods'},
+  refinedFuel: {name:'Kraftstoff', group:'goods'},
   machineParts: {name:'Maschinenteile', group:'goods'},
   compositeMaterial: {name:'Verbundwerkstoff', group:'goods'},
   precisionComponents: {name:'Präzisionskomponenten', group:'goods'},
@@ -187,6 +190,9 @@ const defs = {
     // fuer seine ersten Minen bekommt, ohne von Anfang an auf Handel angewiesen zu sein.
     solarPlant:{name:'Solarkraftwerk', costMagnitude:105, power:l=>40*l*Math.pow(1.05,l)},
     nuclearReactor:{name:'Kernreaktor', base:{iron:700, aluminium:300, uranium:120}, power:l=>30*l*Math.pow(1.05,l), uraniumUse:l=>Math.floor(10*l*Math.pow(1.1,l)), requires:{uraniumMine:5, energyTech:3}},
+    // Strukturelle Kopie des Kernreaktors, nur mit Kohle statt Uran - selbes Muster
+    // (power(l) + flacher, ungedrosselter coalUse(l)-Verbrauch in hourly()).
+    coalPlant:{name:'Kohlekraftwerk', base:{iron:500, aluminium:300, copper:200}, power:l=>22*l*Math.pow(1.05,l), coalUse:l=>Math.floor(16*l*Math.pow(1.1,l)), requires:{coalMine:5, energyTech:1}},
     solarSailI:{name:'Solarsegel I', base:{silver:1200, aluminium:800, crudeOil:400}, power:15, multiBuild:true, requires:{solarPlant:5}},
     solarSailII:{name:'Solarsegel II', base:{silver:3000, aluminium:2200, electronics:600, crudeOil:900}, power:35, multiBuild:true, requires:{solarPlant:10, solarSailI:1}},
     solarSailIII:{name:'Solarsegel III', base:{silver:7000, aluminium:5000, electronics:1800, crudeOil:2000, alloy:500}, power:70, multiBuild:true, requires:{solarPlant:15, solarSailII:1}},
@@ -222,6 +228,12 @@ const defs = {
       recipe:{output:'electronics', prod:l=>10*l*Math.pow(1.1,l), inputsPerUnit:{copper:3, gold:1}}},
     plasticsPlant:{name:'Kunststoffwerk', base:{aluminium:600, crudeOil:250}, requires:{robotFactory:2}, powerUse:l=>12*l, factory:true,
       recipe:{output:'plastic', prod:l=>12*l*Math.pow(1.1,l), inputsPerUnit:{crudeOil:2, coal:1}}},
+    oilRefinery:{name:'Ölraffinerie', base:{iron:8000, aluminium:5000, steel:1500}, requires:{robotFactory:3}, powerUse:l=>12*l, factory:true,
+      recipe:{output:'refinedFuel', prod:l=>25*l*Math.pow(1.1,l), inputsPerUnit:{crudeOil:1.4}}},
+    // recipe.byproduct ist ein neues, optionales Feld (siehe applyFactories) - ein
+    // Nebenprodukt, das im festen Verhaeltnis zum Hauptoutput zusaetzlich anfaellt.
+    electrolysisPlant:{name:'Elektrolyseanlage', base:{aluminium:6000, copper:4000, electronics:800}, requires:{robotFactory:3, energyTech:2}, powerUse:l=>15*l, factory:true,
+      recipe:{output:'hydrogen', prod:l=>20*l*Math.pow(1.1,l), inputsPerUnit:{freshwater:4}, byproduct:{output:'oxygen', ratio:0.5}}},
     alloyFoundry:{name:'Legierungsschmelze', base:{aluminium:700, nickel:250}, requires:{robotFactory:2}, powerUse:l=>13*l, factory:true,
       recipe:{output:'alloy', prod:l=>9*l*Math.pow(1.1,l), inputsPerUnit:{aluminium:2, nickel:1, rareEarths:1}}},
     concretePlant:{name:'Betonwerk', base:{limestone:600, freshwater:250}, requires:{robotFactory:2}, powerUse:l=>10*l, factory:true,
@@ -930,14 +942,16 @@ function hasRes(p,c){ for(const k of RESOURCE_KEYS){ if((p.resources[k]||0) < (c
 function spend(p,c){ for(const k of RESOURCE_KEYS){ p.resources[k] = (p.resources[k]||0) - (c[k]||0); } }
 function addRes(p,c){ for(const k of RESOURCE_KEYS){ p.resources[k] = (p.resources[k]||0) + (c[k]||0); } }
 function fusionDeutUse(p){ return (p.buildings.nuclearReactor) ? defs.buildings.nuclearReactor.uraniumUse(p.buildings.nuclearReactor) : 0; }
+function fusionCoalUse(p){ return (p.buildings.coalPlant) ? defs.buildings.coalPlant.coalUse(p.buildings.coalPlant) : 0; }
 function energyStats(state, p){
   const solar=defs.buildings.solarPlant.power(p.buildings.solarPlant);
   const nuclear=defs.buildings.nuclearReactor.power(p.buildings.nuclearReactor||0);
+  const coalPower=defs.buildings.coalPlant.power(p.buildings.coalPlant||0);
   const satellites=(p.ships.solarSatellite||0)*20;
   const sails = (p.buildings.solarSailI||0)*defs.buildings.solarSailI.power
               + (p.buildings.solarSailII||0)*defs.buildings.solarSailII.power
               + (p.buildings.solarSailIII||0)*defs.buildings.solarSailIII.power;
-  const prod=(solar+nuclear+satellites+sails)*engineerBonus(state);
+  const prod=(solar+nuclear+coalPower+satellites+sails)*engineerBonus(state);
   let use=0;
   for(const [res, mineKey] of Object.entries(MINE_BY_RESOURCE)){
     if(defs.buildings[mineKey].powerUse) use += defs.buildings[mineKey].powerUse(p.buildings[mineKey]||0);
@@ -981,6 +995,7 @@ function applyFactories(state, p, universe, inc){
     const {throttle} = factoryThrottle(p, recipe, lvl);
     const actualOut = recipe.prod(lvl) * e * throttle;
     inc[recipe.output] = (inc[recipe.output]||0) + actualOut;
+    if(recipe.byproduct) inc[recipe.byproduct.output] = (inc[recipe.byproduct.output]||0) + actualOut*recipe.byproduct.ratio;
     for(const [inputKey, perUnit] of Object.entries(recipe.inputsPerUnit)){
       inc[inputKey] = (inc[inputKey]||0) - actualOut*perUnit;
     }
@@ -1019,6 +1034,7 @@ function hourly(state, p, universe){
     inc[res] = defs.buildings[mineKey].prod(lvl)*e*bonus*boost;
   }
   inc.uranium -= fusionDeutUse(p);
+  inc.coal -= fusionCoalUse(p);
   applyFactories(state, p, universe, inc);
   return inc;
 }
@@ -1336,10 +1352,13 @@ function sendFleet(universe, username, planetIndex, params){
   // hier beim Abflug aufgeloest - genauso wie Treibstoff schon jetzt synchron abgezogen wird.
   const dangerZone = systemHasBlackHole(universe, p.coords[0], p.coords[1]) || systemHasBlackHole(universe, gal, sys);
   if(dangerZone) dur = Math.round(dur * BLACKHOLE_DURATION_MULTIPLIER);
-  // Treibstoff (Rohöl) wird zusaetzlich zu evtl. mitgefuehrtem Rohöl-Frachtgut benoetigt.
+  // Treibstoff-Wahl: Rohoel kann NICHT mehr direkt tanken, muss erst zu Kraftstoff
+  // raffiniert werden. Alternativ Wasserstoff (per Elektrolyse). Strikt whitelisted (nicht
+  // generisch gegen RESOURCE_KEYS geprueft), da der Wert direkt als p.resources-Index dient.
+  const fuelType = params.fuelType==='hydrogen' ? 'hydrogen' : 'refinedFuel';
   const fuel = fuelForShips(ships)*Math.max(1,dur/20);
-  if(cargo.crudeOil+fuel>p.resources.crudeOil) return fail(state, 'Zu wenig Rohöl für Ladung und Flug');
-  for(const k of RESOURCE_KEYS){ if(k==='crudeOil') continue; if(cargo[k]>p.resources[k]) return fail(state, 'Nicht genug Ressourcen zum Versenden'); }
+  if((cargo[fuelType]||0)+fuel>p.resources[fuelType]) return fail(state, 'Zu wenig '+RESOURCE_INFO[fuelType].name+' für Ladung und Flug');
+  for(const k of RESOURCE_KEYS){ if(k===fuelType) continue; if(cargo[k]>p.resources[k]) return fail(state, 'Nicht genug Ressourcen zum Versenden'); }
 
   // ACS (Allianz-Kampfstärke): mehrere Angriffsflotten auf denselben ACS-Code + dasselbe
   // Ziel synchronisieren ihre Ankunft, damit sie gemeinsam als eine Streitmacht kämpfen.
@@ -1364,7 +1383,7 @@ function sendFleet(universe, username, planetIndex, params){
 
   for(const [k,v] of Object.entries(ships)) p.ships[k]-=v;
   if(mission==='transport'){ spend(p, cargo); }
-  p.resources.crudeOil-=fuel;
+  p.resources[fuelType]-=fuel;
 
   // Schwarzes-Loch-Risiko: bei Gefahrenzone besteht eine kleine Chance, ein zufaelliges
   // Schiff der bereits abgezogenen Flotte zu verlieren. ships wird IN-PLACE mutiert, damit
@@ -1383,7 +1402,7 @@ function sendFleet(universe, username, planetIndex, params){
     }
   }
 
-  state.fleets.push({from:planetIndex, toCoord, toPlanetIndex, toOwner, npcSlot, emptySlot, ships, cargo:mission==='transport'?cargo:zeroResources(), mission, arrive, returnAt:Date.now()+dur*2000, phase:'outbound', fuel, acsId, acsAllianceTag});
+  state.fleets.push({from:planetIndex, toCoord, toPlanetIndex, toOwner, npcSlot, emptySlot, ships, cargo:mission==='transport'?cargo:zeroResources(), mission, arrive, returnAt:Date.now()+dur*2000, phase:'outbound', fuel, fuelType, acsId, acsAllianceTag});
 
   // Fruehwarn-Satelliten: bei mission==='attack' wird JETZT (Abflugzeitpunkt) geprueft, ob
   // irgendein Spieler (auch ein unbeteiligter Dritter, "Umgebungsradar") einen Sentinel in

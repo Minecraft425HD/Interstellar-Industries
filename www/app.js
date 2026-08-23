@@ -4,7 +4,7 @@ const RESOURCE_KEYS = [
   'crudeOil','naturalGas','coal',
   'sulfur','phosphate','wood',
   'freshwater','saltwater',
-  'steel','electronics','plastic','alloy','concrete','batteryCells',
+  'steel','electronics','plastic','alloy','concrete','batteryCells','hydrogen','oxygen','refinedFuel',
   'machineParts','compositeMaterial',
   'precisionComponents',
 ];
@@ -17,6 +17,7 @@ const RESOURCE_INFO = {
   freshwater: {name:'Süßwasser', group:'water'}, saltwater: {name:'Salzwasser', group:'water'},
   steel: {name:'Stahl', group:'goods'}, electronics: {name:'Elektronik', group:'goods'}, plastic: {name:'Kunststoff', group:'goods'},
   alloy: {name:'Legierung', group:'goods'}, concrete: {name:'Beton', group:'goods'}, batteryCells: {name:'Batteriezellen', group:'goods'},
+  hydrogen: {name:'Wasserstoff', group:'goods'}, oxygen: {name:'Sauerstoff', group:'goods'}, refinedFuel: {name:'Kraftstoff', group:'goods'},
   machineParts: {name:'Maschinenteile', group:'goods'}, compositeMaterial: {name:'Verbundwerkstoff', group:'goods'},
   precisionComponents: {name:'Präzisionskomponenten', group:'goods'},
 };
@@ -75,7 +76,7 @@ const defs = {
     rareEarthsMine:{name:'Seltenerdmine', desc:'Gewinnt Seltene Erden für Hochleistungsmagnete und Sensorik.', resource:'rareEarths', costMagnitude:93, powerUse:l=>13*l, prod:l=>12*l*Math.pow(1.1,l)},
     sulfurMine:{name:'Schwefelmine', desc:'Baut vulkanischen Schwefel für chemische Prozesse ab.', resource:'sulfur', costMagnitude:52, powerUse:l=>9*l, prod:l=>18*l*Math.pow(1.1,l)},
     phosphateMine:{name:'Phosphatmine', desc:'Fördert Phosphat für Düngemittel und Lebenserhaltungssysteme.', resource:'phosphate', costMagnitude:56, powerUse:l=>9*l, prod:l=>18*l*Math.pow(1.1,l)},
-    crudeOilPump:{name:'Ölbohrturm', desc:'Fördert Rohöl aus tiefen geologischen Lagerstätten - Treibstoffgrundlage der Flotte.', resource:'crudeOil', costMagnitude:300, powerUse:l=>20*l, prod:l=>10*l*Math.pow(1.1,l)},
+    crudeOilPump:{name:'Ölbohrturm', desc:'Fördert Rohöl aus tiefen geologischen Lagerstätten - der Rohstoff, aus dem eine Ölraffinerie Kraftstoff für die Flotte gewinnt.', resource:'crudeOil', costMagnitude:300, powerUse:l=>20*l, prod:l=>10*l*Math.pow(1.1,l)},
     naturalGasPump:{name:'Erdgasförderanlage', desc:'Fördert Erdgas aus unterirdischen Vorkommen.', resource:'naturalGas', costMagnitude:270, powerUse:l=>18*l, prod:l=>11*l*Math.pow(1.1,l)},
     coalMine:{name:'Kohlebergwerk', desc:'Baut Kohle ab, ein vielseitiger fossiler Energieträger.', resource:'coal', costMagnitude:70, powerUse:l=>10*l, prod:l=>20*l*Math.pow(1.1,l)},
     freshwaterExtractor:{name:'Süßwassergewinnung', desc:'Gewinnt Süßwasser aus unterirdischem Eis.', resource:'freshwater', costMagnitude:50, powerUse:l=>7*l, prod:l=>20*l*Math.pow(1.1,l)},
@@ -108,6 +109,7 @@ const defs = {
     sawmill:{name:'Forstplantage', desc:'Erntet Holz aus der künstlich angelegten Biosphäre nach der Terraformierung.', resource:'wood', base:{iron:100, freshwater:60}, powerUse:l=>10*l, prod:l=>15*l*Math.pow(1.1,l), requires:{terraformer:1}},
     solarPlant:{name:'Solarkraftwerk', desc:'Erzeugt Energie durch Sonnenlicht, die von den Minen zum Betrieb benötigt wird. Überall nutzbar - selbstversorgend aus lokalen Rohstoffen finanziert.', costMagnitude:105, power:l=>40*l*Math.pow(1.05,l)},
     nuclearReactor:{name:'Kernreaktor', desc:'Erzeugt zusätzliche Energie durch Kernspaltung - unabhängig vom Sonnenlicht, verbraucht aber laufend Uran.', base:{iron:700, aluminium:300, uranium:120}, power:l=>30*l*Math.pow(1.05,l), uraniumUse:l=>Math.floor(10*l*Math.pow(1.1,l)), requires:{uraniumMine:5, energyTech:3}},
+    coalPlant:{name:'Kohlekraftwerk', desc:'Erzeugt zusätzliche Energie durch Kohleverbrennung - unabhängig vom Sonnenlicht, verbraucht aber laufend Kohle.', base:{iron:500, aluminium:300, copper:200}, power:l=>22*l*Math.pow(1.05,l), coalUse:l=>Math.floor(16*l*Math.pow(1.1,l)), requires:{coalMine:5, energyTech:1}},
     solarSailI:{name:'Solarsegel I', desc:'Ein Segel an einem Satelliten, das Energie per Laser zum Planeten sendet. Mehrfach baubar, Kapazität steigt mit dem Solarkraftwerk.', base:{silver:1200, aluminium:800, crudeOil:400}, power:15, multiBuild:true, requires:{solarPlant:5}},
     solarSailII:{name:'Solarsegel II', desc:'Ausbaustufe des Solarsegels mit höherer Energieausbeute je Stück.', base:{silver:3000, aluminium:2200, electronics:600, crudeOil:900}, power:35, multiBuild:true, requires:{solarPlant:10, solarSailI:1}},
     solarSailIII:{name:'Solarsegel III', desc:'Höchste Ausbaustufe des Solarsegels mit maximaler Energieausbeute je Stück.', base:{silver:7000, aluminium:5000, electronics:1800, crudeOil:2000, alloy:500}, power:70, multiBuild:true, requires:{solarPlant:15, solarSailII:1}},
@@ -132,6 +134,10 @@ const defs = {
       recipe:{output:'electronics', prod:l=>10*l*Math.pow(1.1,l), inputsPerUnit:{copper:3, gold:1}}},
     plasticsPlant:{name:'Kunststoffwerk', desc:'Verarbeitet Rohöl und Kohle zu vielseitigem Kunststoff.', base:{aluminium:600, crudeOil:250}, requires:{robotFactory:2}, powerUse:l=>12*l, factory:true,
       recipe:{output:'plastic', prod:l=>12*l*Math.pow(1.1,l), inputsPerUnit:{crudeOil:2, coal:1}}},
+    oilRefinery:{name:'Ölraffinerie', desc:'Raffiniert Rohöl zu Kraftstoff - erst dieser ist als Raumschiff-Treibstoff nutzbar.', base:{iron:8000, aluminium:5000, steel:1500}, requires:{robotFactory:3}, powerUse:l=>12*l, factory:true,
+      recipe:{output:'refinedFuel', prod:l=>25*l*Math.pow(1.1,l), inputsPerUnit:{crudeOil:1.4}}},
+    electrolysisPlant:{name:'Elektrolyseanlage', desc:'Spaltet Süßwasser elektrolytisch in Wasserstoff (nutzbar als Raumschiff-Treibstoff) und Sauerstoff als Nebenprodukt.', base:{aluminium:6000, copper:4000, electronics:800}, requires:{robotFactory:3, energyTech:2}, powerUse:l=>15*l, factory:true,
+      recipe:{output:'hydrogen', prod:l=>20*l*Math.pow(1.1,l), inputsPerUnit:{freshwater:4}, byproduct:{output:'oxygen', ratio:0.5}}},
     alloyFoundry:{name:'Legierungsschmelze', desc:'Schmilzt Aluminium, Nickel und Seltene Erden zu widerstandsfähigen Legierungen.', base:{aluminium:700, nickel:250}, requires:{robotFactory:2}, powerUse:l=>13*l, factory:true,
       recipe:{output:'alloy', prod:l=>9*l*Math.pow(1.1,l), inputsPerUnit:{aluminium:2, nickel:1, rareEarths:1}}},
     concretePlant:{name:'Betonwerk', desc:'Mischt Kalkstein und Süßwasser zu Beton für schwere Bauwerke.', base:{limestone:600, freshwater:250}, requires:{robotFactory:2}, powerUse:l=>10*l, factory:true,
@@ -306,10 +312,12 @@ function levelEffectText(d, key, lvl){
   if(d.power) parts.push('Energie +'+fmt(Math.floor(d.power(lvl))));
   if(d.powerUse) parts.push('Verbrauch -'+fmt(Math.floor(d.powerUse(lvl)))+' Energie');
   if(d.uraniumUse) parts.push('Uran '+fmt(Math.floor(d.uraniumUse(lvl)))+'/h');
+  if(d.coalUse) parts.push('Kohle '+fmt(Math.floor(d.coalUse(lvl)))+'/h');
   if(RESOURCE_GROUPS[d.storageGroup]) parts.push('Kapazität '+fmt(Math.max(5000,5000*lvl)));
   if(d.boostsGroup){ const groupName=RESOURCE_GROUPS[d.boostsGroup]?RESOURCE_GROUPS[d.boostsGroup].name:d.boostsGroup; parts.push('+'+(lvl*2)+'% '+groupName+'-Produktion'); }
   if(d.recipe){
     parts.push('Produktion '+fmt(Math.floor(d.recipe.prod(lvl)))+' '+RESOURCE_INFO[d.recipe.output].name+'/h (bei voller Kapazität)');
+    if(d.recipe.byproduct) parts.push('Nebenprodukt '+fmt(Math.floor(d.recipe.prod(lvl)*d.recipe.byproduct.ratio))+' '+RESOURCE_INFO[d.recipe.byproduct.output].name+'/h');
     for(const [inputKey,perUnit] of Object.entries(d.recipe.inputsPerUnit)){
       parts.push('Verbraucht '+fmt(Math.floor(d.recipe.prod(lvl)*perUnit))+' '+RESOURCE_INFO[inputKey].name+'/h');
     }
@@ -377,7 +385,7 @@ function openInfoModal(type, key, level){
     if(d.hull!=null) statsRows.push(['Hülle', fmt(d.hull)]);
     if(d.cargo!=null) statsRows.push(['Ladekapazität', fmt(d.cargo)]);
     if(d.speed!=null) statsRows.push(['Geschwindigkeit', d.speed]);
-    if(d.fuel!=null) statsRows.push(['Treibstoffverbrauch (Rohöl)', fmt(d.fuel)]);
+    if(d.fuel!=null) statsRows.push(['Treibstoffverbrauch', fmt(d.fuel)]);
     if(d.requires && Object.keys(d.requires).length) statsRows.push(['Voraussetzung', requirementText(d.requires)]);
   }
   const modal = document.createElement('div');
@@ -1052,7 +1060,8 @@ function sendFleet(form){
   Object.keys(defs.ships).forEach(k=>{ if(defs.ships[k].role!=='power' && defs.ships[k].role!=='sentinel' && form[k]) ships[k]=Number(form[k].value)||0; });
   const cargo = {}; RESOURCE_KEYS.forEach(k=>{ if(form['cargo_'+k]) cargo[k]=Number(form['cargo_'+k].value)||0; });
   const acsId = (form.mission.value==='attack' && form.acsId) ? form.acsId.value.trim() : '';
-  postAction('sendFleet', {planetIndex: state.activePlanet, mission: form.mission.value, gal, sys, pos, ships, cargo, acsId});
+  const fuelType = form.fuelType ? form.fuelType.value : 'refinedFuel';
+  postAction('sendFleet', {planetIndex: state.activePlanet, mission: form.mission.value, gal, sys, pos, ships, cargo, acsId, fuelType});
 }
 function sendExpedition(shipsMap, durationSlot){ postAction('sendExpedition', {planetIndex: state.activePlanet, ships: shipsMap, durationSlot}); }
 function activeMoon(){ return state.activeMoonIndex!=null ? state.moons[state.activeMoonIndex] : null; }
@@ -1101,16 +1110,18 @@ function scaledCost(base, level){const mult=Math.pow(1.6, level-1); const r={}; 
 function buildingCost(base, level){ const c=scaledCost(base, level); const d=commanderDiscount(); const r={}; for(const k of RESOURCE_KEYS) r[k]=Math.floor((c[k]||0)*d); return r; }
 function mineByResource(resource){ return Object.entries(defs.buildings).find(([,d])=>d.resource===resource)?.[0]; }
 function uraniumUse(p){ return (p.buildings.nuclearReactor) ? defs.buildings.nuclearReactor.uraniumUse(p.buildings.nuclearReactor) : 0; }
+function coalUse(p){ return (p.buildings.coalPlant) ? defs.buildings.coalPlant.coalUse(p.buildings.coalPlant) : 0; }
 // Alle Gebaeude mit einem `recipe`-Feld (analog zu mineByResource fuer Minen).
 const FACTORY_KEYS = Object.entries(defs.buildings).filter(([,d])=>d.recipe).map(([k])=>k);
 function energyStats(p){
   const solar=defs.buildings.solarPlant.power(p.buildings.solarPlant||0);
   const nuclear=defs.buildings.nuclearReactor.power(p.buildings.nuclearReactor||0);
+  const coalPower=defs.buildings.coalPlant.power(p.buildings.coalPlant||0);
   const satellites=(p.ships.solarSatellite||0)*20;
   const sails = (p.buildings.solarSailI||0)*defs.buildings.solarSailI.power
               + (p.buildings.solarSailII||0)*defs.buildings.solarSailII.power
               + (p.buildings.solarSailIII||0)*defs.buildings.solarSailIII.power;
-  const prod=(solar+nuclear+satellites+sails)*engineerBonus();
+  const prod=(solar+nuclear+coalPower+satellites+sails)*engineerBonus();
   let use=0;
   for(const [k,d] of Object.entries(defs.buildings)){ if(d.resource && d.powerUse) use += d.powerUse(p.buildings[k]||0); }
   for(const k of FACTORY_KEYS){ if(defs.buildings[k].powerUse) use += defs.buildings[k].powerUse(p.buildings[k]||0); }
@@ -1145,6 +1156,7 @@ function hourly(p){
     inc[res] = defs.buildings[mineKey].prod(lvl)*e*bonus;
   }
   inc.uranium -= uraniumUse(p);
+  inc.coal -= coalUse(p);
   // Client-Spiegel von applyFactories() im Server - siehe dort fuer die vollstaendige
   // Begruendung (proportionale Drosselung statt hart an/aus, ein Tick Verzoegerung bei
   // mehrstufigen Rezepten, da Tier-2 nur aus vorhandenem Lagerbestand schoepft).
@@ -1155,6 +1167,7 @@ function hourly(p){
     const {throttle} = factoryThrottle(p, recipe, lvl);
     const actualOut = recipe.prod(lvl) * e * throttle;
     inc[recipe.output] = (inc[recipe.output]||0) + actualOut;
+    if(recipe.byproduct) inc[recipe.byproduct.output] = (inc[recipe.byproduct.output]||0) + actualOut*recipe.byproduct.ratio;
     for(const [inputKey, perUnit] of Object.entries(recipe.inputsPerUnit)){
       inc[inputKey] = (inc[inputKey]||0) - actualOut*perUnit;
     }
@@ -1326,7 +1339,8 @@ function viewFactories(){
     const c=buildingCost(costBaseFor(d,p),lvl);
     const ok=meetsRequirements(p,d.requires);
     const queued=p.buildQueue.some(q=>q.key===k);
-    const recipeText = Object.entries(d.recipe.inputsPerUnit).map(([ik,amt])=>`${amt}× ${RESOURCE_INFO[ik].name}`).join(' + ') + ` → ${RESOURCE_INFO[d.recipe.output].name}`;
+    const byproductText = d.recipe.byproduct ? ` + ${d.recipe.byproduct.ratio}× ${RESOURCE_INFO[d.recipe.byproduct.output].name} (Nebenprodukt)` : '';
+    const recipeText = Object.entries(d.recipe.inputsPerUnit).map(([ik,amt])=>`${amt}× ${RESOURCE_INFO[ik].name}`).join(' + ') + ` → ${RESOURCE_INFO[d.recipe.output].name}${byproductText}`;
     let statusHtml = '';
     if(curLvl>0){
       const {throttle,limitingInput} = factoryThrottle(p, d.recipe, curLvl);
@@ -1355,6 +1369,10 @@ function viewFleet(){
   return `<h2>Flotte versenden</h2><div class="grid2">
   <div class="card"><h3>Missionsformular</h3><form class="fleet-form" id="fleetForm">
     <label>Mission<select name="mission" id="missionSelect">${missionOpt('transport','Transport')}${missionOpt('spy','Spionage')}${missionOpt('attack','Angriff')}${missionOpt('colonize','Kolonisierung')}${missionOpt('harvest','Trümmerfeld-Bergung')}${missionOpt('mine','Asteroiden-Abbau')}</select></label>
+    <label>Treibstoff (${fmt(p.resources.refinedFuel||0)} Kraftstoff · ${fmt(p.resources.hydrogen||0)} Wasserstoff)<select name="fuelType">
+      <option value="refinedFuel">Kraftstoff (aus Rohöl raffiniert)</option>
+      <option value="hydrogen">Wasserstoff (per Elektrolyse)</option>
+    </select></label>
     <label>Zielgalaxie (1-${UNIVERSE.galaxies})<input type="number" name="galaxy" min="1" max="${UNIVERSE.galaxies}" value="${galVal}"></label>
     <label>Zielsystem (1-${UNIVERSE.systems})<input type="number" name="system" min="1" max="${UNIVERSE.systems}" value="${sysVal}"></label>
     <label>Zielposition (1-${UNIVERSE.positions})<input type="number" name="position" min="1" max="${UNIVERSE.positions}" value="${posVal}"></label>
