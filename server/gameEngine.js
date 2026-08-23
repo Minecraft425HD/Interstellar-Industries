@@ -248,7 +248,7 @@ const defs = {
       recipe:{output:'precisionComponents', prod:l=>4*l*Math.pow(1.1,l), inputsPerUnit:{machineParts:2, compositeMaterial:2, rareEarths:5}}},
     // ---- Sonstige Einrichtungen ----
     researchLab:{name:'Forschungslabor', base:{copper:400, silver:440, electronics:150}},
-    naniteFactory:{name:'Nanitenfabrik', base:{nickel:900000, rareEarths:500000, uranium:200000, precisionComponents:1000}, requires:{robotFactory:10, computerTech:10}, facility:true},
+    naniteFactory:{name:'Nanitenfabrik', base:{nickel:900000, rareEarths:500000, uranium:200000, precisionComponents:1000}, requires:{robotFactory:10, computerTech:10}, facility:true, noBuildAccel:true},
     // Kostet bewusst KEIN Holz: Holz kann erst NACH dem Terraformer ueberhaupt produziert
     // werden (Forstplantage erfordert terraformer:1) - sonst waere der erste Terraformer
     // eines jeden Spielers ein unaufloesbarer Henne-Ei-Zirkelschluss.
@@ -1224,7 +1224,12 @@ function enqueueBuild(state, planetIndex, key){
   const cost = buildingCost(state, costBaseFor(def,p), lvl);
   if(!hasRes(p,cost)) return fail(state, 'Nicht genug Ressourcen für '+def.name);
   spend(p,cost);
-  const secs = Math.max(8*lvl, Math.round(resTotal(cost)/(250*(1+p.buildings.robotFactory))));
+  // Fruehe Stufen bauen bis zu 4x schneller (Faktor faellt linear bis Stufe 6 auf 1),
+  // Nanitenfabrik halbiert zusaetzlich pro Stufe - Ausnahme-Gebaeude (aktuell nur die
+  // Nanitenfabrik selbst, noBuildAccel) bekommen den Fruehstufen-Bonus nicht.
+  const accel = def.noBuildAccel ? 1 : Math.max(4 - lvl/2, 1);
+  const nanite = p.buildings.naniteFactory||0;
+  const secs = Math.max(1, Math.round(resTotal(cost)/accel/(250*(1+p.buildings.robotFactory))/Math.pow(2,nanite)));
   p.buildQueue.push({type:'building', key, name:def.name, level:lvl, done:Date.now()+secs*1000});
   return ok(state, def.name+' Stufe '+lvl+' gestartet');
 }
@@ -1238,7 +1243,7 @@ function enqueueResearch(state, planetIndex, key){
   const cost = scaledCost(def.base, lvl);
   if(!hasRes(p,cost)) return fail(state, 'Nicht genug Ressourcen für '+def.name);
   spend(p,cost);
-  const secs = Math.max(12*lvl, Math.round(resTotal(cost)/(220*(1+p.buildings.researchLab))*technocratSpeed(state)*networkSpeed(p)));
+  const secs = Math.max(1, Math.round(resTotal(cost)/(220*(1+p.buildings.researchLab))*technocratSpeed(state)*networkSpeed(p)));
   p.researchQueue.push({type:'research', key, name:def.name, level:lvl, done:Date.now()+secs*1000});
   return ok(state, def.name+' Stufe '+lvl+' gestartet');
 }
@@ -1250,7 +1255,7 @@ function enqueueShip(state, planetIndex, key){
   const cost = def.cost;
   if(!hasRes(p,cost)) return fail(state, 'Nicht genug Ressourcen für '+def.name);
   spend(p,cost);
-  const secs = Math.max(6, Math.round(resTotal(cost)/(300*(1+p.buildings.shipyard))));
+  const secs = Math.max(1, Math.round(resTotal(cost)/(300*(1+p.buildings.shipyard))/Math.pow(2,p.buildings.naniteFactory||0)));
   p.shipQueue.push({type:'ship', key, name:def.name, done:Date.now()+secs*1000});
   return ok(state, def.name+' in Bau');
 }
@@ -1268,7 +1273,7 @@ function enqueueDefense(state, planetIndex, key){
   const cost = {}; for(const k of RESOURCE_KEYS) cost[k]=Math.floor((def.base[k]||0)*d);
   if(!hasRes(p,cost)) return fail(state, 'Nicht genug Ressourcen für '+def.name);
   spend(p,cost);
-  const secs = Math.max(5, Math.round(resTotal(cost)/(300*(1+p.buildings.shipyard))));
+  const secs = Math.max(1, Math.round(resTotal(cost)/(300*(1+p.buildings.shipyard))/Math.pow(2,p.buildings.naniteFactory||0)));
   p.buildQueue.push({type:'defense', key, name:def.name, done:Date.now()+secs*1000});
   return ok(state, def.name+' in Bau');
 }
@@ -1294,7 +1299,7 @@ function enqueueMultiBuild(state, planetIndex, key){
   const cost = {}; for(const k of RESOURCE_KEYS) cost[k]=Math.floor((def.base[k]||0)*d);
   if(!hasRes(p,cost)) return fail(state, 'Nicht genug Ressourcen für '+def.name);
   spend(p,cost);
-  const secs = Math.max(5, Math.round(resTotal(cost)/(300*(1+p.buildings.shipyard))));
+  const secs = Math.max(1, Math.round(resTotal(cost)/(300*(1+p.buildings.shipyard))/Math.pow(2,p.buildings.naniteFactory||0)));
   p.buildQueue.push({type:'multibuild', key, name:def.name, done:Date.now()+secs*1000});
   return ok(state, def.name+' in Bau');
 }
@@ -1502,7 +1507,7 @@ function enqueueMoonBuild(state, planetIndex, moonIndex, key){
   const cost = scaledCost(def.base, lvl);
   if(!hasRes(p,cost)) return fail(state, 'Nicht genug Ressourcen auf dem Heimatplaneten für '+def.name);
   spend(p,cost);
-  const secs = Math.max(10, Math.round(resTotal(cost)/300));
+  const secs = Math.max(1, Math.round(resTotal(cost)/(300*(1+p.buildings.robotFactory))/Math.pow(2,p.buildings.naniteFactory||0)));
   m.buildQueue.push({key, name:def.name, level:lvl, done:Date.now()+secs*1000});
   return ok(state, def.name+' auf Mond gestartet (Kosten vom gewählten Planeten)');
 }

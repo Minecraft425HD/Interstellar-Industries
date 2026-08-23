@@ -152,7 +152,7 @@ const defs = {
       recipe:{output:'precisionComponents', prod:l=>4*l*Math.pow(1.1,l), inputsPerUnit:{machineParts:2, compositeMaterial:2, rareEarths:5}}},
     // ---- Sonstige Einrichtungen ----
     researchLab:{name:'Forschungslabor', desc:'Ermöglicht das Erforschen neuer Technologien und beschleunigt laufende Forschung.', base:{copper:400, silver:440, electronics:150}, },
-    naniteFactory:{name:'Nanitenfabrik', desc:'Hochentwickelte Fertigungsanlage, Voraussetzung für die fortschrittlichsten Bauten.', base:{nickel:900000, rareEarths:500000, uranium:200000, precisionComponents:1000}, requires:{robotFactory:10, computerTech:10}, facility:true},
+    naniteFactory:{name:'Nanitenfabrik', desc:'Hochentwickelte Fertigungsanlage, Voraussetzung für die fortschrittlichsten Bauten. Halbiert pro Stufe die Bauzeit von Gebäuden, Schiffen und Verteidigung (nicht Forschung).', base:{nickel:900000, rareEarths:500000, uranium:200000, precisionComponents:1000}, requires:{robotFactory:10, computerTech:10}, facility:true, noBuildAccel:true},
     terraformer:{name:'Terraformer', desc:'Formt die Planetenoberfläche um, schafft eine künstliche Biosphäre und ermöglicht den Holzanbau. Erfordert vor allem Lithium und Süßwasser.', base:{lithium:20000, freshwater:5000, concrete:8000}, requires:{naniteFactory:1, energyTech:12}, facility:true},
     allianceDepot:{name:'Allianzdepot', desc:'Lagerplatz für Ressourcen, die der Allianz zur Verfügung gestellt werden.', base:{limestone:30000, gold:30000, phosphate:5000, concrete:6000}, requires:{shipyard:3}, facility:true},
     missileSilo:{name:'Raketensilo', desc:'Lagert und startet interplanetare Raketen zum Fernangriff auf gegnerische Verteidigung.', base:{iron:30000, sulfur:11000, steel:3000}, requires:{shipyard:1}, facility:true},
@@ -345,7 +345,8 @@ function openInfoModal(type, key, level){
       const base = (type==='building' && p) ? costBaseFor(d, p) : d.base;
       const cost = (type==='research'||type==='lifeformBuilding') ? scaledCost(base, lvl) : buildingCost(base, lvl);
       const effect = levelEffectText(d, key, lvl);
-      const timeCell = showTime ? `<td>${formatDuration(buildSeconds(type==='research'?'research':'building', cost, p, lvl)*1000)}</td>` : '';
+      const timeKind = type==='research' ? 'research' : (d.moonOnly ? 'moonbuild' : 'building');
+      const timeCell = showTime ? `<td>${formatDuration(buildSeconds(timeKind, cost, p, lvl, d.noBuildAccel)*1000)}</td>` : '';
       rows.push(`<tr><td>${lvl}</td><td class="info-modal-cost">${resCostText(cost)}</td>${timeCell}${hasEffect?`<td class="info-modal-effect">${effect||''}</td>`:''}</tr>`);
     }
     levelTableHtml = `<div class="info-modal-subhead">Aktuelle Stufe: ${curLevel} · Kosten &amp; Effekt nächste 10 Stufen</div>
@@ -502,12 +503,13 @@ function pathfinderBonus(shipMap){ return (shipMap && shipMap.pathfinder>0) ? 1.
 function networkSpeed(p){ const lvl=(p.research.intergalacticNetwork)||0; return Math.max(0.5, 1-0.02*lvl); }
 // Client-Spiegel der 4 Bauzeit-Formeln aus enqueueBuild/enqueueResearch/enqueueShip/
 // enqueueDefense im Server (server/gameEngine.js) - fuer die Bauzeit-Vorschau im Info-Modal.
-function buildSeconds(kind, cost, p, lvl){
+function buildSeconds(kind, cost, p, lvl, noAccel){
   const total = resTotal(cost);
-  if(kind==='building') return Math.max(8*lvl, Math.round(total/(250*(1+p.buildings.robotFactory))));
-  if(kind==='research') return Math.max(12*lvl, Math.round(total/(220*(1+p.buildings.researchLab))*technocratSpeed()*networkSpeed(p)));
-  if(kind==='ship') return Math.max(6, Math.round(total/(300*(1+p.buildings.shipyard))));
-  if(kind==='defense') return Math.max(5, Math.round(total/(300*(1+p.buildings.shipyard))));
+  const nanite = p.buildings.naniteFactory||0;
+  if(kind==='building'){ const accel = noAccel ? 1 : Math.max(4 - lvl/2, 1); return Math.max(1, Math.round(total/accel/(250*(1+p.buildings.robotFactory))/Math.pow(2,nanite))); }
+  if(kind==='research') return Math.max(1, Math.round(total/(220*(1+p.buildings.researchLab))*technocratSpeed()*networkSpeed(p)));
+  if(kind==='ship' || kind==='defense' || kind==='multibuild') return Math.max(1, Math.round(total/(300*(1+p.buildings.shipyard))/Math.pow(2,nanite)));
+  if(kind==='moonbuild') return Math.max(1, Math.round(total/(300*(1+p.buildings.robotFactory))/Math.pow(2,nanite)));
   return 0;
 }
 function maxColonies(p){ const lvl=(p.research.astrophysics)||0; return 1+Math.floor((lvl+1)/2); }
