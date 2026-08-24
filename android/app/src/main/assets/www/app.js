@@ -1243,9 +1243,16 @@ function renderSide(){
 function viewOverview(){ const p=active(), e=energyStats(p), inc=hourly(p), cap=maxStorage(p); const ev=state.event;
   const eventBanner = ev ? `<div class="card" style="margin-bottom:16px;border-color:var(--accent2)"><h3>🌟 Server-Event: ${ev.name}</h3><div class="small">${ev.desc}</div><div class="small" style="margin-top:6px">Endet in ${formatDuration(ev.endsAt-Date.now())}</div></div>` : '';
   const planetType = PLANET_TYPES[p.planetType]||PLANET_TYPES.rocky;
-  // Zeigt JEDEN Rohstoff, den der Planet abbaut, produziert ODER (z.B. durch Handel) tatsaechlich
-  // auf Lager hat - nicht nur die zum Planetentyp "heimischen" Rohstoffe wie zuvor.
-  const relevant = RESOURCE_KEYS.filter(k=>planetType.resources.includes(k) || (p.resources[k]||0)>0 || (inc[k]||0)!==0);
+  // Jedes Fabrikprodukt (Rezept-Output oder -Nebenprodukt, z.B. Wasserstoff/Sauerstoff/
+  // Kraftstoff aus Elektrolyseanlage/Oelraffinerie) ist IMMER relevant, genau wie die zum
+  // Planetentyp heimischen Rohstoffe - sonst verschwindet die komplette Kategorie fuer jeden
+  // Spieler, der die passende Fabrik noch nicht gebaut hat (Bestand UND Produktion beide 0).
+  // Betrifft vor allem Bestandskonten von vor Einfuehrung eines neuen Rohstoffs: migrateResources()
+  // fuellt fehlende Rohstoff-Schluessel bewusst mit 0 auf (kein rueckwirkendes Startkapital),
+  // wodurch sie ohne diese Ausnahme dauerhaft unsichtbar blieben.
+  const producible = new Set();
+  Object.values(defs.buildings).forEach(d=>{ if(d.recipe){ producible.add(d.recipe.output); if(d.recipe.byproduct) producible.add(d.recipe.byproduct.output); } });
+  const relevant = RESOURCE_KEYS.filter(k=>planetType.resources.includes(k) || producible.has(k) || (p.resources[k]||0)>0 || (inc[k]||0)!==0);
   const groupCards = RESOURCE_GROUP_ORDER.filter(g=>relevant.some(k=>RESOURCE_INFO[k].group===g)).map(g=>{
     const rows = relevant.filter(k=>RESOURCE_INFO[k].group===g).map(k=>`<div class="row"><div><strong>${RESOURCE_INFO[k].name}</strong></div><div>${fmt(p.resources[k]||0)} / ${fmt(cap[k])}<span class="small" style="margin-left:6px">${fmt1(inc[k]||0)}/h</span></div></div>`).join('');
     return `<div class="card"><h3>${RESOURCE_GROUPS[g].name}</h3><div class="list">${rows}</div></div>`;
