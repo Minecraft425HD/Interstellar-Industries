@@ -17,7 +17,7 @@ const RESOURCE_INFO = {
   freshwater: {name:'Süßwasser', group:'water'}, saltwater: {name:'Salzwasser', group:'water'},
   steel: {name:'Stahl', group:'goods'}, electronics: {name:'Elektronik', group:'goods'}, plastic: {name:'Kunststoff', group:'goods'},
   alloy: {name:'Legierung', group:'goods'}, concrete: {name:'Beton', group:'goods'}, batteryCells: {name:'Batteriezellen', group:'goods'},
-  hydrogen: {name:'Wasserstoff', group:'goods'}, oxygen: {name:'Sauerstoff', group:'goods'}, refinedFuel: {name:'Kraftstoff', group:'goods'},
+  hydrogen: {name:'Wasserstoff', group:'processedFuel'}, oxygen: {name:'Sauerstoff', group:'processedFuel'}, refinedFuel: {name:'Kraftstoff', group:'processedFuel'},
   machineParts: {name:'Maschinenteile', group:'goods'}, compositeMaterial: {name:'Verbundwerkstoff', group:'goods'},
   precisionComponents: {name:'Präzisionskomponenten', group:'goods'},
 };
@@ -25,10 +25,13 @@ const RESOURCE_GROUPS = {
   ore: {name:'Erze', storageBuilding:'oreStorage'}, tech: {name:'Technologiemetalle', storageBuilding:'techStorage'},
   fuel: {name:'Energieträger', storageBuilding:'fuelStorage'}, special: {name:'Sonderrohstoffe', storageBuilding:'resourceStorage'},
   water: {name:'Wasser', storageBuilding:'resourceStorage'}, goods: {name:'Industriegüter', storageBuilding:'goodsStorage'},
+  // Eigene Kategorie fuer Kraftstoff/Wasserstoff/Sauerstoff (siehe Server-Spiegel) - teilt sich
+  // weiterhin die Lagerkapazitaet mit goodsStorage.
+  processedFuel: {name:'Treibstoff', storageBuilding:'goodsStorage'},
 };
 // Gemeinsame Gruppierungsreihenfolge fuer Topbar (renderTop) und Uebersicht (viewOverview) -
 // vorher hatte jede Stelle ihre eigene (teils unvollstaendige, 'goods' fehlte) Sortierung.
-const RESOURCE_GROUP_ORDER = ['ore','tech','fuel','special','water','goods'];
+const RESOURCE_GROUP_ORDER = ['ore','tech','fuel','processedFuel','special','water','goods'];
 const PLANET_TYPES = {
   rocky: {name:'Gesteinsplanet', desc:'Fester, mineralreicher Untergrund - der Standard-Planetentyp für Heimatwelten.', resources:['iron','copper','aluminium','nickel','limestone'],
     pros:'Reich an Eisen, Kupfer, Aluminium, Nickel und Kalkstein - die autarke Grundlage für Frühindustrie, ohne auf Handel angewiesen zu sein.',
@@ -53,12 +56,17 @@ function planetTypesForResource(resource){ return Object.entries(PLANET_TYPES).f
 function zeroResources(){ const r={}; RESOURCE_KEYS.forEach(k=>r[k]=0); return r; }
 function resTotal(c){ return RESOURCE_KEYS.reduce((s,k)=>s+(c[k]||0),0); }
 function resCostText(c){ const parts=RESOURCE_KEYS.map(k=>c[k]?`<span class="cost-chip">${RESOURCE_INFO[k].name} ${fmt(c[k])}</span>`:null).filter(Boolean); return parts.length ? parts.join('') : '<span class="cost-chip cost-chip-free">kostenlos</span>'; }
+// Identische Wertigkeits-Hierarchie wie buildMarketRate() im Server (Markt-Umrechnungskurse).
+function resourceValueRate(key){
+  const g = RESOURCE_INFO[key].group;
+  return g==='ore' ? 1 : g==='special' ? 1.2 : g==='water' ? 0.6 : g==='tech' ? 3 : 2.5;
+}
 function mineBaseCost(planetType, magnitude){
   const pool = PLANET_TYPES[planetType] ? PLANET_TYPES[planetType].resources : [];
   const cost = zeroResources();
   if(!pool.length) return cost;
   const share = magnitude / pool.length;
-  pool.forEach(r=>{ cost[r] = Math.round(share); });
+  pool.forEach(r=>{ cost[r] = Math.max(1, Math.round(share/resourceValueRate(r))); });
   return cost;
 }
 function costBaseFor(def, p){ if(def.costMagnitude!=null) return mineBaseCost(p.planetType, def.costMagnitude); return def.base; }

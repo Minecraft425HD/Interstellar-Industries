@@ -45,9 +45,9 @@ const RESOURCE_INFO = {
   alloy: {name:'Legierung', group:'goods'},
   concrete: {name:'Beton', group:'goods'},
   batteryCells: {name:'Batteriezellen', group:'goods'},
-  hydrogen: {name:'Wasserstoff', group:'goods'},
-  oxygen: {name:'Sauerstoff', group:'goods'},
-  refinedFuel: {name:'Kraftstoff', group:'goods'},
+  hydrogen: {name:'Wasserstoff', group:'processedFuel'},
+  oxygen: {name:'Sauerstoff', group:'processedFuel'},
+  refinedFuel: {name:'Kraftstoff', group:'processedFuel'},
   machineParts: {name:'Maschinenteile', group:'goods'},
   compositeMaterial: {name:'Verbundwerkstoff', group:'goods'},
   precisionComponents: {name:'Präzisionskomponenten', group:'goods'},
@@ -59,6 +59,12 @@ const RESOURCE_GROUPS = {
   special: {name:'Sonderrohstoffe', storageBuilding:'resourceStorage'},
   water: {name:'Wasser', storageBuilding:'resourceStorage'},
   goods: {name:'Industriegüter', storageBuilding:'goodsStorage'},
+  // Eigene, klar benannte Kategorie fuer die raffinierten Flug-Treibstoffe (Kraftstoff aus
+  // Rohoel, Wasserstoff aus Elektrolyse) plus deren Nebenprodukt Sauerstoff - vorher unter
+  // dem generischen "Industriegueter" versteckt, zusammen mit Stahl/Elektronik/etc., obwohl
+  // genau diese Ressourcen als Flottentreibstoff gewaehlt werden (sendFleet fuelType). Teilt
+  // sich weiterhin die Lagerkapazitaet mit goodsStorage - kein neues Lagergebaeude noetig.
+  processedFuel: {name:'Treibstoff', storageBuilding:'goodsStorage'},
 };
 const PLANET_TYPES = {
   rocky: {name:'Gesteinsplanet', desc:'Fester, mineralreicher Untergrund - der Standard-Planetentyp für Heimatwelten.', resources:['iron','copper','aluminium','nickel','limestone'],
@@ -86,17 +92,32 @@ function planetTypesForResource(resource){
 function zeroResources(){ const r={}; RESOURCE_KEYS.forEach(k=>r[k]=0); return r; }
 function resTotal(c){ return RESOURCE_KEYS.reduce((s,k)=>s+(c[k]||0),0); }
 
+// Relative Wertigkeit je Rohstoffgruppe (dieselbe Hierarchie, die buildMarketRate() fuer
+// die Markt-Umrechnungskurse nutzt): haeufige Erze sind billig (Rate 1), Wasser am
+// billigsten (0.6), Sonderrohstoffe leicht teurer (1.2), Energietraeger/Industrieguetuer
+// im mittleren Bereich (2.5), Technologiemetalle (Gold/Silber/Lithium/Seltene Erden) am
+// wertvollsten (3). Ein einziger Ort fuer diese Gewichtung - genutzt sowohl vom Markt als
+// auch von mineBaseCost(), damit beide Systeme dieselbe Vorstellung von "wertvoll" teilen.
+function resourceValueRate(key){
+  const g = RESOURCE_INFO[key].group;
+  return g==='ore' ? 1 : g==='special' ? 1.2 : g==='water' ? 0.6 : g==='tech' ? 3 : 2.5;
+}
+
 // Selbstversorgende Minen-Kosten: verteilt einen Gesamtwert ausschliesslich auf die
 // Rohstoffe, die der BAUENDE Planet(entyp) selbst hervorbringt. Damit kann jeder
 // Planetentyp seine eigene Basis-Abbauinfrastruktur hochziehen, ohne von Anfang an auf
 // Handel angewiesen zu sein - Handel wird erst fuer Energie/Infrastruktur/Schiffe/
 // Forschung noetig, die bewusst Rohstoffe mehrerer Planetentypen kombinieren.
+// Der Werte-Anteil (magnitude/pool.length) wird gleichmaessig verteilt, aber ERST DANN je
+// Rohstoff durch dessen Wertigkeit geteilt - wertvollere Rohstoffe (z.B. Gold, Uran,
+// Seltene Erden) brauchen dadurch weniger MENGE als haeufige Erze fuer denselben
+// Werteanteil, statt vorher ueberall exakt dieselbe Menge zu verlangen.
 function mineBaseCost(planetType, magnitude){
   const pool = PLANET_TYPES[planetType] ? PLANET_TYPES[planetType].resources : [];
   const cost = zeroResources();
   if(!pool.length) return cost;
   const share = magnitude / pool.length;
-  pool.forEach(r=>{ cost[r] = Math.round(share); });
+  pool.forEach(r=>{ cost[r] = Math.max(1, Math.round(share/resourceValueRate(r))); });
   return cost;
 }
 // Liefert die tatsaechliche Kosten-Basis fuer ein Gebaeude auf Planet p: bei Minen
@@ -511,10 +532,7 @@ function createStarterEmpire(coord, name){
 // metalle, Uran) sind teurer als haeufige Erze; Wasser ist am guenstigsten.
 function buildMarketRate(){
   const rate = {};
-  for(const k of RESOURCE_KEYS){
-    const g = RESOURCE_INFO[k].group;
-    rate[k] = g==='ore' ? 1 : g==='special' ? 1.2 : g==='water' ? 0.6 : g==='tech' ? 3 : 2.5;
-  }
+  for(const k of RESOURCE_KEYS) rate[k] = resourceValueRate(k);
   return rate;
 }
 
