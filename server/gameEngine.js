@@ -1229,7 +1229,13 @@ function enqueueBuild(state, planetIndex, key){
   // Nanitenfabrik selbst, noBuildAccel) bekommen den Fruehstufen-Bonus nicht.
   const accel = def.noBuildAccel ? 1 : Math.max(4 - lvl/2, 1);
   const nanite = p.buildings.naniteFactory||0;
-  const secs = Math.max(1, Math.round(resTotal(cost)/accel/(250*(1+p.buildings.robotFactory))/Math.pow(2,nanite)));
+  // Woertliche OGame-Wiki-Konstante (Zeit(s) = Kosten*1,44/Beschleunigung/(1+Robo)/2^Nanite) -
+  // vorher ein grob geschaetzter Nenner (250), der bei entwickeltem Roboterfabrik-Level Bauten
+  // teils unter eine Sekunde druecken konnte (sichtbar als irrefuehrendes "0Min"). Die 27+
+  // Rohstoffe dieses Spiels liegen in aehnlicher Groessenordnung wie OGames Metall+Kristall
+  // (z.B. Eisenmine Stufe 1 = 75 Gesamtkosten, exakt wie OGames Metallmine), daher passt die
+  // woertliche Konstante hier tatsaechlich, statt eine neue erfinden zu muessen.
+  const secs = Math.max(1, Math.round(resTotal(cost)*1.44/accel/(1+p.buildings.robotFactory)/Math.pow(2,nanite)));
   p.buildQueue.push({type:'building', key, name:def.name, level:lvl, done:Date.now()+secs*1000});
   return ok(state, def.name+' Stufe '+lvl+' gestartet');
 }
@@ -1243,7 +1249,8 @@ function enqueueResearch(state, planetIndex, key){
   const cost = scaledCost(def.base, lvl);
   if(!hasRes(p,cost)) return fail(state, 'Nicht genug Ressourcen für '+def.name);
   spend(p,cost);
-  const secs = Math.max(1, Math.round(resTotal(cost)/(220*(1+p.buildings.researchLab))*technocratSpeed(state)*networkSpeed(p)));
+  // Woertliche OGame-Wiki-Konstante (Zeit(h) = Kosten/(1000*(1+Labor)), also *3.6 in Sekunden).
+  const secs = Math.max(1, Math.round(resTotal(cost)*3.6/(1+p.buildings.researchLab)*technocratSpeed(state)*networkSpeed(p)));
   p.researchQueue.push({type:'research', key, name:def.name, level:lvl, done:Date.now()+secs*1000});
   return ok(state, def.name+' Stufe '+lvl+' gestartet');
 }
@@ -1255,7 +1262,8 @@ function enqueueShip(state, planetIndex, key){
   const cost = def.cost;
   if(!hasRes(p,cost)) return fail(state, 'Nicht genug Ressourcen für '+def.name);
   spend(p,cost);
-  const secs = Math.max(1, Math.round(resTotal(cost)/(300*(1+p.buildings.shipyard))/Math.pow(2,p.buildings.naniteFactory||0)));
+  // Woertliche OGame-Wiki-Konstante (Zeit(h) = Kosten/(2500*(1+Werft)*2^Nanite), also *1.44 in Sekunden).
+  const secs = Math.max(1, Math.round(resTotal(cost)*1.44/(1+p.buildings.shipyard)/Math.pow(2,p.buildings.naniteFactory||0)));
   p.shipQueue.push({type:'ship', key, name:def.name, done:Date.now()+secs*1000});
   return ok(state, def.name+' in Bau');
 }
@@ -1273,7 +1281,8 @@ function enqueueDefense(state, planetIndex, key){
   const cost = {}; for(const k of RESOURCE_KEYS) cost[k]=Math.floor((def.base[k]||0)*d);
   if(!hasRes(p,cost)) return fail(state, 'Nicht genug Ressourcen für '+def.name);
   spend(p,cost);
-  const secs = Math.max(1, Math.round(resTotal(cost)/(300*(1+p.buildings.shipyard))/Math.pow(2,p.buildings.naniteFactory||0)));
+  // Woertliche OGame-Wiki-Konstante (Zeit(h) = Kosten/(2500*(1+Werft)*2^Nanite), also *1.44 in Sekunden).
+  const secs = Math.max(1, Math.round(resTotal(cost)*1.44/(1+p.buildings.shipyard)/Math.pow(2,p.buildings.naniteFactory||0)));
   p.buildQueue.push({type:'defense', key, name:def.name, done:Date.now()+secs*1000});
   return ok(state, def.name+' in Bau');
 }
@@ -1299,7 +1308,8 @@ function enqueueMultiBuild(state, planetIndex, key){
   const cost = {}; for(const k of RESOURCE_KEYS) cost[k]=Math.floor((def.base[k]||0)*d);
   if(!hasRes(p,cost)) return fail(state, 'Nicht genug Ressourcen für '+def.name);
   spend(p,cost);
-  const secs = Math.max(1, Math.round(resTotal(cost)/(300*(1+p.buildings.shipyard))/Math.pow(2,p.buildings.naniteFactory||0)));
+  // Woertliche OGame-Wiki-Konstante (Zeit(h) = Kosten/(2500*(1+Werft)*2^Nanite), also *1.44 in Sekunden).
+  const secs = Math.max(1, Math.round(resTotal(cost)*1.44/(1+p.buildings.shipyard)/Math.pow(2,p.buildings.naniteFactory||0)));
   p.buildQueue.push({type:'multibuild', key, name:def.name, done:Date.now()+secs*1000});
   return ok(state, def.name+' in Bau');
 }
@@ -1507,7 +1517,8 @@ function enqueueMoonBuild(state, planetIndex, moonIndex, key){
   const cost = scaledCost(def.base, lvl);
   if(!hasRes(p,cost)) return fail(state, 'Nicht genug Ressourcen auf dem Heimatplaneten für '+def.name);
   spend(p,cost);
-  const secs = Math.max(1, Math.round(resTotal(cost)/(300*(1+p.buildings.robotFactory))/Math.pow(2,p.buildings.naniteFactory||0)));
+  // Wie Gebaeude, aber ohne Fruehstufen-Beschleunigung (Wiki-Ausnahme fuer Mondgebaeude).
+  const secs = Math.max(1, Math.round(resTotal(cost)*1.44/(1+p.buildings.robotFactory)/Math.pow(2,p.buildings.naniteFactory||0)));
   m.buildQueue.push({key, name:def.name, level:lvl, done:Date.now()+secs*1000});
   return ok(state, def.name+' auf Mond gestartet (Kosten vom gewählten Planeten)');
 }

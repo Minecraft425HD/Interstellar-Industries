@@ -493,7 +493,9 @@ function requirementText(req){ if(!req) return ''; return Object.entries(req).ma
 function debrisKey(coord){ return coord[0]+':'+coord[1]+':'+coord[2]; }
 function officerActive(key){ return !!(state.officerExpiry[key] && state.officerExpiry[key] > Date.now()); }
 function officerTimeLeft(key){ return officerActive(key) ? state.officerExpiry[key]-Date.now() : 0; }
-function formatDuration(ms){ const totalMin=Math.max(0,Math.floor(ms/60000)); const d=Math.floor(totalMin/1440); const h=Math.floor((totalMin%1440)/60); const m=totalMin%60; if(d>0) return d+'T '+h+'Std'; if(h>0) return h+'Std '+m+'Min'; return m+'Min'; }
+// Zeigt Sekunden statt sie auf Minuten abzurunden - bei runter kalibrierten Bauzeiten (siehe
+// Bauzeit-Formeln) wuerden sonst z.B. 45s als irrefuehrendes "0Min" erscheinen.
+function formatDuration(ms){ const totalSec=Math.max(0,Math.floor(ms/1000)); const d=Math.floor(totalSec/86400); const h=Math.floor((totalSec%86400)/3600); const m=Math.floor((totalSec%3600)/60); const s=totalSec%60; if(d>0) return d+'T '+h+'Std'; if(h>0) return h+'Std '+m+'Min'; if(m>0) return m+'Min '+s+'S'; return s+'S'; }
 function officerBonus(){ return officerActive('geologist') ? 1.10 : 1.0; }
 function fleetSpeedBonus(){ return officerActive('admiral') ? 1.1 : 1.0; }
 function engineerBonus(){ return officerActive('engineer') ? 1.10 : 1.0; }
@@ -506,10 +508,13 @@ function networkSpeed(p){ const lvl=(p.research.intergalacticNetwork)||0; return
 function buildSeconds(kind, cost, p, lvl, noAccel){
   const total = resTotal(cost);
   const nanite = p.buildings.naniteFactory||0;
-  if(kind==='building'){ const accel = noAccel ? 1 : Math.max(4 - lvl/2, 1); return Math.max(1, Math.round(total/accel/(250*(1+p.buildings.robotFactory))/Math.pow(2,nanite))); }
-  if(kind==='research') return Math.max(1, Math.round(total/(220*(1+p.buildings.researchLab))*technocratSpeed()*networkSpeed(p)));
-  if(kind==='ship' || kind==='defense' || kind==='multibuild') return Math.max(1, Math.round(total/(300*(1+p.buildings.shipyard))/Math.pow(2,nanite)));
-  if(kind==='moonbuild') return Math.max(1, Math.round(total/(300*(1+p.buildings.robotFactory))/Math.pow(2,nanite)));
+  // Woertliche OGame-Wiki-Konstanten (Gebaeude/Schiffe/Verteidigung/Mondbau: *1.44,
+  // Forschung: *3.6) - identischer Spiegel der Server-Formeln in enqueueBuild/enqueueResearch/
+  // enqueueShip/enqueueDefense/enqueueMultiBuild/enqueueMoonBuild.
+  if(kind==='building'){ const accel = noAccel ? 1 : Math.max(4 - lvl/2, 1); return Math.max(1, Math.round(total*1.44/accel/(1+p.buildings.robotFactory)/Math.pow(2,nanite))); }
+  if(kind==='research') return Math.max(1, Math.round(total*3.6/(1+p.buildings.researchLab)*technocratSpeed()*networkSpeed(p)));
+  if(kind==='ship' || kind==='defense' || kind==='multibuild') return Math.max(1, Math.round(total*1.44/(1+p.buildings.shipyard)/Math.pow(2,nanite)));
+  if(kind==='moonbuild') return Math.max(1, Math.round(total*1.44/(1+p.buildings.robotFactory)/Math.pow(2,nanite)));
   return 0;
 }
 function maxColonies(p){ const lvl=(p.research.astrophysics)||0; return 1+Math.floor((lvl+1)/2); }
