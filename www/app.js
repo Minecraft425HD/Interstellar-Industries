@@ -488,6 +488,15 @@ document.addEventListener('click', (e)=>{
   if(modalOverlay && !modalBox){ closeInfoModal(); closeBattleSimModal(); return; }
   const menu = document.getElementById('coordMenu');
   if(menu && !menu.contains(e.target)){ closeCoordMenu(); }
+  // Stellaris-Token-Shop: per Klick auf das Topbar-Guthaben oder einen Link aus dem
+  // Markt erreichbar; die Ausgangsansicht wird gemerkt, damit "Zurück" dorthin zurueckfuehrt.
+  if(e.target.closest('#stellarisBalance') || e.target.closest('[data-open-st-shop]')){
+    if(state.view!=='stellarisShop'){ state.viewBeforeShop = state.view; state.view='stellarisShop'; render(); }
+    return;
+  }
+  if(e.target.closest('[data-view-back]')){
+    state.view = state.viewBeforeShop || 'overview'; render(); return;
+  }
 });
 
 function showError(msg){ state.logs = ['⚠ '+msg, ...state.logs].slice(0,10); renderSide(); showToast(msg); }
@@ -1568,6 +1577,15 @@ function viewSettings(){
 }
 
 function viewExpeditions(){ const p=active(); const shipOptions=(key)=>Array.from({length:(p.ships[key]||0)+1},(_,i)=>`<option>${i}</option>`).join('');
+  const outcomes = [
+    ['30%','Ressourcenfund','Zufällige Ressourcen des Planetentyps'],
+    ['12%','Stellaris-Token-Fund','100-500 ST'],
+    ['13%','Unbeschadete Rückkehr','Keine Belohnung, keine Verluste'],
+    ['7%','Schiffswrack geborgen','+1 Bonus-Schiff (Kleiner Transporter/Leichter Jäger/Spionagesonde)'],
+    ['28%','Piraten-Begegnung','Kampf - Sieg oder Teilverlust der Flotte'],
+    ['10%','Flotte verschollen','Totalverlust der entsandten Flotte'],
+  ];
+  const outcomeRows = outcomes.map(([chance,name,desc])=>`<div class="row"><div><strong>${name}</strong><div class="sub">${desc}</div></div><div>${chance}</div></div>`).join('');
   return `<h2>Expeditionen</h2><div class="small">Freie Plätze: ${state.expeditions.length}/${maxExpeditions(p)} (abhängig von Astrophysik)</div><div style="height:10px"></div><div class="grid2">
   <div class="card"><h3>Expedition starten</h3><form class="fleet-form" id="expeditionForm">
     <label>Dauer-Slot (1-3, je 15 Min)<input type="number" min="1" max="3" value="1" name="slot"></label>
@@ -1581,7 +1599,9 @@ function viewExpeditions(){ const p=active(); const shipOptions=(key)=>Array.fro
     <button class="btn good" type="submit">Expedition senden</button>
   </form></div>
   <div class="card"><h3>Laufende Expeditionen</h3><div class="list">${state.expeditions.length? state.expeditions.map(e=>`<div class="row"><div>Von ${state.planets[e.from]?state.planets[e.from].name:'?'}</div><div>${secsLeft(e.done)} s</div></div>`).join('') : '<div class="small">Keine aktiven Expeditionen.</div>'}</div></div>
-  </div>`; }
+  </div>
+  <div style="height:14px"></div>
+  <div class="card"><h3>Mögliche Ergebnisse</h3><div class="list">${outcomeRows}</div></div>`; }
 
 function moonFacilitySection(){
   const moonKeys = ['lunarBase','sensorPhalanx','jumpGate'];
@@ -1682,13 +1702,37 @@ function viewMarket(){ const r=state.marketRate; const initialAmount=1000; const
   const auctionCard = a ? `<div class="card"><h3>Auktionshaus</h3><div class="small">${a.itemDesc}</div><div style="height:8px"></div><div><strong>${a.itemName}</strong></div><div class="sub">Höchstgebot: ${fmt(a.currentBid)} Stellaris-Token${a.currentBidder?(' · von '+a.currentBidder):''}</div><div class="sub">Restzeit: ${mins}m ${secs}s</div><div style="height:10px"></div><form class="market-form" id="auctionForm"><label>Gebot (Stellaris-Token)<input type="number" min="${minBid}" value="${minBid}" name="amount"></label><button class="btn good" type="submit">Bieten</button></form><div class="small" style="margin-top:8px">Stellaris-Token: ${fmt(state.darkMatter)}</div></div>` : '';
   const resOptions = RESOURCE_KEYS.map(k=>`<option value="${k}">${RESOURCE_INFO[k].name}</option>`).join('');
   const rateCards = RESOURCE_KEYS.map(k=>`<div class="card"><div class="label">${RESOURCE_INFO[k].name}</div><div class="value">${fmt1(r[k]||0)}</div></div>`).join('');
-  // Kauf-Pakete fuer Stellaris-Token gegen Echtgeld: nur UI-Vorbereitung, noch ohne
-  // angebundenen Zahlungsanbieter - der "Kaufen"-Button bucht bewusst NICHTS gut, sondern
-  // zeigt nur einen Platzhalter-Hinweis (siehe data-buy-st Handler).
-  const stPackages = [[100,'0,99'],[500,'3,99'],[1200,'7,99'],[3000,'17,99']];
-  const stPackageCards = stPackages.map(([amount,price])=>`<div class="card"><div class="label">${fmt(amount)} ST</div><div class="value">${price} €</div><button class="btn alt" type="button" data-buy-st="${amount}" style="margin-top:8px;width:100%">Kaufen</button></div>`).join('');
-  const stBuyCard = `<div class="small" style="margin-top:16px">Stellaris-Token (ST) kaufen - Premium-Währung für Auktionshaus, Offiziere und den Händler. Echtgeld-Zahlung ist in Vorbereitung, die Kauf-Pakete sind schon sichtbar, aber noch nicht aktiv.</div><div style="height:8px"></div><div class="grid4">${stPackageCards}</div>`;
-  return `<h2>Markt</h2><div class="small">Kurswerte (relativer Tauschwert pro Einheit; 10% Marktabschlag beim Tausch):</div><div style="height:8px"></div><div class="grid4">${rateCards}</div>${stBuyCard}<div style="height:16px"></div><div class="grid2"><div class="card"><h3>Ressourcen handeln</h3><form class="market-form" id="marketForm"><label>Abgeben<select name="give">${resOptions}</select></label><label>Erhalten<select name="want">${resOptions}</select></label><label>Menge<input type="number" min="1" value="100" name="amount"></label><button class="btn good" type="submit">Am Markt tauschen</button></form></div><div class="card"><h3>Händler (Stellaris-Token)</h3><div class="small">Tausche Stellaris-Token sofort gegen Ressourcen. Kurs: 5 Einheiten pro 1 ST.</div><div style="height:10px"></div><form class="market-form" id="merchantForm"><label>Ressource<select name="resource">${resOptions}</select></label><label>Menge<input type="number" min="1" value="${initialAmount}" name="amount" id="merchantAmount"></label><div class="small" id="merchantCostHint">Kosten: ${fmt(initialCost)} Stellaris-Token</div><button class="btn warn" type="submit" id="merchantBuyBtn" ${initialAffordable?'':'disabled'}>Kaufen</button></form><div class="small" style="margin-top:8px">Stellaris-Token: ${fmt(state.darkMatter)}</div></div>${auctionCard}</div>`; }
+  const stLinkCard = `<div class="small" style="margin-top:16px">Stellaris-Token (ST): Premium-Währung für Auktionshaus, Offiziere und den Händler. <button class="btn alt" type="button" data-open-st-shop style="margin-left:8px">Stellaris-Token kaufen →</button></div>`;
+  return `<h2>Markt</h2><div class="small">Kurswerte (relativer Tauschwert pro Einheit; 10% Marktabschlag beim Tausch):</div><div style="height:8px"></div><div class="grid4">${rateCards}</div>${stLinkCard}<div style="height:16px"></div><div class="grid2"><div class="card"><h3>Ressourcen handeln</h3><form class="market-form" id="marketForm"><label>Abgeben<select name="give">${resOptions}</select></label><label>Erhalten<select name="want">${resOptions}</select></label><label>Menge<input type="number" min="1" value="100" name="amount"></label><button class="btn good" type="submit">Am Markt tauschen</button></form></div><div class="card"><h3>Händler (Stellaris-Token)</h3><div class="small">Tausche Stellaris-Token sofort gegen Ressourcen. Kurs: 5 Einheiten pro 1 ST.</div><div style="height:10px"></div><form class="market-form" id="merchantForm"><label>Ressource<select name="resource">${resOptions}</select></label><label>Menge<input type="number" min="1" value="${initialAmount}" name="amount" id="merchantAmount"></label><div class="small" id="merchantCostHint">Kosten: ${fmt(initialCost)} Stellaris-Token</div><button class="btn warn" type="submit" id="merchantBuyBtn" ${initialAffordable?'':'disabled'}>Kaufen</button></form><div class="small" style="margin-top:8px">Stellaris-Token: ${fmt(state.darkMatter)}</div></div>${auctionCard}</div>`; }
+
+// Dedizierter Stellaris-Token-Kaufbildschirm, erreichbar per Klick auf das Guthaben oben
+// rechts im Topbar (oder den Link in der Marktansicht) - rein informativ/UI-Vorbereitung,
+// noch ohne angebundenen Zahlungsanbieter (siehe data-buy-st Handler in renderView()).
+function viewStellarisShop(){
+  const stPackages = [[100,'0,99',false],[500,'3,99',false],[1200,'7,99',true],[3000,'17,99',false]];
+  const stPackageCards = stPackages.map(([amount,price,popular])=>`<div class="card${popular?' highlight':''}">${popular?'<div class="badge warn" style="margin-bottom:6px">Beliebt</div>':''}<div class="label">${fmt(amount)} ST</div><div class="value">${price} €</div><button class="btn alt" type="button" data-buy-st="${amount}" style="margin-top:8px;width:100%">Kaufen</button></div>`).join('');
+  const payMethods = ['Kreditkarte','PayPal','Google Play'];
+  const payOptions = payMethods.map((m,i)=>`<label class="pay-method"><input type="radio" name="payMethod" value="${m}" disabled ${i===0?'checked':''}> ${m}</label>`).join('');
+  return `<h2>Stellaris-Token kaufen</h2>
+  <button class="btn" type="button" data-view-back style="margin-bottom:12px">← Zurück</button>
+  <div class="card"><div class="label">Aktuelles Guthaben</div><div class="value">${fmt(state.darkMatter)} ST</div></div>
+  <div style="height:16px"></div>
+  <div class="card"><h3>Wofür werden Stellaris-Token gebraucht?</h3><ul class="small" style="margin:0;padding-left:18px;line-height:1.7">
+    <li>Gebote im Auktionshaus (seltene Items wie Flottengeschwindigkeitsbooster)</li>
+    <li>Offiziere aktivieren (Commander, Ingenieur, Geograph, Techokrat, Admiral)</li>
+    <li>Sofortkauf von Ressourcen beim Händler</li>
+  </ul></div>
+  <div style="height:16px"></div>
+  <div class="card"><h3>Kostenlos verdienen</h3><div class="small">Expeditionen haben eine Chance (~12%), 100-500 Stellaris-Token als Fund zu bringen - siehe Tab „Expeditionen" für alle möglichen Ergebnisse.</div></div>
+  <div style="height:16px"></div>
+  <div class="card"><h3>Mit Echtgeld kaufen</h3><div class="small">Echtgeld-Zahlung ist in Vorbereitung - die Pakete und Zahlungsmethoden sind schon sichtbar, aber noch nicht aktiv.</div>
+    <div style="height:10px"></div>
+    <div class="grid4">${stPackageCards}</div>
+    <div style="height:14px"></div>
+    <div class="label">Zahlungsmethode (folgt in Kürze)</div>
+    <div class="pay-methods">${payOptions}</div>
+  </div>`;
+}
 
 // Mond-Fakten eines Spionageberichts (oder des eigenen Mondes) - Mond erscheint immer an
 // erster Stelle, wo verfuegbar, wie vom Nutzer explizit gewuenscht. Gebaeude/Flotte des
@@ -1771,7 +1815,7 @@ function viewHighscore(){
 }
 
 function renderView(bind=true){
-  const views={overview:viewOverview,buildings:viewBuildings,facilities:viewFacilities,factories:viewFactories,defense:viewDefense,research:viewResearch,shipyard:viewShipyard,fleet:viewFleet,expeditions:viewExpeditions,galaxy:viewGalaxy,alliance:viewAlliance,officers:viewOfficers,lifeform:viewLifeform,market:viewMarket,reports:viewReports,messages:viewMessages,empire:viewEmpire,highscore:viewHighscore,settings:viewSettings};
+  const views={overview:viewOverview,buildings:viewBuildings,facilities:viewFacilities,factories:viewFactories,defense:viewDefense,research:viewResearch,shipyard:viewShipyard,fleet:viewFleet,expeditions:viewExpeditions,galaxy:viewGalaxy,alliance:viewAlliance,officers:viewOfficers,lifeform:viewLifeform,market:viewMarket,reports:viewReports,messages:viewMessages,empire:viewEmpire,highscore:viewHighscore,settings:viewSettings,stellarisShop:viewStellarisShop};
   $('#view').innerHTML = views[state.view]();
   if(bind){
     document.querySelectorAll('[data-factory-tab]').forEach(b=>b.onclick=()=>{ state.factoryTab=b.dataset.factoryTab; renderView(); });
