@@ -56,17 +56,21 @@ function planetTypesForResource(resource){ return Object.entries(PLANET_TYPES).f
 function zeroResources(){ const r={}; RESOURCE_KEYS.forEach(k=>r[k]=0); return r; }
 function resTotal(c){ return RESOURCE_KEYS.reduce((s,k)=>s+(c[k]||0),0); }
 function resCostText(c){ const parts=RESOURCE_KEYS.map(k=>c[k]?`<span class="cost-chip">${RESOURCE_INFO[k].name} ${fmt(c[k])}</span>`:null).filter(Boolean); return parts.length ? parts.join('') : '<span class="cost-chip cost-chip-free">kostenlos</span>'; }
-// Identische Wertigkeits-Hierarchie wie buildMarketRate() im Server (Markt-Umrechnungskurse).
-function resourceValueRate(key){
-  const g = RESOURCE_INFO[key].group;
-  return g==='ore' ? 1 : g==='special' ? 1.2 : g==='water' ? 0.6 : g==='tech' ? 3 : 2.5;
-}
+// Feingranulare Wertigkeit JE EINZELNEM Rohstoff (Spiegel von RESOURCE_VALUE im Server) -
+// jeder der 18 Rohstoffe hat einen eigenen Wert, damit auch innerhalb einer Gruppe/eines
+// Planetentyp-Pools (z.B. die 5 Gesteinsplaneten-Erze) unterschiedliche Mengen verlangt werden.
+const RESOURCE_VALUE = {
+  saltwater:0.6, limestone:0.8, wood:0.9, freshwater:1.1, iron:1.0,
+  coal:1.2, copper:1.3, sulfur:1.4, phosphate:1.6, aluminium:1.8,
+  nickel:2.0, naturalGas:2.3, crudeOil:2.6, lithium:3.0,
+  silver:4.0, rareEarths:5.0, gold:7.0, uranium:9.0,
+};
 function mineBaseCost(planetType, magnitude){
   const pool = PLANET_TYPES[planetType] ? PLANET_TYPES[planetType].resources : [];
   const cost = zeroResources();
   if(!pool.length) return cost;
   const share = magnitude / pool.length;
-  pool.forEach(r=>{ cost[r] = Math.max(1, Math.round(share/resourceValueRate(r))); });
+  pool.forEach(r=>{ cost[r] = Math.max(1, Math.round(share/(RESOURCE_VALUE[r]||1))); });
   return cost;
 }
 function costBaseFor(def, p){ if(def.costMagnitude!=null) return mineBaseCost(p.planetType, def.costMagnitude); return def.base; }

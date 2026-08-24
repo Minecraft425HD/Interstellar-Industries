@@ -92,16 +92,25 @@ function planetTypesForResource(resource){
 function zeroResources(){ const r={}; RESOURCE_KEYS.forEach(k=>r[k]=0); return r; }
 function resTotal(c){ return RESOURCE_KEYS.reduce((s,k)=>s+(c[k]||0),0); }
 
-// Relative Wertigkeit je Rohstoffgruppe (dieselbe Hierarchie, die buildMarketRate() fuer
-// die Markt-Umrechnungskurse nutzt): haeufige Erze sind billig (Rate 1), Wasser am
-// billigsten (0.6), Sonderrohstoffe leicht teurer (1.2), Energietraeger/Industrieguetuer
-// im mittleren Bereich (2.5), Technologiemetalle (Gold/Silber/Lithium/Seltene Erden) am
-// wertvollsten (3). Ein einziger Ort fuer diese Gewichtung - genutzt sowohl vom Markt als
-// auch von mineBaseCost(), damit beide Systeme dieselbe Vorstellung von "wertvoll" teilen.
+// Relative Wertigkeit je Rohstoffgruppe (fuer den Markt, siehe buildMarketRate()).
 function resourceValueRate(key){
   const g = RESOURCE_INFO[key].group;
   return g==='ore' ? 1 : g==='special' ? 1.2 : g==='water' ? 0.6 : g==='tech' ? 3 : 2.5;
 }
+
+// Feingranulare Wertigkeit JE EINZELNEM Rohstoff (nicht nur je Gruppe) fuer die Minen-
+// Kostenverteilung - der reine Gruppen-Ansatz (resourceValueRate) liess z.B. alle 5
+// Gesteinsplaneten-Erze (Eisen/Kupfer/Aluminium/Nickel/Kalkstein) gleich teuer, weil sie
+// alle zur Gruppe 'ore' gehoeren. Jeder der 18 Rohstoffe hat hier einen eigenen, in sich
+// konsistenten Wert (haeufige Grundstoffe niedrig, Edel-/Technologiemetalle und Uran hoch),
+// sodass auch INNERHALB einer Gruppe/eines Planetentyp-Pools spuerbar unterschiedliche
+// Mengen verlangt werden.
+const RESOURCE_VALUE = {
+  saltwater:0.6, limestone:0.8, wood:0.9, freshwater:1.1, iron:1.0,
+  coal:1.2, copper:1.3, sulfur:1.4, phosphate:1.6, aluminium:1.8,
+  nickel:2.0, naturalGas:2.3, crudeOil:2.6, lithium:3.0,
+  silver:4.0, rareEarths:5.0, gold:7.0, uranium:9.0,
+};
 
 // Selbstversorgende Minen-Kosten: verteilt einen Gesamtwert ausschliesslich auf die
 // Rohstoffe, die der BAUENDE Planet(entyp) selbst hervorbringt. Damit kann jeder
@@ -109,15 +118,16 @@ function resourceValueRate(key){
 // Handel angewiesen zu sein - Handel wird erst fuer Energie/Infrastruktur/Schiffe/
 // Forschung noetig, die bewusst Rohstoffe mehrerer Planetentypen kombinieren.
 // Der Werte-Anteil (magnitude/pool.length) wird gleichmaessig verteilt, aber ERST DANN je
-// Rohstoff durch dessen Wertigkeit geteilt - wertvollere Rohstoffe (z.B. Gold, Uran,
-// Seltene Erden) brauchen dadurch weniger MENGE als haeufige Erze fuer denselben
-// Werteanteil, statt vorher ueberall exakt dieselbe Menge zu verlangen.
+// Rohstoff durch dessen individuelle Wertigkeit (RESOURCE_VALUE) geteilt - wertvollere
+// Rohstoffe (z.B. Gold, Uran, Seltene Erden, aber auch Nickel vs. Eisen) brauchen dadurch
+// weniger MENGE als haeufige Grundstoffe fuer denselben Werteanteil, statt ueberall exakt
+// dieselbe Menge zu verlangen.
 function mineBaseCost(planetType, magnitude){
   const pool = PLANET_TYPES[planetType] ? PLANET_TYPES[planetType].resources : [];
   const cost = zeroResources();
   if(!pool.length) return cost;
   const share = magnitude / pool.length;
-  pool.forEach(r=>{ cost[r] = Math.max(1, Math.round(share/resourceValueRate(r))); });
+  pool.forEach(r=>{ cost[r] = Math.max(1, Math.round(share/(RESOURCE_VALUE[r]||1))); });
   return cost;
 }
 // Liefert die tatsaechliche Kosten-Basis fuer ein Gebaeude auf Planet p: bei Minen
