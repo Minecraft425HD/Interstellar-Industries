@@ -23,7 +23,7 @@ Für Wartung/Debugging gibt es ein festes Admin-Konto:
 
 Meldet man sich in der App mit diesen Daten an, öffnet sich statt des Spiels
 ein Admin-Panel mit einer Liste aller registrierten Spieler (Punkte, Planeten,
-Heimatkoordinaten, Dunkle Materie). Von dort aus lassen sich Spieler löschen
+Heimatkoordinaten, Stellaris-Token). Von dort aus lassen sich Spieler löschen
 (z.B. um eine Position wieder freizugeben) oder mit Ressourcen ausstatten.
 Das Admin-Konto selbst hat kein eigenes Imperium und kann nicht gelöscht
 werden.
