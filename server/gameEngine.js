@@ -95,24 +95,28 @@ function planetTypesForResource(resource){
 function zeroResources(){ const r={}; RESOURCE_KEYS.forEach(k=>r[k]=0); return r; }
 function resTotal(c){ return RESOURCE_KEYS.reduce((s,k)=>s+(c[k]||0),0); }
 
-// Relative Wertigkeit je Rohstoffgruppe (fuer den Markt, siehe buildMarketRate()).
-function resourceValueRate(key){
-  const g = RESOURCE_INFO[key].group;
-  return g==='ore' ? 1 : g==='special' ? 1.2 : g==='water' ? 0.6 : g==='tech' ? 3 : 2.5;
-}
-
-// Feingranulare Wertigkeit JE EINZELNEM Rohstoff (nicht nur je Gruppe) fuer die Minen-
-// Kostenverteilung - der reine Gruppen-Ansatz (resourceValueRate) liess z.B. alle 5
-// Gesteinsplaneten-Erze (Eisen/Kupfer/Aluminium/Nickel/Kalkstein) gleich teuer, weil sie
-// alle zur Gruppe 'ore' gehoeren. Jeder der 18 Rohstoffe hat hier einen eigenen, in sich
-// konsistenten Wert (haeufige Grundstoffe niedrig, Edel-/Technologiemetalle und Uran hoch),
-// sodass auch INNERHALB einer Gruppe/eines Planetentyp-Pools spuerbar unterschiedliche
-// Mengen verlangt werden.
+// Feingranulare Wertigkeit JE EINZELNEM Rohstoff/Gut (nicht nur je Gruppe) - fuer die Minen-
+// Kostenverteilung (mineBaseCost) UND die Markt-Umrechnungskurse (buildMarketRate). Ein reiner
+// Gruppen-Ansatz liess z.B. alle 5 Gesteinsplaneten-Erze (Eisen/Kupfer/Aluminium/Nickel/
+// Kalkstein) gleich teuer/gleich viel wert erscheinen, weil sie alle zur Gruppe 'ore' gehoeren.
+// Jeder Rohstoff/jedes Fabrikgut hat hier einen eigenen, in sich konsistenten Wert (haeufige
+// Grundstoffe niedrig, Edel-/Technologiemetalle und Uran hoch, staerker verarbeitete
+// Industrieguetuer hoeher als ihre Rohstoff-Vorstufen) - Rohstoffe UND Fabrikprodukte teilen
+// dieselbe Wertigkeits-Skala, damit z.B. der Markt Praezisionskomponenten (Tier 3) sinnvoll
+// teurer bewertet als Eisen, statt beide pauschal in einen "goods"-Topf zu werfen.
 const RESOURCE_VALUE = {
+  // Rohstoffe (auch fuer mineBaseCost() relevant)
   saltwater:0.6, limestone:0.8, wood:0.9, freshwater:1.1, iron:1.0,
   coal:1.2, copper:1.3, sulfur:1.4, phosphate:1.6, aluminium:1.8,
   nickel:2.0, naturalGas:2.3, crudeOil:2.6, lithium:3.0,
   silver:4.0, rareEarths:5.0, gold:7.0, uranium:9.0,
+  // Tier-1-Fabrikgueter (einmal verarbeitet)
+  concrete:3.0, oxygen:3.0, plastic:4.0, batteryCells:4.0, refinedFuel:4.5,
+  steel:4.5, electronics:5.0, hydrogen:5.0, alloy:5.5,
+  // Tier-2-Fabrikgueter (aus Tier-1-Guetuern)
+  machineParts:7.5, compositeMaterial:8.0,
+  // Tier-3-Fabrikgueter (aus Tier-2-Guetuern + Rohstoff)
+  precisionComponents:15.0,
 };
 
 // Selbstversorgende Minen-Kosten: verteilt einen Gesamtwert ausschliesslich auf die
@@ -421,7 +425,7 @@ function resolveAuctionIfDue(universe){
     if(!winner.itemExpiry) winner.itemExpiry = {};
     const base = Math.max(Date.now(), winner.itemExpiry[a.itemKey]||0);
     winner.itemExpiry[a.itemKey] = base + def.durationHours*3600*1000;
-    message(winner, 'Auktion gewonnen: '+def.name+' für '+a.currentBid+' Dunkle Materie ersteigert!');
+    message(winner, 'Auktion gewonnen: '+def.name+' für '+a.currentBid+' Stellaris-Token ersteigert!');
     log(winner, 'Auktion gewonnen: '+def.name);
   }
   universe.auction = { itemKey: pickRandomItemKey(), currentBid: 0, currentBidder: null, endsAt: Date.now()+AUCTION_DURATION_MS };
@@ -431,12 +435,12 @@ function bidAuction(universe, username, amount){
   ensureAuction(universe);
   const a = universe.auction;
   const bid = Math.floor(Number(amount)||0);
-  if(bid<=a.currentBid) return fail(state, 'Gebot muss höher als das aktuelle Höchstgebot ('+a.currentBid+' Dunkle Materie) sein');
-  if(bid>state.darkMatter) return fail(state, 'Nicht genug Dunkle Materie für dieses Gebot');
+  if(bid<=a.currentBid) return fail(state, 'Gebot muss höher als das aktuelle Höchstgebot ('+a.currentBid+' Stellaris-Token) sein');
+  if(bid>state.darkMatter) return fail(state, 'Nicht genug Stellaris-Token für dieses Gebot');
   if(a.currentBidder && universe.players[a.currentBidder]) universe.players[a.currentBidder].darkMatter += a.currentBid;
   state.darkMatter -= bid;
   a.currentBid = bid; a.currentBidder = username;
-  return ok(state, 'Gebot über '+bid+' Dunkle Materie auf '+defs.items[a.itemKey].name+' abgegeben');
+  return ok(state, 'Gebot über '+bid+' Stellaris-Token auf '+defs.items[a.itemKey].name+' abgegeben');
 }
 function itemActive(state, key){ return !!(state.itemExpiry && state.itemExpiry[key] && state.itemExpiry[key] > Date.now()); }
 
@@ -545,7 +549,7 @@ function createStarterEmpire(coord, name){
 // metalle, Uran) sind teurer als haeufige Erze; Wasser ist am guenstigsten.
 function buildMarketRate(){
   const rate = {};
-  for(const k of RESOURCE_KEYS) rate[k] = resourceValueRate(k);
+  for(const k of RESOURCE_KEYS) rate[k] = RESOURCE_VALUE[k]||1;
   return rate;
 }
 
@@ -1080,6 +1084,13 @@ function maxStorage(p){
 }
 function capacityForShips(shipMap){ let total=0; for(const [k,v] of Object.entries(shipMap)){ total += defs.ships[k].cargo*v; } return total; }
 function fuelForShips(shipMap){ let total=0; for(const [k,v] of Object.entries(shipMap)){ total += defs.ships[k].fuel*v; } return total; }
+// Effizienz je waehlbarer Flottentreibstoffart (sendFleet fuelType) - Wasserstoff ist als
+// fortschrittlicherer, per Elektrolyse gewonnener Treibstoff effizienter (20% weniger Verbrauch
+// fuer dieselbe Strecke) als konventioneller, aus Rohoel raffinierter Kraftstoff. Macht die
+// Treibstoffwahl zu einer echten Abwaegung: Kraftstoff ist frueher verfuegbar (nur Oelraffinerie
+// noetig), Wasserstoff braucht zusaetzlich Energietechnik fuer die Elektrolyseanlage, spart
+// dafuer dauerhaft Treibstoffmenge pro Flug.
+const FUEL_EFFICIENCY = { refinedFuel: 1.0, hydrogen: 0.8 };
 function fleetSpeed(shipMap){ const vals=Object.entries(shipMap).filter(([,v])=>v>0).map(([k])=>defs.ships[k].speed); return vals.length?Math.min(...vals):1; }
 function distanceBetween(a,b){ return Math.abs(a[0]-b[0])*15000 + Math.abs(a[1]-b[1])*20 + Math.abs(a[2]-b[2]) + 5; }
 function fleetDuration(state, fromCoord,toCoord,shipMap){ const speed=fleetSpeed(shipMap)*fleetSpeedBonus(state)*pathfinderBonus(shipMap); const distance=distanceBetween(fromCoord,toCoord); return Math.max(10, Math.round((distance*3)/speed)); }
@@ -1402,7 +1413,7 @@ function sendFleet(universe, username, planetIndex, params){
   // raffiniert werden. Alternativ Wasserstoff (per Elektrolyse). Strikt whitelisted (nicht
   // generisch gegen RESOURCE_KEYS geprueft), da der Wert direkt als p.resources-Index dient.
   const fuelType = params.fuelType==='hydrogen' ? 'hydrogen' : 'refinedFuel';
-  const fuel = fuelForShips(ships)*Math.max(1,dur/20);
+  const fuel = fuelForShips(ships)*Math.max(1,dur/20)*FUEL_EFFICIENCY[fuelType];
   if((cargo[fuelType]||0)+fuel>p.resources[fuelType]) return fail(state, 'Zu wenig '+RESOURCE_INFO[fuelType].name+' für Ladung und Flug');
   for(const k of RESOURCE_KEYS){ if(k===fuelType) continue; if(cargo[k]>p.resources[k]) return fail(state, 'Nicht genug Ressourcen zum Versenden'); }
 
@@ -1514,7 +1525,7 @@ function resolveExpedition(state, exp){
     addRes(p,gain);
     message(state, 'Expedition erfolgreich: '+resTotal(gain)+' Ressourcen gefunden.');
   }
-  else if(roll<0.42){ const dm=Math.floor(100+Math.random()*500); state.darkMatter+=dm; message(state, 'Expedition fand '+dm+' Dunkle Materie.'); }
+  else if(roll<0.42){ const dm=Math.floor(100+Math.random()*500); state.darkMatter+=dm; message(state, 'Expedition fand '+dm+' Stellaris-Token.'); }
   else if(roll<0.55){ for(const [k,v] of Object.entries(exp.ships)) p.ships[k]=(p.ships[k]||0)+v; message(state, 'Expeditionsflotte kehrte unbeschadet zurück.'); return; }
   else if(roll<0.62){
     const bonusOptions=['smallCargo','lightFighter','espionageProbe'];
@@ -1786,10 +1797,10 @@ function merchantBuy(state, planetIndex, resourceType, amount){
   if(amount<=0 || !RESOURCE_KEYS.includes(resourceType)) return fail(state, 'Ungültige Menge');
   const rate = 5;
   const cost = Math.ceil(amount/rate);
-  if(state.darkMatter<cost) return fail(state, 'Nicht genug Dunkle Materie');
+  if(state.darkMatter<cost) return fail(state, 'Nicht genug Stellaris-Token');
   state.darkMatter-=cost;
   addRes(p, {[resourceType]:amount});
-  return ok(state, 'Händler: '+amount+' '+resourceType+' für '+cost+' Dunkle Materie gekauft');
+  return ok(state, 'Händler: '+amount+' '+resourceType+' für '+cost+' Stellaris-Token gekauft');
 }
 function launchMissiles(universe, username, planetIndex, targetPos, count){
   const state = universe.players[username];
@@ -1840,7 +1851,7 @@ function activateOfficer(state, key){
   const validKeys = ['commander','admiral','engineer','geologist','technocrat'];
   if(!validKeys.includes(key)) return fail(state, 'Unbekannter Offizier');
   if(officerActive(state, key)) return fail(state, 'Offizier bereits aktiv');
-  if(state.darkMatter<500) return fail(state, 'Nicht genug Dunkle Materie');
+  if(state.darkMatter<500) return fail(state, 'Nicht genug Stellaris-Token');
   state.darkMatter-=500;
   state.officerExpiry[key] = Date.now()+7*24*3600*1000;
   return ok(state, 'Offizier aktiviert (7 Tage)');

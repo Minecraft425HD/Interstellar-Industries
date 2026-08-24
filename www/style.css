@@ -56,6 +56,17 @@ body{ display:flex; flex-direction:column; min-height:100%; }
 }
 .planet-id #planetName{ font-weight:700; font-size:16px; text-shadow:0 0 12px rgba(63,169,245,.35); letter-spacing:.02em; }
 .planet-id .small{ color:var(--muted); font-size:12px; }
+/* Staendig sichtbares Stellaris-Token-Guthaben oben rechts (jede Ansicht, nicht nur Markt/
+   Einstellungen) - #topbar ist bereits justify-content:space-between, daher landet dieses
+   Element automatisch rechts neben der Planeten-ID. */
+.stellaris-balance{
+  display:flex; align-items:center; gap:6px;
+  padding:6px 12px; border-radius:999px;
+  background:rgba(245,179,66,.12); border:1px solid rgba(245,179,66,.4);
+  font-weight:700; font-size:14px; color:var(--warn); white-space:nowrap;
+}
+.stellaris-balance-icon{ font-size:15px; text-shadow:0 0 8px rgba(245,179,66,.6); }
+.stellaris-balance-unit{ font-size:11px; font-weight:600; opacity:.75; letter-spacing:.03em; }
 /* Alle Rohstoffe passen nicht mehr nebeneinander in eine Zeile fester Breite - statt
    ueber mehrere Zeilen umzubrechen (macht die Kopfzeile riesig hoch), bleibt die Leiste
    EINE Zeile fest und wird stattdessen horizontal scrollbar (nach rechts wischen). */

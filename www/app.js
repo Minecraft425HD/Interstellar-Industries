@@ -400,7 +400,7 @@ function openInfoModal(type, key, level){
     if(d.hull!=null) statsRows.push(['Hülle', fmt(d.hull)]);
     if(d.cargo!=null) statsRows.push(['Ladekapazität', fmt(d.cargo)]);
     if(d.speed!=null) statsRows.push(['Geschwindigkeit', d.speed]);
-    if(d.fuel!=null) statsRows.push(['Treibstoffverbrauch', fmt(d.fuel)]);
+    if(d.fuel!=null) statsRows.push(['Treibstoffverbrauch', `${fmt(Math.round(d.fuel*FUEL_EFFICIENCY.refinedFuel))} Kraftstoff oder ${fmt(Math.round(d.fuel*FUEL_EFFICIENCY.hydrogen))} Wasserstoff (20% effizienter)`]);
     if(d.requires && Object.keys(d.requires).length) statsRows.push(['Voraussetzung', requirementText(d.requires)]);
   }
   const modal = document.createElement('div');
@@ -972,7 +972,7 @@ function renderAdminPanel(){
     <div style="height:14px"></div>
     ${adminLoading ? '<div class="small">Lade Spielerliste…</div>' : ''}
     ${adminPlayers && adminPlayers.length===0 ? '<div class="small">Noch keine Spieler registriert.</div>' : ''}
-    ${adminPlayers && adminPlayers.length>0 ? `<div style="overflow-x:auto"><table><thead><tr><th>Benutzername</th><th>Heimatkoordinaten</th><th>Punkte</th><th>Planeten</th><th>Dunkle Materie</th><th>Registriert</th><th>Aktionen</th></tr></thead><tbody>${rows}</tbody></table></div>` : ''}`;
+    ${adminPlayers && adminPlayers.length>0 ? `<div style="overflow-x:auto"><table><thead><tr><th>Benutzername</th><th>Heimatkoordinaten</th><th>Punkte</th><th>Planeten</th><th>Stellaris-Token</th><th>Registriert</th><th>Aktionen</th></tr></thead><tbody>${rows}</tbody></table></div>` : ''}`;
   } else {
     const linesHtml = (adminLogLines||[]).map(l=>`<div>${escapeHtml(l)}</div>`).join('');
     bodyHtml = `<div class="small" style="margin-bottom:8px">Aktualisiert automatisch alle 2 Sekunden – zeigt jede Verbindung und Aktion aller Spieler in Echtzeit.</div>
@@ -1206,6 +1206,8 @@ function maxStorage(p){
 }
 function capacityForShips(shipMap){let total=0; for(const [k,v] of Object.entries(shipMap)){ if(defs.ships[k]) total += defs.ships[k].cargo*v; } return total }
 function fuelForShips(shipMap){let total=0; for(const [k,v] of Object.entries(shipMap)){ if(defs.ships[k]) total += defs.ships[k].fuel*v; } return total }
+// Spiegel der Server-Konstante (siehe FUEL_EFFICIENCY in gameEngine.js).
+const FUEL_EFFICIENCY = { refinedFuel: 1.0, hydrogen: 0.8 };
 function fleetSpeed(shipMap){const vals=Object.entries(shipMap).filter(([k,v])=>v>0 && defs.ships[k]).map(([k])=>defs.ships[k].speed); return vals.length?Math.min(...vals):1}
 function distanceBetween(a,b){return Math.abs(a[0]-b[0])*15000 + Math.abs(a[1]-b[1])*20 + Math.abs(a[2]-b[2]) + 5}
 function fleetDuration(fromCoord,toCoord,shipMap){const speed=fleetSpeed(shipMap)*fleetSpeedBonus()*pathfinderBonus(shipMap); const distance=distanceBetween(fromCoord,toCoord); return Math.max(10, Math.round((distance*3)/speed)); }
@@ -1229,6 +1231,7 @@ function renderTop(){
   const p=active(); if(!p) return;
   $('#planetName').textContent=p.name;
   $('#planetCoords').innerHTML=coordLinkHtml(p.coords)+' · '+(PLANET_TYPES[p.planetType]||PLANET_TYPES.rocky).name;
+  const stBal = $('#stellarisBalanceValue'); if(stBal) stBal.textContent = fmt(state.darkMatter||0);
 }
 function renderSide(){
   $('#planetTabs').innerHTML = state.planets.map((p,i)=>p.destroyed?'':`<button class="pill ${state.activePlanet===i?'active':''}" data-planet="${i}">${p.name}</button>`).join('');
@@ -1399,7 +1402,7 @@ function viewFleet(){
     <label>Mission<select name="mission" id="missionSelect">${missionOpt('transport','Transport')}${missionOpt('spy','Spionage')}${missionOpt('attack','Angriff')}${missionOpt('colonize','Kolonisierung')}${missionOpt('harvest','Trümmerfeld-Bergung')}${missionOpt('mine','Asteroiden-Abbau')}</select></label>
     <label>Treibstoff (${fmt(p.resources.refinedFuel||0)} Kraftstoff · ${fmt(p.resources.hydrogen||0)} Wasserstoff)<select name="fuelType">
       <option value="refinedFuel">Kraftstoff (aus Rohöl raffiniert)</option>
-      <option value="hydrogen">Wasserstoff (per Elektrolyse)</option>
+      <option value="hydrogen">Wasserstoff (per Elektrolyse, 20% effizienter)</option>
     </select></label>
     <label>Zielgalaxie (1-${UNIVERSE.galaxies})<input type="number" name="galaxy" min="1" max="${UNIVERSE.galaxies}" value="${galVal}"></label>
     <label>Zielsystem (1-${UNIVERSE.systems})<input type="number" name="system" min="1" max="${UNIVERSE.systems}" value="${sysVal}"></label>
@@ -1550,7 +1553,6 @@ function viewMessages(){
 
 function viewSettings(){
   const p = active();
-  const native = !!(window.Android && window.Android.saveGame);
   const url = getServerUrl();
   const statusLabel = connectionStatus==='connected' ? 'Verbunden' : (connectionStatus==='error' ? 'Fehler: '+connectionError : 'Nicht verbunden');
   const statusColor = connectionStatus==='connected' ? 'var(--good)' : (connectionStatus==='error' ? 'var(--danger)' : 'var(--muted)');
@@ -1561,7 +1563,6 @@ function viewSettings(){
     : `<div class="card"><h3>Planet umbenennen</h3><div class="small">Planeten können nur einmal pro Woche umbenannt werden.</div><div style="height:10px"></div><form id="renamePlanetForm" class="market-form"><label>Neuer Name<input type="text" name="name" maxlength="30" value="${escapeHtml(p.name)}"></label><button class="btn alt" type="submit">Speichern</button></form></div>`;
   return `<h2>Einstellungen</h2><div class="grid2">
   <div class="card"><h3>Konto</h3><div class="small">Angemeldet als <strong>${state.username||'-'}</strong></div><div class="small" style="color:${statusColor}">Server-Status: ${statusLabel}</div><div class="small">Server: ${url}</div><div style="height:10px"></div><button class="btn danger" id="logoutBtn">Abmelden</button> <button class="btn alt" id="changeServerBtn2">Server wechseln</button></div>
-  <div class="card"><h3>Spielstand-Sicherung</h3><div class="small">Der Server speichert automatisch und dauerhaft. Diese Buttons erstellen zusätzlich eine lokale Sicherungskopie deines Imperiums.</div><div style="height:10px"></div><button class="btn" id="saveBtn">Backup herunterladen</button><div style="height:10px"></div>${native ? '<button class="btn alt" id="loadBtnNative">Backup wiederherstellen</button>' : '<input type="file" id="loadInput" accept="application/json">'}</div>
   ${renameCard}
   </div>`;
 }
@@ -1654,11 +1655,11 @@ function viewAlliance(){
 
 function viewOfficers(){
   const list=[['commander','Kommandant','Reduziert Baukosten für Gebäude und Verteidigung leicht (-5%).'],['admiral','Admiral','Erhöht die Flottengeschwindigkeit (+10%).'],['engineer','Ingenieur','Erhöht die Energieproduktion (+10%).'],['geologist','Geologe','Erhöht die Rohstoffproduktion um 10%.'],['technocrat','Technokrat','Beschleunigt die Forschung (-15% Zeit).']];
-  return `<h2>Offiziere</h2><div class="small">Dunkle Materie: ${fmt(state.darkMatter)} · Offiziere gelten für 7 Tage nach Aktivierung.</div><div style="height:10px"></div><div class="list">${list.map(([k,name,desc])=>{
+  return `<h2>Offiziere</h2><div class="small">Stellaris-Token: ${fmt(state.darkMatter)} · Offiziere gelten für 7 Tage nach Aktivierung.</div><div style="height:10px"></div><div class="list">${list.map(([k,name,desc])=>{
     const active=officerActive(k);
     const affordable = state.darkMatter>=500;
     const disabled = active || !affordable;
-    const label = active ? 'Aktiv' : (affordable ? 'Aktivieren (500 DM)' : 'Zu wenig Dunkle Materie');
+    const label = active ? 'Aktiv' : (affordable ? 'Aktivieren (500 ST)' : 'Zu wenig Stellaris-Token');
     return `<div class="row"><div><strong>${name}</strong><div class="sub">${desc}</div>${active?`<div class="sub">Noch aktiv: ${formatDuration(officerTimeLeft(k))}</div>`:''}</div><button class="btn ${active?'good':'alt'}" data-officer="${k}" ${disabled?'disabled':''}>${label}</button></div>`;
   }).join('')}</div>`; }
 
@@ -1678,10 +1679,16 @@ function viewMarket(){ const r=state.marketRate; const initialAmount=1000; const
   const secsLeft = a ? Math.max(0, Math.ceil((a.endsAt-Date.now())/1000)) : 0;
   const mins = Math.floor(secsLeft/60), secs = secsLeft%60;
   const minBid = a ? a.currentBid+1 : 1;
-  const auctionCard = a ? `<div class="card"><h3>Auktionshaus</h3><div class="small">${a.itemDesc}</div><div style="height:8px"></div><div><strong>${a.itemName}</strong></div><div class="sub">Höchstgebot: ${fmt(a.currentBid)} Dunkle Materie${a.currentBidder?(' · von '+a.currentBidder):''}</div><div class="sub">Restzeit: ${mins}m ${secs}s</div><div style="height:10px"></div><form class="market-form" id="auctionForm"><label>Gebot (Dunkle Materie)<input type="number" min="${minBid}" value="${minBid}" name="amount"></label><button class="btn good" type="submit">Bieten</button></form><div class="small" style="margin-top:8px">Dunkle Materie: ${fmt(state.darkMatter)}</div></div>` : '';
+  const auctionCard = a ? `<div class="card"><h3>Auktionshaus</h3><div class="small">${a.itemDesc}</div><div style="height:8px"></div><div><strong>${a.itemName}</strong></div><div class="sub">Höchstgebot: ${fmt(a.currentBid)} Stellaris-Token${a.currentBidder?(' · von '+a.currentBidder):''}</div><div class="sub">Restzeit: ${mins}m ${secs}s</div><div style="height:10px"></div><form class="market-form" id="auctionForm"><label>Gebot (Stellaris-Token)<input type="number" min="${minBid}" value="${minBid}" name="amount"></label><button class="btn good" type="submit">Bieten</button></form><div class="small" style="margin-top:8px">Stellaris-Token: ${fmt(state.darkMatter)}</div></div>` : '';
   const resOptions = RESOURCE_KEYS.map(k=>`<option value="${k}">${RESOURCE_INFO[k].name}</option>`).join('');
   const rateCards = RESOURCE_KEYS.map(k=>`<div class="card"><div class="label">${RESOURCE_INFO[k].name}</div><div class="value">${fmt1(r[k]||0)}</div></div>`).join('');
-  return `<h2>Markt</h2><div class="small">Kurswerte (relativer Tauschwert pro Einheit; 10% Marktabschlag beim Tausch):</div><div style="height:8px"></div><div class="grid4">${rateCards}</div><div style="height:16px"></div><div class="grid2"><div class="card"><h3>Ressourcen handeln</h3><form class="market-form" id="marketForm"><label>Abgeben<select name="give">${resOptions}</select></label><label>Erhalten<select name="want">${resOptions}</select></label><label>Menge<input type="number" min="1" value="100" name="amount"></label><button class="btn good" type="submit">Am Markt tauschen</button></form></div><div class="card"><h3>Händler (Dunkle Materie)</h3><div class="small">Tausche Dunkle Materie sofort gegen Ressourcen. Kurs: 5 Einheiten pro 1 DM.</div><div style="height:10px"></div><form class="market-form" id="merchantForm"><label>Ressource<select name="resource">${resOptions}</select></label><label>Menge<input type="number" min="1" value="${initialAmount}" name="amount" id="merchantAmount"></label><div class="small" id="merchantCostHint">Kosten: ${fmt(initialCost)} Dunkle Materie</div><button class="btn warn" type="submit" id="merchantBuyBtn" ${initialAffordable?'':'disabled'}>Kaufen</button></form><div class="small" style="margin-top:8px">Dunkle Materie: ${fmt(state.darkMatter)}</div></div>${auctionCard}</div>`; }
+  // Kauf-Pakete fuer Stellaris-Token gegen Echtgeld: nur UI-Vorbereitung, noch ohne
+  // angebundenen Zahlungsanbieter - der "Kaufen"-Button bucht bewusst NICHTS gut, sondern
+  // zeigt nur einen Platzhalter-Hinweis (siehe data-buy-st Handler).
+  const stPackages = [[100,'0,99'],[500,'3,99'],[1200,'7,99'],[3000,'17,99']];
+  const stPackageCards = stPackages.map(([amount,price])=>`<div class="card"><div class="label">${fmt(amount)} ST</div><div class="value">${price} €</div><button class="btn alt" type="button" data-buy-st="${amount}" style="margin-top:8px;width:100%">Kaufen</button></div>`).join('');
+  const stBuyCard = `<div class="small" style="margin-top:16px">Stellaris-Token (ST) kaufen - Premium-Währung für Auktionshaus, Offiziere und den Händler. Echtgeld-Zahlung ist in Vorbereitung, die Kauf-Pakete sind schon sichtbar, aber noch nicht aktiv.</div><div style="height:8px"></div><div class="grid4">${stPackageCards}</div>`;
+  return `<h2>Markt</h2><div class="small">Kurswerte (relativer Tauschwert pro Einheit; 10% Marktabschlag beim Tausch):</div><div style="height:8px"></div><div class="grid4">${rateCards}</div>${stBuyCard}<div style="height:16px"></div><div class="grid2"><div class="card"><h3>Ressourcen handeln</h3><form class="market-form" id="marketForm"><label>Abgeben<select name="give">${resOptions}</select></label><label>Erhalten<select name="want">${resOptions}</select></label><label>Menge<input type="number" min="1" value="100" name="amount"></label><button class="btn good" type="submit">Am Markt tauschen</button></form></div><div class="card"><h3>Händler (Stellaris-Token)</h3><div class="small">Tausche Stellaris-Token sofort gegen Ressourcen. Kurs: 5 Einheiten pro 1 ST.</div><div style="height:10px"></div><form class="market-form" id="merchantForm"><label>Ressource<select name="resource">${resOptions}</select></label><label>Menge<input type="number" min="1" value="${initialAmount}" name="amount" id="merchantAmount"></label><div class="small" id="merchantCostHint">Kosten: ${fmt(initialCost)} Stellaris-Token</div><button class="btn warn" type="submit" id="merchantBuyBtn" ${initialAffordable?'':'disabled'}>Kaufen</button></form><div class="small" style="margin-top:8px">Stellaris-Token: ${fmt(state.darkMatter)}</div></div>${auctionCard}</div>`; }
 
 // Mond-Fakten eines Spionageberichts (oder des eigenen Mondes) - Mond erscheint immer an
 // erster Stelle, wo verfuegbar, wie vom Nutzer explizit gewuenscht. Gebaeude/Flotte des
@@ -1726,7 +1733,30 @@ function viewReports(){
   }).join('')}`;
 }
 
-function viewEmpire(){ return `<h2>Imperium</h2><div class="small">Gesamtpunkte: ${fmt(totalPlayerPoints())}</div><div style="height:10px"></div><table><thead><tr><th>Planet</th><th>Koordinaten</th><th>Typ</th><th>Produktion/h</th><th>Energie</th><th>Punkte</th></tr></thead><tbody>${state.planets.filter(p=>!p.destroyed).map(p=>{ const inc=hourly(p), e=energyStats(p), pts=Math.floor(computePoints(p)/1000); const ptName=(PLANET_TYPES[p.planetType]||PLANET_TYPES.rocky).name; const incText = RESOURCE_KEYS.filter(k=>(inc[k]||0)!==0).map(k=>`${RESOURCE_INFO[k].name} ${fmt1(inc[k])}`).join(', ') || '—'; return `<tr><td>${p.name}</td><td>${coordLinkHtml(p.coords)}</td><td>${ptName}</td><td>${incText}</td><td>${fmt(e.prod)}/${fmt(e.use)}</td><td>${fmt(pts)}</td></tr>`; }).join('')}</tbody></table>`; }
+// Optisch aufgehuebschte Imperiumsansicht: dieselben Daten wie zuvor (Planet, Koordinaten,
+// Typ, stuendliche Produktion, Energie, Punkte), aber als Karten im Stil der uebrigen Tabs
+// statt einer reinen Tabelle - keine funktionale Aenderung.
+function viewEmpire(){
+  const cards = state.planets.filter(p=>!p.destroyed).map(p=>{
+    const inc=hourly(p), e=energyStats(p), pts=Math.floor(computePoints(p)/1000);
+    const ptName=(PLANET_TYPES[p.planetType]||PLANET_TYPES.rocky).name;
+    const incText = RESOURCE_KEYS.filter(k=>(inc[k]||0)!==0).map(k=>`${RESOURCE_INFO[k].name} ${fmt1(inc[k])}/h`).join(' · ') || 'Keine Produktion';
+    const energyRatio = Math.min(100, (e.prod/Math.max(1,e.use))*100);
+    return `<div class="card">
+      <h3>${escapeHtml(p.name)}</h3>
+      <div class="small">${coordLinkHtml(p.coords)} · ${ptName}</div>
+      <div style="height:10px"></div>
+      <div class="row"><div>Energie</div><div>${fmt(e.prod)} / ${fmt(e.use)}</div></div>
+      <div class="bar" style="margin:4px 0 10px"><span style="width:${energyRatio}%"></span></div>
+      <div class="row"><div>Punkte</div><div>${fmt(pts)}</div></div>
+      <div style="height:8px"></div>
+      <div class="small">${incText}</div>
+    </div>`;
+  }).join('');
+  return `<h2>Imperium</h2>
+  <div class="card" style="margin-bottom:16px"><h3>Gesamtpunkte</h3><div style="font-size:28px;font-weight:700;text-shadow:0 0 12px rgba(63,169,245,.35)">${fmt(totalPlayerPoints())}</div></div>
+  <div class="grid3">${cards}</div>`;
+}
 
 function viewHighscore(){
   if(highscoreCache===null && !highscoreLoading){ fetchHighscore(); }
@@ -1760,6 +1790,11 @@ function renderView(bind=true){
       ff.position.onchange=()=>{ state.fleetPrefill=null; };
     }
     const mf=$('#marketForm'); if(mf) mf.onsubmit=e=>{e.preventDefault(); marketTrade(mf.give.value,mf.want.value,mf.amount.value)};
+    // Stellaris-Token-Kaufpakete: rein informativer Platzhalter, bucht bewusst NICHTS gut
+    // und sendet keine Server-Aktion - echte Zahlungsabwicklung ist noch nicht angebunden.
+    document.querySelectorAll('[data-buy-st]').forEach(b=>b.onclick=()=>{
+      showError('Echtgeld-Zahlung ist noch nicht verfügbar - Zahlungsanbieter folgt in Kürze.');
+    });
     const auctionForm=$('#auctionForm'); if(auctionForm) auctionForm.onsubmit=e=>{e.preventDefault(); postAction('bidAuction', {amount: Number(auctionForm.amount.value)||0});};
     const merchForm=$('#merchantForm'); if(merchForm){
       merchForm.onsubmit=e=>{e.preventDefault(); merchantBuy(merchForm.resource.value, merchForm.amount.value)};
@@ -1767,7 +1802,7 @@ function renderView(bind=true){
       if(merchAmountInput && merchHint && merchBtn){
         merchAmountInput.oninput=()=>{
           const cost = merchantCost(merchAmountInput.value);
-          merchHint.textContent = 'Kosten: '+fmt(cost)+' Dunkle Materie';
+          merchHint.textContent = 'Kosten: '+fmt(cost)+' Stellaris-Token';
           merchBtn.disabled = !(cost>0 && cost<=state.darkMatter);
         };
       }
@@ -1796,9 +1831,6 @@ function renderView(bind=true){
       const [g,s] = b.dataset.telescopeJump.split(':').map(Number);
       state.galaxyIndex=g; state.galaxySystem=s; state.expandedGalaxySlot=null; renderView(true);
     });
-    const saveBtn=$('#saveBtn'); if(saveBtn) saveBtn.onclick=saveGame;
-    const loadInput=$('#loadInput'); if(loadInput) loadInput.onchange=e=>{ if(e.target.files[0]) loadGame(e.target.files[0]); };
-    const loadBtnNative=$('#loadBtnNative'); if(loadBtnNative) loadBtnNative.onclick=requestNativeLoad;
     const logoutBtn=$('#logoutBtn'); if(logoutBtn) logoutBtn.onclick=logout;
     const changeServerBtn2=$('#changeServerBtn2'); if(changeServerBtn2) changeServerBtn2.onclick=()=>{ setToken(''); setServerUrl(''); state.username=null; everConnected=false; render(); };
     const ef=$('#expeditionForm'); if(ef) ef.onsubmit=e=>{e.preventDefault(); const ships={lightFighter:Number(ef.lightFighter.value)||0,cruiser:Number(ef.cruiser.value)||0,largeCargo:Number(ef.largeCargo.value)||0,pathfinder:Number(ef.pathfinder.value)||0,reaper:Number(ef.reaper.value)||0}; sendExpedition(ships, Number(ef.slot.value)||1);};
