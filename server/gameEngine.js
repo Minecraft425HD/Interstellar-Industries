@@ -46,7 +46,10 @@ const RESOURCE_INFO = {
   concrete: {name:'Beton', group:'goods'},
   batteryCells: {name:'Batteriezellen', group:'goods'},
   hydrogen: {name:'Wasserstoff', group:'processedFuel'},
-  oxygen: {name:'Sauerstoff', group:'processedFuel'},
+  // Sauerstoff ist NICHT als Flottentreibstoff waehlbar (sendFleet fuelType akzeptiert nur
+  // 'hydrogen'/'refinedFuel') - er ist ein reines Nebenprodukt der Elektrolyse, gehoert also
+  // zu den allgemeinen Industrieguetern, nicht in die Treibstoff-Kategorie.
+  oxygen: {name:'Sauerstoff', group:'goods'},
   refinedFuel: {name:'Kraftstoff', group:'processedFuel'},
   machineParts: {name:'Maschinenteile', group:'goods'},
   compositeMaterial: {name:'Verbundwerkstoff', group:'goods'},

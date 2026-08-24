@@ -17,7 +17,9 @@ const RESOURCE_INFO = {
   freshwater: {name:'Süßwasser', group:'water'}, saltwater: {name:'Salzwasser', group:'water'},
   steel: {name:'Stahl', group:'goods'}, electronics: {name:'Elektronik', group:'goods'}, plastic: {name:'Kunststoff', group:'goods'},
   alloy: {name:'Legierung', group:'goods'}, concrete: {name:'Beton', group:'goods'}, batteryCells: {name:'Batteriezellen', group:'goods'},
-  hydrogen: {name:'Wasserstoff', group:'processedFuel'}, oxygen: {name:'Sauerstoff', group:'processedFuel'}, refinedFuel: {name:'Kraftstoff', group:'processedFuel'},
+  // Sauerstoff ist NICHT als Flottentreibstoff waehlbar - reines Elektrolyse-Nebenprodukt,
+  // gehoert zu den Industrieguetern statt in die Treibstoff-Kategorie.
+  hydrogen: {name:'Wasserstoff', group:'processedFuel'}, oxygen: {name:'Sauerstoff', group:'goods'}, refinedFuel: {name:'Kraftstoff', group:'processedFuel'},
   machineParts: {name:'Maschinenteile', group:'goods'}, compositeMaterial: {name:'Verbundwerkstoff', group:'goods'},
   precisionComponents: {name:'Präzisionskomponenten', group:'goods'},
 };
