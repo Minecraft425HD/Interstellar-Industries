@@ -359,20 +359,6 @@ const defs = {
     fuelBooster:{name:'Energieträger-Produktionsbooster', desc:'Erhöht die Produktion aller Energieträger (Rohöl, Erdgas, Kohle, Uran) für 24 Stunden um 50%.', group:'fuel', durationHours:24},
     speedBooster:{name:'Flottengeschwindigkeitsbooster', desc:'Erhöht die Fluggeschwindigkeit aller Flotten für 24 Stunden um 30%.', effect:'speedBoost', durationHours:24},
   },
-  lifeformBuildings: {
-    humanResidence:{name:'Wohnkomplex', desc:'Menschliche Siedlungen, die effizienter Erze fördern. +2% Erzproduktion pro Stufe.', species:'humans', boostsGroup:'ore', base:{iron:5000, copper:2200}},
-    humanFarm:{name:'Nahrungsfarm', desc:'Versorgt die wachsende Bevölkerung und steigert nebenbei die Technologiemetall-Gewinnung. +2% pro Stufe.', species:'humans', boostsGroup:'tech', base:{gold:4200, silver:4200}},
-    humanBank:{name:'Handelszentrum', desc:'Effizientere Energielogistik durch florierenden Handel. +2% Energieträger-Produktion pro Stufe.', species:'humans', boostsGroup:'fuel', base:{crudeOil:3500, naturalGas:2500}},
-    rocktalMeditation:{name:'Meditationshalle', desc:"Rock'tal-Weisheit steigert die Effizienz der Erzförderung. +2% Erzproduktion pro Stufe.", species:'rocktal', boostsGroup:'ore', base:{iron:5200, nickel:2000}},
-    rocktalCrystalFarm:{name:'Edelmetallfarm', desc:"Von Rock'tal-Mönchen gepflegte Abbaustätten. +2% Technologiemetall-Produktion pro Stufe.", species:'rocktal', boostsGroup:'tech', base:{silver:4400, lithium:4000}},
-    rocktalRefinery:{name:'Energie-Raffinerie', desc:"Traditionelle Rock'tal-Destillation. +2% Energieträger-Produktion pro Stufe.", species:'rocktal', boostsGroup:'fuel', base:{coal:3400, uranium:2800}},
-    mechasAssembly:{name:'Montagehalle', desc:'Mechas-Automatisierung optimiert den Erzabbau. +2% Erzproduktion pro Stufe.', species:'mechas', boostsGroup:'ore', base:{aluminium:5800, nickel:2000}},
-    mechasProcessor:{name:'Metallprozessor', desc:'Mechanische Präzision bei der Technologiemetall-Verarbeitung. +2% pro Stufe.', species:'mechas', boostsGroup:'tech', base:{gold:4600, rareEarths:4400}},
-    mechasReactor:{name:'Reaktorkern', desc:'Hocheffiziente Mechas-Reaktoren steigern die Energieträger-Ausbeute. +2% pro Stufe.', species:'mechas', boostsGroup:'fuel', base:{naturalGas:3600, uranium:3200}},
-    kaeleshShrine:{name:'Schrein', desc:'Kaelesh-Rituale segnen die Erzförderung. +2% Erzproduktion pro Stufe.', species:'kaelesh', boostsGroup:'ore', base:{copper:4400, limestone:3200}},
-    kaeleshMonastery:{name:'Kloster', desc:'Kaelesh-Mönche verfeinern die Technologiemetall-Gewinnung. +2% pro Stufe.', species:'kaelesh', boostsGroup:'tech', base:{lithium:4200, rareEarths:4200}},
-    kaeleshOracle:{name:'Orakel', desc:'Prophetische Voraussicht optimiert die Energieträger-Förderung. +2% pro Stufe.', species:'kaelesh', boostsGroup:'fuel', base:{crudeOil:3600, coal:3100}},
-  },
   events: {
     oreRush:{name:'Erzrausch', desc:'Die Produktion aller Erze (Eisen, Kupfer, Aluminium, Nickel, Kalkstein) ist für alle Spieler um 50% erhöht.', group:'ore', multiplier:1.5},
     techRush:{name:'Technologiemetallrausch', desc:'Die Produktion aller Technologiemetalle (Gold, Silber, Lithium, Seltene Erden) ist für alle Spieler um 50% erhöht.', group:'tech', multiplier:1.5},
@@ -539,7 +525,6 @@ function createStarterEmpire(coord, name){
     itemExpiry: {},
     darkMatter: 500,
     expeditions: [],
-    lifeform: {active:'humans', points:0, buildings:{}, research:{}},
     marketRate: buildMarketRate(),
     logs: ['Imperium gegründet.'],
     mail: [],
@@ -1036,19 +1021,6 @@ function applyFactories(state, p, universe, inc){
     }
   }
 }
-function lifeformBoost(state, resource){
-  let mult = 1;
-  const lf = state.lifeform;
-  if(!lf) return mult;
-  const group = RESOURCE_INFO[resource] && RESOURCE_INFO[resource].group;
-  for(const [key,def] of Object.entries(defs.lifeformBuildings)){
-    if(def.species===lf.active && def.boostsGroup===group){
-      const lvl = (lf.buildings && lf.buildings[key]) || 0;
-      mult += lvl*0.02;
-    }
-  }
-  return mult;
-}
 function itemGroupBoost(state, resource){
   const group = RESOURCE_INFO[resource] && RESOURCE_INFO[resource].group;
   for(const [key,def] of Object.entries(defs.items)){
@@ -1065,7 +1037,7 @@ function hourly(state, p, universe){
     const mineKey = MINE_BY_RESOURCE[res];
     const lvl = p.buildings[mineKey]||0;
     if(!lvl) continue;
-    const boost = itemGroupBoost(state,res) * lifeformBoost(state,res) * eventResourceMultiplier(universe,res);
+    const boost = itemGroupBoost(state,res) * eventResourceMultiplier(universe,res);
     inc[res] = defs.buildings[mineKey].prod(lvl)*e*bonus*boost;
   }
   inc.uranium -= fusionDeutUse(p);
@@ -1189,7 +1161,6 @@ function ensureAllDefaults(state){
   if(!state.marketRate || RESOURCE_KEYS.some(k=>state.marketRate[k]==null)) state.marketRate=buildMarketRate();
   if(state.darkMatter==null) state.darkMatter=0;
   if(!state.expeditions) state.expeditions=[];
-  if(!state.lifeform) state.lifeform={active:'humans',points:0,buildings:{},research:{}};
   if(state.allianceTag===undefined) state.allianceTag = null;
   if(!state.logs) state.logs=[];
   if(!state.messages) state.messages=[];
@@ -1224,7 +1195,6 @@ function normalizePlayerState(data){
     officerExpiry: data.officerExpiry || {},
     darkMatter: data.darkMatter!=null ? data.darkMatter : fresh.darkMatter,
     expeditions: data.expeditions || [],
-    lifeform: data.lifeform || fresh.lifeform,
     marketRate: data.marketRate || fresh.marketRate,
     logs: data.logs || fresh.logs,
   };
@@ -1856,26 +1826,6 @@ function activateOfficer(state, key){
   state.officerExpiry[key] = Date.now()+7*24*3600*1000;
   return ok(state, 'Offizier aktiviert (7 Tage)');
 }
-function setLifeform(state, species){
-  const valid = ['humans','rocktal','mechas','kaelesh'];
-  if(!valid.includes(species)) return fail(state, 'Unbekannte Lebensform');
-  state.lifeform.active = species;
-  return ok(state, 'Lebensform gewechselt');
-}
-function enqueueLifeformBuilding(state, planetIndex, key){
-  const p = requirePlanet(state, planetIndex);
-  const def = defs.lifeformBuildings[key];
-  if(!def) return fail(state, 'Unbekanntes Lebensform-Gebäude');
-  if(def.species!==state.lifeform.active) return fail(state, def.name+' gehört zu einer anderen Lebensform');
-  if(!state.lifeform.buildings) state.lifeform.buildings = {};
-  const lvl = (state.lifeform.buildings[key]||0)+1;
-  const cost = scaledCost(def.base, lvl);
-  if(!hasRes(p,cost)) return fail(state, 'Nicht genug Ressourcen für '+def.name);
-  spend(p,cost);
-  state.lifeform.buildings[key] = lvl;
-  state.lifeform.points = (state.lifeform.points||0) + resTotal(cost);
-  return ok(state, def.name+' Stufe '+lvl+' fertiggestellt');
-}
 const PLANET_NAME_MAX_LEN = 30;
 const PLANET_RENAME_COOLDOWN_MS = 7*24*60*60*1000;
 function renamePlanet(state, planetIndex, name){
@@ -2258,8 +2208,6 @@ function applyAction(universe, username, type, payload){
     case 'merchantBuy': return merchantBuy(state, payload.planetIndex, payload.resourceType, payload.amount);
     case 'launchMissiles': return launchMissiles(universe, username, payload.planetIndex, payload.targetPos, payload.count);
     case 'activateOfficer': return activateOfficer(state, payload.key);
-    case 'setLifeform': return setLifeform(state, payload.species);
-    case 'enqueueLifeformBuilding': return enqueueLifeformBuilding(state, payload.planetIndex, payload.key);
     case 'renamePlanet': return renamePlanet(state, payload.planetIndex, payload.name);
     default: throw new Error('Unbekannte Aktion: '+type);
   }

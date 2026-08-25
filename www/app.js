@@ -230,20 +230,6 @@ const defs = {
     fuelBooster:{name:'Energieträger-Produktionsbooster', desc:'Erhöht die Produktion aller Energieträger (Rohöl, Erdgas, Kohle, Uran) für 24 Stunden um 50%.', group:'fuel', durationHours:24},
     speedBooster:{name:'Flottengeschwindigkeitsbooster', desc:'Erhöht die Fluggeschwindigkeit aller Flotten für 24 Stunden um 30%.', effect:'speedBoost', durationHours:24},
   },
-  lifeformBuildings: {
-    humanResidence:{name:'Wohnkomplex', desc:'Menschliche Siedlungen, die effizienter Erze fördern. +2% Erzproduktion pro Stufe.', species:'humans', boostsGroup:'ore', base:{iron:5000, copper:2200}},
-    humanFarm:{name:'Nahrungsfarm', desc:'Versorgt die wachsende Bevölkerung und steigert nebenbei die Technologiemetall-Gewinnung. +2% pro Stufe.', species:'humans', boostsGroup:'tech', base:{gold:4200, silver:4200}},
-    humanBank:{name:'Handelszentrum', desc:'Effizientere Energielogistik durch florierenden Handel. +2% Energieträger-Produktion pro Stufe.', species:'humans', boostsGroup:'fuel', base:{crudeOil:3500, naturalGas:2500}},
-    rocktalMeditation:{name:'Meditationshalle', desc:"Rock'tal-Weisheit steigert die Effizienz der Erzförderung. +2% Erzproduktion pro Stufe.", species:'rocktal', boostsGroup:'ore', base:{iron:5200, nickel:2000}},
-    rocktalCrystalFarm:{name:'Edelmetallfarm', desc:"Von Rock'tal-Mönchen gepflegte Abbaustätten. +2% Technologiemetall-Produktion pro Stufe.", species:'rocktal', boostsGroup:'tech', base:{silver:4400, lithium:4000}},
-    rocktalRefinery:{name:'Energie-Raffinerie', desc:"Traditionelle Rock'tal-Destillation. +2% Energieträger-Produktion pro Stufe.", species:'rocktal', boostsGroup:'fuel', base:{coal:3400, uranium:2800}},
-    mechasAssembly:{name:'Montagehalle', desc:'Mechas-Automatisierung optimiert den Erzabbau. +2% Erzproduktion pro Stufe.', species:'mechas', boostsGroup:'ore', base:{aluminium:5800, nickel:2000}},
-    mechasProcessor:{name:'Metallprozessor', desc:'Mechanische Präzision bei der Technologiemetall-Verarbeitung. +2% pro Stufe.', species:'mechas', boostsGroup:'tech', base:{gold:4600, rareEarths:4400}},
-    mechasReactor:{name:'Reaktorkern', desc:'Hocheffiziente Mechas-Reaktoren steigern die Energieträger-Ausbeute. +2% pro Stufe.', species:'mechas', boostsGroup:'fuel', base:{naturalGas:3600, uranium:3200}},
-    kaeleshShrine:{name:'Schrein', desc:'Kaelesh-Rituale segnen die Erzförderung. +2% Erzproduktion pro Stufe.', species:'kaelesh', boostsGroup:'ore', base:{copper:4400, limestone:3200}},
-    kaeleshMonastery:{name:'Kloster', desc:'Kaelesh-Mönche verfeinern die Technologiemetall-Gewinnung. +2% pro Stufe.', species:'kaelesh', boostsGroup:'tech', base:{lithium:4200, rareEarths:4200}},
-    kaeleshOracle:{name:'Orakel', desc:'Prophetische Voraussicht optimiert die Energieträger-Förderung. +2% pro Stufe.', species:'kaelesh', boostsGroup:'fuel', base:{crudeOil:3600, coal:3100}},
-  },
 };
 const missionLabels = {transport:'Transport', spy:'Spionage', attack:'Angriff', colonize:'Kolonisierung', harvest:'Trümmerfeld-Bergung', mine:'Asteroiden-Abbau'};
 
@@ -266,7 +252,6 @@ const state = {
   officerExpiry: {},
   darkMatter: 0,
   expeditions: [],
-  lifeform: {active:'humans', points:0, buildings:{}, research:{}},
   marketRate: {},
   auction: null,
   logs: [],
@@ -328,7 +313,6 @@ function levelEffectText(d, key, lvl){
   if(d.uraniumUse) parts.push('Uran '+fmt(Math.floor(d.uraniumUse(lvl)))+'/h');
   if(d.coalUse) parts.push('Kohle '+fmt(Math.floor(d.coalUse(lvl)))+'/h');
   if(RESOURCE_GROUPS[d.storageGroup]) parts.push('Kapazität '+fmt(Math.max(5000,5000*lvl)));
-  if(d.boostsGroup){ const groupName=RESOURCE_GROUPS[d.boostsGroup]?RESOURCE_GROUPS[d.boostsGroup].name:d.boostsGroup; parts.push('+'+(lvl*2)+'% '+groupName+'-Produktion'); }
   if(d.recipe){
     parts.push('Produktion '+fmt(Math.floor(d.recipe.prod(lvl)))+' '+RESOURCE_INFO[d.recipe.output].name+'/h (bei voller Kapazität)');
     if(d.recipe.byproduct) parts.push('Nebenprodukt '+fmt(Math.floor(d.recipe.prod(lvl)*d.recipe.byproduct.ratio))+' '+RESOURCE_INFO[d.recipe.byproduct.output].name+'/h');
@@ -340,14 +324,14 @@ function levelEffectText(d, key, lvl){
 }
 function openInfoModal(type, key, level){
   closeInfoModal();
-  const table = type==='building' ? defs.buildings : (type==='research' ? defs.research : (type==='lifeformBuilding' ? defs.lifeformBuildings : defs.ships));
+  const table = type==='building' ? defs.buildings : (type==='research' ? defs.research : defs.ships);
   const d = table && table[key];
   if(!d) return;
   // Storage buildings boost capacity for their entire resource group, e.g. oreStorage -> 'ore'.
   const storageGroupEntry = Object.entries(RESOURCE_GROUPS).find(([,g])=>g.storageBuilding===key);
   if(storageGroupEntry) d.storageGroup = storageGroupEntry[0];
   const p = active();
-  const isLeveled = type==='research' || type==='lifeformBuilding' || (type==='building' && !d.isDefense && !d.multiBuild);
+  const isLeveled = type==='research' || (type==='building' && !d.isDefense && !d.multiBuild);
   const statsRows = [];
   let levelTableHtml = '';
   if(isLeveled){
@@ -357,7 +341,7 @@ function openInfoModal(type, key, level){
     const rows = [];
     for(let lvl=curLevel+1; lvl<=curLevel+10; lvl++){
       const base = (type==='building' && p) ? costBaseFor(d, p) : d.base;
-      const cost = (type==='research'||type==='lifeformBuilding') ? scaledCost(base, lvl) : buildingCost(base, lvl);
+      const cost = type==='research' ? scaledCost(base, lvl) : buildingCost(base, lvl);
       const effect = levelEffectText(d, key, lvl);
       const timeKind = type==='research' ? 'research' : (d.moonOnly ? 'moonbuild' : 'building');
       const timeCell = showTime ? `<td>${formatDuration(buildSeconds(timeKind, cost, p, lvl, d.noBuildAccel)*1000)}</td>` : '';
@@ -676,7 +660,6 @@ function applyServerState(serverState, opts){
   state.officerExpiry = serverState.officerExpiry || {};
   state.darkMatter = serverState.darkMatter || 0;
   state.expeditions = serverState.expeditions || [];
-  state.lifeform = serverState.lifeform || state.lifeform;
   state.marketRate = serverState.marketRate || state.marketRate;
   state.auction = serverState.auction || state.auction;
   if(serverState.event !== undefined) state.event = serverState.event;
@@ -1230,7 +1213,7 @@ function computePoints(p){
 }
 function totalPlayerPoints(){ return Math.floor(state.planets.filter(p=>!p.destroyed).reduce((s,p)=>s+computePoints(p),0)/1000); }
 
-const navItems = [['overview','Übersicht'],['buildings','Gebäude'],['facilities','Anlagen'],['factories','Fabriken'],['defense','Verteidigung'],['research','Forschung'],['shipyard','Werft'],['fleet','Flotte'],['expeditions','Expeditionen'],['galaxy','Galaxie'],['alliance','Allianz'],['officers','Offiziere'],['lifeform','Lebensform'],['market','Markt'],['reports','Berichte'],['messages','Nachrichten'],['empire','Imperium'],['highscore','Rangliste'],['settings','Einstellungen']];
+const navItems = [['overview','Übersicht'],['buildings','Gebäude'],['facilities','Anlagen'],['factories','Fabriken'],['defense','Verteidigung'],['research','Forschung'],['shipyard','Werft'],['fleet','Flotte'],['expeditions','Expeditionen'],['galaxy','Galaxie'],['alliance','Allianz'],['officers','Offiziere'],['market','Markt'],['reports','Berichte'],['messages','Nachrichten'],['empire','Imperium'],['highscore','Rangliste'],['settings','Einstellungen']];
 
 function unreadMailCount(){ return (state.mail||[]).filter(m=>m.direction==='in' && !m.read).length; }
 function renderNav(){ const unread=unreadMailCount(); $('#nav').innerHTML = navItems.map(([id,label])=>`<button class="${state.view===id?'active':''}" data-view="${id}">${label}${id==='messages'&&unread>0?` <span class="pill active" style="padding:1px 6px;font-size:11px">${unread}</span>`:''}</button>`).join(''); document.querySelectorAll('[data-view]').forEach(b=>b.onclick=()=>{ if(b.dataset.view!=='fleet') state.fleetPrefill=null; if(b.dataset.view==='highscore') highscoreCache=null; if(b.dataset.view==='galaxy') galaxyCache={}; state.view=b.dataset.view; if(b.dataset.view==='messages' && unreadMailCount()>0) postAction('markMailRead', {}); render(); }); }
@@ -1683,15 +1666,6 @@ function viewOfficers(){
     return `<div class="row"><div><strong>${name}</strong><div class="sub">${desc}</div>${active?`<div class="sub">Noch aktiv: ${formatDuration(officerTimeLeft(k))}</div>`:''}</div><button class="btn ${active?'good':'alt'}" data-officer="${k}" ${disabled?'disabled':''}>${label}</button></div>`;
   }).join('')}</div>`; }
 
-function viewLifeform(){
-  const lf=state.lifeform; const species=[['humans','Menschen'],['rocktal',"Rock'tal"],['mechas','Mechas'],['kaelesh','Kaelesh']];
-  const ownBuildings = Object.entries(defs.lifeformBuildings).filter(([,d])=>d.species===lf.active);
-  const rows = ownBuildings.map(([k,d])=>{
-    const lvl = (lf.buildings&&lf.buildings[k])||0;
-    const c = scaledCost(d.base, lvl+1);
-    return `<div class="row"><div><strong>${d.name}</strong><div class="sub">Stufe ${lvl}</div><div class="sub">Kosten: ${resCostText(c)}</div></div><div style="display:flex;gap:6px;align-items:center">${infoIconHtml('lifeformBuilding',k,lvl)}<button class="btn good" data-lifeform-build="${k}">Ausbauen</button></div></div>`;
-  }).join('');
-  return `<h2>Lebensform</h2><div class="small">Aktive Spezies: ${species.find(s=>s[0]===lf.active)[1]}. Jede Lebensform bringt eigene Gebäude mit, die zur aktiven Spezies passende Rohstoffproduktion dauerhaft steigern. Beim Wechsel bleiben bereits erreichte Stufen erhalten, wirken aber nur, solange die jeweilige Spezies aktiv ist.</div><div style="height:10px"></div><div class="grid2">${species.map(([k,name])=>`<div class="card"><h3>${name}</h3><button class="btn ${lf.active===k?'good':'alt'}" data-lifeform="${k}">${lf.active===k?'Ausgewählt':'Wählen'}</button></div>`).join('')}</div><div style="height:16px"></div><h3>Gebäude von ${species.find(s=>s[0]===lf.active)[1]}</h3><div class="list">${rows}</div>`; }
 
 function merchantCost(amount){ return Math.ceil((Number(amount)||0)/5); }
 function viewMarket(){ const r=state.marketRate; const initialAmount=1000; const initialCost=merchantCost(initialAmount); const initialAffordable = initialCost>0 && initialCost<=state.darkMatter;
@@ -1815,7 +1789,7 @@ function viewHighscore(){
 }
 
 function renderView(bind=true){
-  const views={overview:viewOverview,buildings:viewBuildings,facilities:viewFacilities,factories:viewFactories,defense:viewDefense,research:viewResearch,shipyard:viewShipyard,fleet:viewFleet,expeditions:viewExpeditions,galaxy:viewGalaxy,alliance:viewAlliance,officers:viewOfficers,lifeform:viewLifeform,market:viewMarket,reports:viewReports,messages:viewMessages,empire:viewEmpire,highscore:viewHighscore,settings:viewSettings,stellarisShop:viewStellarisShop};
+  const views={overview:viewOverview,buildings:viewBuildings,facilities:viewFacilities,factories:viewFactories,defense:viewDefense,research:viewResearch,shipyard:viewShipyard,fleet:viewFleet,expeditions:viewExpeditions,galaxy:viewGalaxy,alliance:viewAlliance,officers:viewOfficers,market:viewMarket,reports:viewReports,messages:viewMessages,empire:viewEmpire,highscore:viewHighscore,settings:viewSettings,stellarisShop:viewStellarisShop};
   $('#view').innerHTML = views[state.view]();
   if(bind){
     document.querySelectorAll('[data-factory-tab]').forEach(b=>b.onclick=()=>{ state.factoryTab=b.dataset.factoryTab; renderView(); });
@@ -1884,8 +1858,6 @@ function renderView(bind=true){
     document.querySelectorAll('[data-respond-application]').forEach(b=>b.onclick=()=>{ const [applicantUsername,acceptFlag]=b.dataset.respondApplication.split(':'); postAction('respondToApplication', {applicantUsername, accept: acceptFlag==='1'}); });
     const leaveAllianceBtn=$('#leaveAllianceBtn'); if(leaveAllianceBtn) leaveAllianceBtn.onclick=()=>{ if(confirm('Allianz wirklich verlassen?')) postAction('leaveAlliance', {}); };
     document.querySelectorAll('[data-officer]').forEach(b=>b.onclick=()=>{ if(officerActive(b.dataset.officer)) return; postAction('activateOfficer', {key:b.dataset.officer}); });
-    document.querySelectorAll('[data-lifeform]').forEach(b=>b.onclick=()=>postAction('setLifeform', {species:b.dataset.lifeform}));
-    document.querySelectorAll('[data-lifeform-build]').forEach(b=>b.onclick=()=>postAction('enqueueLifeformBuilding', {planetIndex: state.activePlanet, key:b.dataset.lifeformBuild}));
     document.querySelectorAll('[data-highscore-cat]').forEach(b=>b.onclick=()=>{ highscoreCategory=b.dataset.highscoreCat; renderView(); });
     document.querySelectorAll('[data-battle-sim]').forEach(b=>b.onclick=()=>openBattleSimulator(Number(b.dataset.battleSim)));
     document.querySelectorAll('[data-moon-select]').forEach(b=>b.onclick=()=>{ state.activeMoonIndex=Number(b.dataset.moonSelect); renderView(true); });
