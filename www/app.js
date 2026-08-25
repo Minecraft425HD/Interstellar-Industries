@@ -228,6 +228,10 @@ const defs = {
     oreBooster:{name:'Erz-Produktionsbooster', desc:'Erhöht die Produktion aller Erze (Eisen, Kupfer, Aluminium, Nickel, Kalkstein) für 24 Stunden um 50%.', group:'ore', durationHours:24},
     techBooster:{name:'Technologiemetall-Produktionsbooster', desc:'Erhöht die Produktion aller Technologiemetalle (Gold, Silber, Lithium, Seltene Erden) für 24 Stunden um 50%.', group:'tech', durationHours:24},
     fuelBooster:{name:'Energieträger-Produktionsbooster', desc:'Erhöht die Produktion aller Energieträger (Rohöl, Erdgas, Kohle, Uran) für 24 Stunden um 50%.', group:'fuel', durationHours:24},
+    specialBooster:{name:'Sonderrohstoff-Produktionsbooster', desc:'Erhöht die Produktion aller Sonderrohstoffe für 24 Stunden um 50%.', group:'special', durationHours:24},
+    waterBooster:{name:'Wasser-Produktionsbooster', desc:'Erhöht die Produktion von Süß- und Meerwasser für 24 Stunden um 50%.', group:'water', durationHours:24},
+    goodsBooster:{name:'Industriegüter-Produktionsbooster', desc:'Erhöht die Produktion aller Fabrikgüter (Stahl, Elektronik, Beton, ...) für 24 Stunden um 50%.', group:'goods', durationHours:24},
+    fuelRefineryBooster:{name:'Treibstoff-Produktionsbooster', desc:'Erhöht die Produktion von Kraftstoff und Wasserstoff für 24 Stunden um 50%.', group:'processedFuel', durationHours:24},
     speedBooster:{name:'Flottengeschwindigkeitsbooster', desc:'Erhöht die Fluggeschwindigkeit aller Flotten für 24 Stunden um 30%.', effect:'speedBoost', durationHours:24},
   },
 };
@@ -253,6 +257,7 @@ const state = {
   itemExpiry: {},
   darkMatter: 0,
   expeditions: [],
+  onboarded: true,
   marketRate: {},
   auction: null,
   logs: [],
@@ -306,6 +311,46 @@ function openCoordMenu(anchorEl){
 }
 function infoIconHtml(type, key, level){ return `<button type="button" class="info-btn" data-info-type="${type}" data-info-key="${key}" data-info-level="${level!=null?level:0}" title="Info" aria-label="Info">ⓘ</button>`; }
 function closeInfoModal(){ const m=document.getElementById('infoModal'); if(m) m.remove(); }
+
+// ---- Einfuehrungs-Tutorial fuer brandneue Spieler (state.onboarded, serverseitig gesetzt) ----
+const ONBOARDING_STEPS = [
+  {title:'Willkommen bei Stellare Industrien!', body:'Du hast gerade dein erstes Imperium gegründet. Diese kurze Einführung zeigt dir in wenigen Schritten, wie du loslegst. Du kannst sie jederzeit überspringen.'},
+  {title:'Rohstoffe & Gebäude', body:'Im Tab <strong>Gebäude</strong> baust du Minen für Erze, Energieträger und mehr, sowie Kraftwerke für Energie - ohne Energie produzieren deine Minen nicht auf voller Leistung. Im Tab <strong>Übersicht</strong> siehst du deine aktuelle Produktion pro Stunde.'},
+  {title:'Forschung & Fabriken', body:'Im Tab <strong>Forschung</strong> schaltest du neue Technologien frei, die Gebäude, Schiffe und Verteidigung verbessern oder erst freischalten. Im Tab <strong>Fabriken</strong> verarbeitest du Rohstoffe zu wertvolleren Gütern wie Stahl oder Elektronik.'},
+  {title:'Werft & Flotte', body:'Im Tab <strong>Werft</strong> baust du Schiffe. Im Tab <strong>Flotte</strong> versendest du sie - zum Transportieren, Spionieren, Angreifen oder Kolonisieren. Für weite Reisen brauchst du Treibstoff (Kraftstoff oder Wasserstoff).'},
+  {title:'Galaxie & Allianzen', body:'Im Tab <strong>Galaxie</strong> erkundest du das Universum und findest Ziele für deine Flotte. Im Tab <strong>Allianz</strong> kannst du dich mit anderen Spielern zusammenschließen. Viel Erfolg - dein Imperium wartet!'},
+];
+let onboardingStep = 0;
+// Nicht-blockierendes Banner statt Vollbild-Modal: faengt keine Klicks auf dem Rest
+// der Seite ab, damit brandneue Spieler (state.onboarded===false) sofort mit der
+// UI interagieren koennen, statt vom Tutorial gesperrt zu werden.
+function renderOnboarding(){
+  const el = $('#onboardingBanner');
+  if(!el) return;
+  if(state.onboarded){ el.style.display='none'; return; }
+  const step = ONBOARDING_STEPS[onboardingStep];
+  const isLast = onboardingStep>=ONBOARDING_STEPS.length-1;
+  const dots = ONBOARDING_STEPS.map((_,i)=>`<span style="background:${i===onboardingStep?'var(--accent2)':'var(--border)'}"></span>`).join('');
+  el.style.display='block';
+  el.innerHTML = `
+    <div class="onboarding-banner-head"><strong>${step.title}</strong><button type="button" id="onboardingSkip" class="info-modal-close" title="Überspringen">&times;</button></div>
+    <p>${step.body}</p>
+    <div class="onboarding-banner-foot">
+      <div class="onboarding-banner-dots">${dots}</div>
+      <div style="display:flex;gap:10px">
+        <button class="btn alt" type="button" id="onboardingSkip2">Überspringen</button>
+        <button class="btn good" type="button" id="onboardingNext">${isLast?'Los geht\'s!':'Weiter'}</button>
+      </div>
+    </div>`;
+  const advance = ()=>{
+    if(isLast){ state.onboarded=true; postAction('completeOnboarding', {}); renderOnboarding(); }
+    else { onboardingStep++; renderOnboarding(); }
+  };
+  const skip = ()=>{ state.onboarded=true; postAction('completeOnboarding', {}); renderOnboarding(); };
+  $('#onboardingNext').onclick = advance;
+  $('#onboardingSkip').onclick = skip;
+  $('#onboardingSkip2').onclick = skip;
+}
 function levelEffectText(d, key, lvl){
   const parts = [];
   if(d.prod) parts.push('Produktion '+fmt(Math.floor(d.prod(lvl)))+'/h');
@@ -558,6 +603,41 @@ function getToken(){ return localStorage.getItem(TOKEN_KEY)||''; }
 function setToken(t){ if(t) localStorage.setItem(TOKEN_KEY, t); else localStorage.removeItem(TOKEN_KEY); }
 function getStoredUsername(){ return localStorage.getItem(USERNAME_KEY)||''; }
 function setStoredUsername(u){ if(u) localStorage.setItem(USERNAME_KEY, u); else localStorage.removeItem(USERNAME_KEY); }
+
+// ---- Benachrichtigungen bei Angriffen/Ankuenften (geraetelokale Einstellung, kein Server-Feld) ----
+const NOTIFICATIONS_KEY = 'stellareIndustrienNotificationsEnabled';
+function notificationsEnabled(){ return localStorage.getItem(NOTIFICATIONS_KEY)==='1'; }
+function setNotificationsEnabled(on){
+  localStorage.setItem(NOTIFICATIONS_KEY, on ? '1' : '0');
+  if(on && !(window.Android && window.Android.showNotification) && typeof Notification!=='undefined' && Notification.permission==='default'){
+    Notification.requestPermission();
+  }
+}
+// Bevorzugt die native Android-Bridge (funktioniert auch in der WebView-App, wo die Web
+// Notifications API ohne diese Bridge wirkungslos waere); faellt im Browser auf die
+// Standard-Notifications-API zurueck.
+function sendGameNotification(title, body){
+  if(window.Android && window.Android.showNotification){ window.Android.showNotification(title, body); return; }
+  if(typeof Notification!=='undefined' && Notification.permission==='granted'){ new Notification(title, {body}); }
+}
+const NOTIFIABLE_KEYWORDS = ['angegriffen','Angriffsbericht','KATASTROPHE','Todesstern-Bombardement','Raketenangriff','Transport von','ausspioniert','Spionageversuch'];
+let prevMessagesForNotify = null;
+// Vergleicht die vorherige mit der neuen Systemnachrichten-Liste (jeweils neuestes Element
+// zuerst, siehe message() im Server) und benachrichtigt nur fuer wirklich NEUE, angriffs-/
+// ankunftsrelevante Eintraege - nie fuer die komplette Historie beim allerersten Laden.
+function checkForNotifiableEvents(newMessages){
+  const prev = prevMessagesForNotify;
+  prevMessagesForNotify = newMessages;
+  if(!notificationsEnabled() || !prev || !prev.length || !newMessages || !newMessages.length) return;
+  const idx = newMessages.indexOf(prev[0]);
+  if(idx<=0) return; // nichts Neues, oder zu viele neue Eintraege seit dem letzten Poll fuer eine sichere Zuordnung
+  const freshEntries = newMessages.slice(0, idx);
+  for(const entry of freshEntries){
+    if(NOTIFIABLE_KEYWORDS.some(kw=>entry.includes(kw))){
+      sendGameNotification('Stellare Industrien', entry);
+    }
+  }
+}
 let connectionStatus = 'disconnected'; // disconnected | connecting | connected | error
 let connectionError = '';
 let everConnected = false;
@@ -652,6 +732,7 @@ function applyServerState(serverState, opts){
   state.fleets = serverState.fleets || [];
   state.reports = serverState.reports || [];
   state.messages = serverState.messages || [];
+  checkForNotifiableEvents(state.messages);
   state.mail = serverState.mail || [];
   state.debrisFields = serverState.debrisFields || {};
   state.moons = serverState.moons || [];
@@ -666,6 +747,7 @@ function applyServerState(serverState, opts){
   state.itemExpiry = serverState.itemExpiry || {};
   state.darkMatter = serverState.darkMatter || 0;
   state.expeditions = serverState.expeditions || [];
+  if(serverState.onboarded !== undefined) state.onboarded = !!serverState.onboarded;
   state.marketRate = serverState.marketRate || state.marketRate;
   state.auction = serverState.auction || state.auction;
   if(serverState.event !== undefined) state.event = serverState.event;
@@ -1064,7 +1146,7 @@ async function fetchHighscore(){
   try { const data = await apiFetch('/api/highscore'); highscoreCache = data.list; }
   catch(err){ showError('Rangliste konnte nicht geladen werden: '+err.message); }
   highscoreLoading = false;
-  if(state.view==='highscore') renderView(true);
+  if(state.view==='highscore' || state.view==='messages') renderView(true);
 }
 
 // ---- Action wrappers (network calls to the dedicated server) ----
@@ -1557,6 +1639,7 @@ function viewDefense(){
 }
 
 function viewMessages(){
+  if(highscoreCache===null && !highscoreLoading){ fetchHighscore(); }
   const mail = state.mail||[];
   const unreadCount = mail.filter(m=>m.direction==='in' && !m.read).length;
   const mailRows = mail.length ? mail.map(m=>{
@@ -1565,9 +1648,13 @@ function viewMessages(){
     return `<div class="report"${unread?' style="border-color:var(--accent2)"':''}><div class="row" style="border:none;background:none;padding:0"><strong>${who}</strong><span class="small">${m.time}</span></div><div class="small" style="margin-top:6px;white-space:pre-wrap">${escapeHtml(m.text)}</div></div>`;
   }).join('') : '<div class="small">Noch keine Spielernachrichten.</div>';
   const systemHtml = state.messages.length ? `<div class="list">${state.messages.map(m=>`<div class="report">${m}</div>`).join('')}</div>` : '<div class="small">Keine Systemnachrichten.</div>';
+  // Autovervollstaendigung fuer den Empfaenger-Namen: nutzt die ohnehin oeffentliche
+  // Rangliste (fetchHighscore) als Namensquelle statt eines eigenen neuen Endpunkts.
+  const playerSuggestions = (highscoreCache||[]).filter(e=>e.username!==state.username).map(e=>`<option value="${escapeHtml(e.username)}">`).join('');
   return `<h2>Nachrichten</h2><div class="grid2">
-  <div class="card"><h3>Neue Nachricht</h3><div class="small">Sende eine Direktnachricht an einen anderen Spieler (per genauem Benutzernamen).</div><div style="height:10px"></div><form class="fleet-form" id="mailForm">
-    <label>Empfänger (Benutzername)<input type="text" name="toUsername" maxlength="20" required></label>
+  <div class="card"><h3>Neue Nachricht</h3><div class="small">Sende eine Direktnachricht an einen anderen Spieler.</div><div style="height:10px"></div><form class="fleet-form" id="mailForm">
+    <label>Empfänger (Benutzername)<input type="text" name="toUsername" maxlength="20" required list="playerSuggestions" autocomplete="off" placeholder="Namen eingeben..."></label>
+    <datalist id="playerSuggestions">${playerSuggestions}</datalist>
     <label>Nachricht<textarea name="text" rows="4" maxlength="1000" required></textarea></label>
     <button class="btn good" type="submit">Senden</button>
   </form></div>
@@ -1587,8 +1674,11 @@ function viewSettings(){
   const renameCard = renameRemaining > 0
     ? `<div class="card"><h3>Planet umbenennen</h3><div class="small">Planeten können nur einmal pro Woche umbenannt werden.</div><div class="small" style="margin-top:6px">Nächste Umbenennung möglich in <strong>${formatDuration(renameRemaining)}</strong></div></div>`
     : `<div class="card"><h3>Planet umbenennen</h3><div class="small">Planeten können nur einmal pro Woche umbenannt werden.</div><div style="height:10px"></div><form id="renamePlanetForm" class="market-form"><label>Neuer Name<input type="text" name="name" maxlength="30" value="${escapeHtml(p.name)}"></label><button class="btn alt" type="submit">Speichern</button></form></div>`;
+  const notifyOn = notificationsEnabled();
+  const notifyCard = `<div class="card"><h3>Benachrichtigungen</h3><div class="small">Zeigt eine Benachrichtigung, wenn dein Planet angegriffen, ausspioniert oder bombardiert wird, oder ein Transport eintrifft.</div><div style="height:10px"></div><label style="display:flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" id="notifyToggle" ${notifyOn?'checked':''}> Bei Angriffen/Ankünften benachrichtigen</label></div>`;
   return `<h2>Einstellungen</h2><div class="grid2">
   <div class="card"><h3>Konto</h3><div class="small">Angemeldet als <strong>${state.username||'-'}</strong></div><div class="small" style="color:${statusColor}">Server-Status: ${statusLabel}</div><div class="small">Server: ${url}</div><div style="height:10px"></div><button class="btn danger" id="logoutBtn">Abmelden</button> <button class="btn alt" id="changeServerBtn2">Server wechseln</button></div>
+  ${notifyCard}
   ${renameCard}
   </div>`;
 }
@@ -1893,6 +1983,7 @@ function renderView(bind=true){
       state.galaxyIndex=g; state.galaxySystem=s; state.expandedGalaxySlot=null; renderView(true);
     });
     const logoutBtn=$('#logoutBtn'); if(logoutBtn) logoutBtn.onclick=logout;
+    const notifyToggle=$('#notifyToggle'); if(notifyToggle) notifyToggle.onchange=()=>setNotificationsEnabled(notifyToggle.checked);
     const changeServerBtn2=$('#changeServerBtn2'); if(changeServerBtn2) changeServerBtn2.onclick=()=>{ setToken(''); setServerUrl(''); state.username=null; everConnected=false; render(); };
     const ef=$('#expeditionForm'); if(ef) ef.onsubmit=e=>{e.preventDefault(); const ships={lightFighter:Number(ef.lightFighter.value)||0,cruiser:Number(ef.cruiser.value)||0,largeCargo:Number(ef.largeCargo.value)||0,pathfinder:Number(ef.pathfinder.value)||0,reaper:Number(ef.reaper.value)||0}; sendExpedition(ships, Number(ef.slot.value)||1);};
     const depositBtn=$('#depositBtn'); if(depositBtn) depositBtn.onclick=()=>depositAlliance();
@@ -1929,6 +2020,7 @@ function render(){
   if(state.activeMoonIndex===null && state.moons.length>0) state.activeMoonIndex=0;
   renderNav(); renderTop(); renderSide(); renderView();
   renderConnectionBanner();
+  renderOnboarding();
 }
 
 function initConnection(){

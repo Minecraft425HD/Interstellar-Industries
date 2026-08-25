@@ -1,9 +1,16 @@
 package com.interstellar.industries;
 
+import android.Manifest;
 import android.annotation.SuppressLint;
 import android.app.Activity;
+import android.app.Notification;
+import android.app.NotificationChannel;
+import android.app.NotificationManager;
+import android.app.PendingIntent;
 import android.content.ContentValues;
+import android.content.Context;
 import android.content.Intent;
+import android.content.pm.PackageManager;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
@@ -31,6 +38,8 @@ public class MainActivity extends Activity {
 
     private static final int REQUEST_FILE_CHOOSER = 51;
     private static final int REQUEST_LOAD_SAVE = 52;
+    private static final String NOTIFICATION_CHANNEL_ID = "game_events";
+    private static final int NOTIFICATION_ID = 1001;
 
     private WebView webView;
     private ValueCallback<Uri[]> filePathCallback;
@@ -39,6 +48,8 @@ public class MainActivity extends Activity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        createNotificationChannel();
+        requestNotificationPermissionIfNeeded();
 
         webView = new WebView(this);
         WebSettings settings = webView.getSettings();
@@ -88,6 +99,61 @@ public class MainActivity extends Activity {
                 }
             });
         }
+
+        // Vom Client aufgerufen, wenn im Ereignisprotokoll ein neuer angriffs-/verteidigungs-
+        // relevanter Eintrag auftaucht (siehe checkForNotifiableEvents() in app.js). Nutzt die
+        // native Android-Benachrichtigung statt der Web Notifications API, da eine normale
+        // WebView diese ohne zusaetzliche JS-Bridge nicht implementiert.
+        @JavascriptInterface
+        public void showNotification(final String title, final String body) {
+            runOnUiThread(() -> postNotification(title, body));
+        }
+    }
+
+    private void requestNotificationPermissionIfNeeded() {
+        // Ab Android 13 (API 33) ist POST_NOTIFICATIONS eine gefaehrliche Laufzeit-
+        // Berechtigung wie Kamera/Standort - ohne explizite Zustimmung bleibt notify()
+        // sonst wirkungslos. Auf aelteren Versionen war das Recht schon durch den
+        // Manifest-Eintrag automatisch erteilt.
+        if (Build.VERSION.SDK_INT >= 33) {
+            if (checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, 60);
+            }
+        }
+    }
+
+    private void createNotificationChannel() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            NotificationChannel channel = new NotificationChannel(
+                    NOTIFICATION_CHANNEL_ID, "Spielereignisse", NotificationManager.IMPORTANCE_HIGH);
+            channel.setDescription("Angriffe, Flottenankünfte und andere wichtige Ereignisse");
+            NotificationManager manager = getSystemService(NotificationManager.class);
+            if (manager != null) manager.createNotificationChannel(channel);
+        }
+    }
+
+    @SuppressWarnings("deprecation")
+    private void postNotification(String title, String body) {
+        Intent intent = new Intent(this, MainActivity.class);
+        intent.setFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+        int flags = PendingIntent.FLAG_UPDATE_CURRENT
+                | (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M ? PendingIntent.FLAG_IMMUTABLE : 0);
+        PendingIntent pendingIntent = PendingIntent.getActivity(this, 0, intent, flags);
+        // Notification.Builder(Context, String) braucht API 26+ (Kanal-Pflicht); minSdk hier ist
+        // 24, daher fuer aeltere Geraete auf den alten Einzel-Argument-Konstruktor ausweichen
+        // (ohne Kanal - dort gibt es das Konzept noch nicht).
+        Notification.Builder builder = (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
+                ? new Notification.Builder(this, NOTIFICATION_CHANNEL_ID)
+                : new Notification.Builder(this);
+        Notification notification = builder
+                .setContentTitle(title)
+                .setContentText(body)
+                .setSmallIcon(android.R.drawable.ic_dialog_alert)
+                .setAutoCancel(true)
+                .setContentIntent(pendingIntent)
+                .build();
+        NotificationManager manager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+        if (manager != null) manager.notify(NOTIFICATION_ID, notification);
     }
 
     private void writeSaveFile(String json) {

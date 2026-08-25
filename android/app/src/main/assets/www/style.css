@@ -368,6 +368,21 @@ button.slot{ font:inherit; color:inherit; width:100%; }
   color:#c9f7d9; border-bottom:1px solid var(--good);
 }
 
+/* Nicht-blockierendes Einfuehrungs-Banner (im Dokumentfluss, kein Overlay) -
+   im Gegensatz zu .info-modal faengt es keine Klicks auf dem Rest der Seite ab. */
+.onboarding-banner{
+  position:sticky; top:0; z-index:30;
+  background-image: var(--tex-diagonal), linear-gradient(90deg, #1c3a5e, #23517f, #1c3a5e);
+  color:var(--text); border-bottom:1px solid var(--accent);
+  padding:10px 14px;
+}
+.onboarding-banner-head{ display:flex; align-items:center; justify-content:space-between; gap:10px; }
+.onboarding-banner-head strong{ font-size:13px; color:var(--accent2); }
+.onboarding-banner p{ margin:6px 0 8px 0; font-size:12.5px; line-height:1.5; }
+.onboarding-banner-foot{ display:flex; align-items:center; justify-content:space-between; gap:10px; }
+.onboarding-banner-dots{ display:flex; gap:5px; }
+.onboarding-banner-dots span{ display:inline-block; width:7px; height:7px; border-radius:50%; }
+
 body.disconnected #topbar, body.disconnected #nav, body.disconnected #sidebar{ display:none; }
 body.disconnected main#view{ padding-top:10vh; }
 

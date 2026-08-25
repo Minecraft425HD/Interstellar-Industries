@@ -357,12 +357,19 @@ const defs = {
     oreBooster:{name:'Erz-Produktionsbooster', desc:'Erhöht die Produktion aller Erze (Eisen, Kupfer, Aluminium, Nickel, Kalkstein) für 24 Stunden um 50%.', group:'ore', durationHours:24},
     techBooster:{name:'Technologiemetall-Produktionsbooster', desc:'Erhöht die Produktion aller Technologiemetalle (Gold, Silber, Lithium, Seltene Erden) für 24 Stunden um 50%.', group:'tech', durationHours:24},
     fuelBooster:{name:'Energieträger-Produktionsbooster', desc:'Erhöht die Produktion aller Energieträger (Rohöl, Erdgas, Kohle, Uran) für 24 Stunden um 50%.', group:'fuel', durationHours:24},
+    specialBooster:{name:'Sonderrohstoff-Produktionsbooster', desc:'Erhöht die Produktion aller Sonderrohstoffe für 24 Stunden um 50%.', group:'special', durationHours:24},
+    waterBooster:{name:'Wasser-Produktionsbooster', desc:'Erhöht die Produktion von Süß- und Meerwasser für 24 Stunden um 50%.', group:'water', durationHours:24},
+    goodsBooster:{name:'Industriegüter-Produktionsbooster', desc:'Erhöht die Produktion aller Fabrikgüter (Stahl, Elektronik, Beton, ...) für 24 Stunden um 50%.', group:'goods', durationHours:24},
+    fuelRefineryBooster:{name:'Treibstoff-Produktionsbooster', desc:'Erhöht die Produktion von Kraftstoff und Wasserstoff für 24 Stunden um 50%.', group:'processedFuel', durationHours:24},
     speedBooster:{name:'Flottengeschwindigkeitsbooster', desc:'Erhöht die Fluggeschwindigkeit aller Flotten für 24 Stunden um 30%.', effect:'speedBoost', durationHours:24},
   },
   events: {
     oreRush:{name:'Erzrausch', desc:'Die Produktion aller Erze (Eisen, Kupfer, Aluminium, Nickel, Kalkstein) ist für alle Spieler um 50% erhöht.', group:'ore', multiplier:1.5},
     techRush:{name:'Technologiemetallrausch', desc:'Die Produktion aller Technologiemetalle (Gold, Silber, Lithium, Seltene Erden) ist für alle Spieler um 50% erhöht.', group:'tech', multiplier:1.5},
     fuelRush:{name:'Energieträgerrausch', desc:'Die Produktion aller Energieträger (Rohöl, Erdgas, Kohle, Uran) ist für alle Spieler um 50% erhöht.', group:'fuel', multiplier:1.5},
+    specialRush:{name:'Sonderrohstoffrausch', desc:'Die Produktion aller Sonderrohstoffe ist für alle Spieler um 50% erhöht.', group:'special', multiplier:1.5},
+    waterRush:{name:'Wasserrausch', desc:'Die Produktion von Süß- und Meerwasser ist für alle Spieler um 50% erhöht.', group:'water', multiplier:1.5},
+    goodsRush:{name:'Industriegüterrausch', desc:'Die Produktion aller Fabrikgüter ist für alle Spieler um 50% erhöht.', group:'goods', multiplier:1.5},
     galacticBoom:{name:'Galaktischer Boom', desc:'Die Produktion aller Rohstoffe ist für jeden Spieler um 25% erhöht.', group:'all', multiplier:1.25},
   },
 };
@@ -525,6 +532,7 @@ function createStarterEmpire(coord, name){
     itemExpiry: {},
     darkMatter: 500,
     expeditions: [],
+    onboarded: false,
     marketRate: buildMarketRate(),
     logs: ['Imperium gegründet.'],
     mail: [],
@@ -1159,6 +1167,9 @@ function ensureAllDefaults(state){
   if(!state.marketRate || RESOURCE_KEYS.some(k=>state.marketRate[k]==null)) state.marketRate=buildMarketRate();
   if(state.darkMatter==null) state.darkMatter=0;
   if(!state.expeditions) state.expeditions=[];
+  // Bestandsspieler (ohne dieses Feld) gelten als bereits eingefuehrt - nur brandneue
+  // Konten (createStarterEmpire setzt es explizit auf false) sehen das Tutorial.
+  if(state.onboarded==null) state.onboarded = true;
   if(state.allianceTag===undefined) state.allianceTag = null;
   if(!state.logs) state.logs=[];
   if(!state.messages) state.messages=[];
@@ -1193,6 +1204,7 @@ function normalizePlayerState(data){
     officerExpiry: data.officerExpiry || {},
     darkMatter: data.darkMatter!=null ? data.darkMatter : fresh.darkMatter,
     expeditions: data.expeditions || [],
+    onboarded: true, // ein wiederhergestelltes Backup gehoert immer zu einem bereits eingefuehrten Konto
     marketRate: data.marketRate || fresh.marketRate,
     logs: data.logs || fresh.logs,
   };
@@ -1851,6 +1863,11 @@ function renamePlanet(state, planetIndex, name){
   return ok(state, 'Planet "'+oldName+'" wurde in "'+trimmed+'" umbenannt');
 }
 
+function completeOnboarding(state){
+  state.onboarded = true;
+  return ok(state);
+}
+
 // Spy mission with a research ship present: chance-based tech steal from an NPC.
 // Success chance shifts with the attacker's espionage tech advantage over the NPC's;
 // on success, one random research field jumps to the NPC's level if it's higher.
@@ -2215,6 +2232,7 @@ function applyAction(universe, username, type, payload){
     case 'launchMissiles': return launchMissiles(universe, username, payload.planetIndex, payload.targetPos, payload.count);
     case 'activateOfficer': return activateOfficer(state, payload.key);
     case 'renamePlanet': return renamePlanet(state, payload.planetIndex, payload.name);
+    case 'completeOnboarding': return completeOnboarding(state);
     default: throw new Error('Unbekannte Aktion: '+type);
   }
 }
