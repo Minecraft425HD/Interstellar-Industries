@@ -90,8 +90,8 @@ const defs = {
     rareEarthsMine:{name:'Seltenerdmine', desc:'Gewinnt Seltene Erden für Hochleistungsmagnete und Sensorik.', resource:'rareEarths', costMagnitude:93, powerUse:l=>13*l, prod:l=>12*l*Math.pow(1.1,l)},
     sulfurMine:{name:'Schwefelmine', desc:'Baut vulkanischen Schwefel für chemische Prozesse ab.', resource:'sulfur', costMagnitude:52, powerUse:l=>9*l, prod:l=>18*l*Math.pow(1.1,l)},
     phosphateMine:{name:'Phosphatmine', desc:'Fördert Phosphat für Düngemittel und Lebenserhaltungssysteme.', resource:'phosphate', costMagnitude:56, powerUse:l=>9*l, prod:l=>18*l*Math.pow(1.1,l)},
-    crudeOilPump:{name:'Ölbohrturm', desc:'Fördert Rohöl aus tiefen geologischen Lagerstätten - der Rohstoff, aus dem eine Ölraffinerie Kraftstoff für die Flotte gewinnt.', resource:'crudeOil', costMagnitude:300, powerUse:l=>20*l, prod:l=>10*l*Math.pow(1.1,l)},
-    naturalGasPump:{name:'Erdgasförderanlage', desc:'Fördert Erdgas aus unterirdischen Vorkommen.', resource:'naturalGas', costMagnitude:270, powerUse:l=>18*l, prod:l=>11*l*Math.pow(1.1,l)},
+    crudeOilPump:{name:'Ölbohrturm', desc:'Fördert Rohöl aus tiefen geologischen Lagerstätten - der Rohstoff, aus dem eine Ölraffinerie Kraftstoff für die Flotte gewinnt.', resource:'crudeOil', costMagnitude:80, powerUse:l=>20*l, prod:l=>10*l*Math.pow(1.1,l)},
+    naturalGasPump:{name:'Erdgasförderanlage', desc:'Fördert Erdgas aus unterirdischen Vorkommen.', resource:'naturalGas', costMagnitude:75, powerUse:l=>18*l, prod:l=>11*l*Math.pow(1.1,l)},
     coalMine:{name:'Kohlebergwerk', desc:'Baut Kohle ab, ein vielseitiger fossiler Energieträger.', resource:'coal', costMagnitude:70, powerUse:l=>10*l, prod:l=>20*l*Math.pow(1.1,l)},
     freshwaterExtractor:{name:'Süßwassergewinnung', desc:'Gewinnt Süßwasser aus unterirdischem Eis.', resource:'freshwater', costMagnitude:50, powerUse:l=>7*l, prod:l=>20*l*Math.pow(1.1,l)},
     saltwaterDesalinator:{name:'Meerwasserpumpe', desc:'Pumpt Salzwasser aus verbliebenen Ozeanen.', resource:'saltwater', costMagnitude:43, powerUse:l=>6*l, prod:l=>22*l*Math.pow(1.1,l)},
@@ -198,7 +198,7 @@ const defs = {
     laserTech:{name:'Lasertechnik', desc:'Grundlage für Laserwaffen und weiterführende Waffentechnologien.', base:{copper:180, silver:120, electronics:80}, requires:{researchLab:1, energyTech:2}},
     ionTech:{name:'Iontechnik', desc:'Grundlage für Ionenwaffen und -verteidigung.', base:{aluminium:800, lithium:400, naturalGas:200, electronics:150}, requires:{researchLab:4, laserTech:5, energyTech:4}},
     plasmaTech:{name:'Plasmatechnik', desc:'Grundlage für Plasmawaffen, die stärkste konventionelle Waffentechnologie.', base:{aluminium:2000, rareEarths:4200, uranium:800, compositeMaterial:300}, requires:{researchLab:4, energyTech:8, laserTech:10, ionTech:5}},
-    gravitonTech:{name:'Gravitationstechnik', desc:'Extrem aufwendige Forschung, Voraussetzung für den Todesstern.', base:{}, requires:{researchLab:12}},
+    gravitonTech:{name:'Gravitationstechnik', desc:'Extrem aufwendige Forschung, Voraussetzung für den Todesstern.', base:{aluminium:80000, rareEarths:120000, uranium:40000, precisionComponents:2000}, requires:{researchLab:12}},
     astrophysics:{name:'Astrophysik', desc:'Erhöht die maximale Anzahl an Kolonien und gleichzeitigen Expeditionen.', base:{aluminium:5000, lithium:7000, crudeOil:4000, alloy:900}, requires:{researchLab:3, espionageTech:4, impulseDrive:3}},
     intergalacticNetwork:{name:'Intergalaktisches Forschungsnetzwerk', desc:'Beschleunigt die Forschung durch ein Netzwerk verbundener Forschungslabore.', base:{aluminium:250000, rareEarths:400000, naturalGas:150000, machineParts:1500}, requires:{researchLab:10, computerTech:8}},
     asteroidMiningTech:{name:'Asteroidenbergbau', desc:'Erlaubt dem Asteroidenminer den Abbau höherstufiger Asteroidenfelder (Stufe = maximale Feldstufe).', base:{iron:2000, steel:600, electronics:300, machineParts:150}, requires:{researchLab:5, energyTech:2}},
@@ -218,7 +218,7 @@ const defs = {
     reaper:{name:'Reaper', desc:'Elite-Kampfschiff mit enormer Feuerkraft und Hülle.', cost:{iron:85000, aluminium:50000, rareEarths:25000, machineParts:4000}, cargo:10000, speed:0.6, fuel:80, attack:2800, shield:700, hull:140000, role:'combat', requires:{shipyard:10, spaceDock:1, hyperspaceTech:6, hyperspaceDrive:7}},
     pathfinder:{name:'Pfadfinder', desc:'Schnelles, vielseitiges Schiff mit hoher Ladekapazität.', cost:{aluminium:10000, lithium:14000, crudeOil:7000, electronics:1500}, cargo:10000, speed:1.6, fuel:20, attack:200, shield:100, hull:23000, role:'combat', requires:{shipyard:5, spaceDock:1, hyperspaceDrive:2, hyperspaceTech:3}},
     deathstar:{name:'Todesstern', desc:'Die mächtigste Waffe im Universum - extrem teuer und stark.', cost:{iron:4000000, aluminium:3000000, rareEarths:2000000, precisionComponents:15000}, cargo:1000000, speed:0.4, fuel:1, attack:200000, shield:50000, hull:9000000, role:'combat', requires:{shipyard:12, hyperspaceTech:6, gravitonTech:1}},
-    solarSatellite:{name:'Solarsatellit', desc:'Liefert zusätzliche Energie, kann sich nicht bewegen oder kämpfen.', cost:{silver:1800, crudeOil:700}, cargo:0, speed:0, fuel:0, attack:1, shield:1, hull:2000, role:'power', requires:{}},
+    solarSatellite:{name:'Solarsatellit', desc:'Liefert zusätzliche Energie, kann sich nicht bewegen oder kämpfen.', cost:{silver:1800, crudeOil:700}, cargo:0, speed:0, fuel:0, attack:1, shield:1, hull:2000, power:20, role:'power', requires:{}},
     sentinelSatellite:{name:'Frühwarn-Satellit', desc:'Erkennt mit einer gewissen Chance eingehende Angriffe im Umkreis, bevor sie ankommen. Kann sich nicht bewegen oder kämpfen; wird über einen Umlaufbahn-Transfer zwischen Planet und Mond bewegt.', cost:{silver:2200, lithium:1200, electronics:800}, cargo:0, speed:0, fuel:0, attack:1, shield:1, hull:2000, role:'sentinel', requires:{shipyard:6, espionageTech:5}},
     recycler:{name:'Recycler', desc:'Sammelt Trümmerfelder nach Schlachten ein.', cost:{iron:11000, aluminium:5000, crudeOil:2000, steel:800}, cargo:20000, speed:0.7, fuel:30, attack:1, shield:10, hull:16000, role:'recycler', requires:{shipyard:4, combustion:6}},
     asteroidMiner:{name:'Asteroidenminer', desc:'Baut Rohstoffe aus Asteroidenfeldern ab (erreichbare Stufe hängt von der Asteroidenbergbau-Forschung ab).', cost:{iron:9000, aluminium:6000, crudeOil:2500, steel:1200, electronics:400}, cargo:18000, speed:0.6, fuel:35, attack:1, shield:15, hull:14000, role:'miner', requires:{shipyard:5, combustion:5, asteroidMiningTech:1}},
@@ -250,6 +250,7 @@ const state = {
   alliance: null,
   alliancesList: [],
   officerExpiry: {},
+  itemExpiry: {},
   darkMatter: 0,
   expeditions: [],
   marketRate: {},
@@ -341,7 +342,10 @@ function openInfoModal(type, key, level){
     const rows = [];
     for(let lvl=curLevel+1; lvl<=curLevel+10; lvl++){
       const base = (type==='building' && p) ? costBaseFor(d, p) : d.base;
-      const cost = type==='research' ? scaledCost(base, lvl) : buildingCost(base, lvl);
+      // Mondgebaeude bekommen serverseitig (enqueueMoonBuild) NIE einen Kommandant-Rabatt -
+      // die Vorschau muss das exakt spiegeln, sonst zeigt sie mit aktivem Kommandant einen
+      // zu niedrigen Preis/zu kurze Bauzeit an.
+      const cost = (type==='research' || d.moonOnly) ? scaledCost(base, lvl) : buildingCost(base, lvl);
       const effect = levelEffectText(d, key, lvl);
       const timeKind = type==='research' ? 'research' : (d.moonOnly ? 'moonbuild' : 'building');
       const timeCell = showTime ? `<td>${formatDuration(buildSeconds(timeKind, cost, p, lvl, d.noBuildAccel)*1000)}</td>` : '';
@@ -499,12 +503,13 @@ function meetsRequirements(p, req){ if(!req) return true; for(const [k,v] of Obj
 function requirementText(req){ if(!req) return ''; return Object.entries(req).map(([k,v])=>{ const nm = defs.buildings[k]?defs.buildings[k].name:(defs.research[k]?defs.research[k].name:k); return nm+' Stufe '+v; }).join(', '); }
 function debrisKey(coord){ return coord[0]+':'+coord[1]+':'+coord[2]; }
 function officerActive(key){ return !!(state.officerExpiry[key] && state.officerExpiry[key] > Date.now()); }
+function itemActive(key){ return !!(state.itemExpiry && state.itemExpiry[key] && state.itemExpiry[key] > Date.now()); }
 function officerTimeLeft(key){ return officerActive(key) ? state.officerExpiry[key]-Date.now() : 0; }
 // Zeigt Sekunden statt sie auf Minuten abzurunden - bei runter kalibrierten Bauzeiten (siehe
 // Bauzeit-Formeln) wuerden sonst z.B. 45s als irrefuehrendes "0Min" erscheinen.
 function formatDuration(ms){ const totalSec=Math.max(0,Math.floor(ms/1000)); const d=Math.floor(totalSec/86400); const h=Math.floor((totalSec%86400)/3600); const m=Math.floor((totalSec%3600)/60); const s=totalSec%60; if(d>0) return d+'T '+h+'Std'; if(h>0) return h+'Std '+m+'Min'; if(m>0) return m+'Min '+s+'S'; return s+'S'; }
 function officerBonus(){ return officerActive('geologist') ? 1.10 : 1.0; }
-function fleetSpeedBonus(){ return officerActive('admiral') ? 1.1 : 1.0; }
+function fleetSpeedBonus(){ let m = officerActive('admiral') ? 1.1 : 1.0; if(itemActive('speedBooster')) m*=1.3; return m; }
 function engineerBonus(){ return officerActive('engineer') ? 1.10 : 1.0; }
 function commanderDiscount(){ return officerActive('commander') ? 0.95 : 1.0; }
 function technocratSpeed(){ return officerActive('technocrat') ? 0.85 : 1.0; }
@@ -658,6 +663,7 @@ function applyServerState(serverState, opts){
   if(serverState.alliance !== undefined) state.alliance = (serverState.alliance && serverState.alliance.founder) ? serverState.alliance : null;
   state.alliancesList = serverState.alliancesList || state.alliancesList;
   state.officerExpiry = serverState.officerExpiry || {};
+  state.itemExpiry = serverState.itemExpiry || {};
   state.darkMatter = serverState.darkMatter || 0;
   state.expeditions = serverState.expeditions || [];
   state.marketRate = serverState.marketRate || state.marketRate;
@@ -767,7 +773,7 @@ function renderLoadingScreen(){
 // ---- Login / Registration ----
 let authMode = 'login';
 let authError = '';
-const regForm = { username:'', password:'', password2:'', planetName:'', galaxy:1, system:1, selectedPos:null };
+const regForm = { username:getStoredUsername(), password:'', password2:'', planetName:'', galaxy:1, system:1, selectedPos:null };
 let regSlots = null;
 let regLoading = false;
 
@@ -1076,13 +1082,40 @@ function sendFleet(form){
   const fuelType = form.fuelType ? form.fuelType.value : 'refinedFuel';
   postAction('sendFleet', {planetIndex: state.activePlanet, mission: form.mission.value, gal, sys, pos, ships, cargo, acsId, fuelType});
 }
+// Lebt vorher unbenutzt (fleetDuration/fuelForShips/capacityForShips waren fertig gespiegelt,
+// aber nirgends ans Formular angebunden) - zeigt jetzt ETA, Treibstoffkosten und Frachtraum
+// VOR dem Absenden an, statt dass Spieler das nur ueber eine Server-Ablehnung erfahren.
+function updateFleetPreview(form){
+  const el = $('#fleetPreview'); if(!el) return;
+  const p = active(); if(!p) return;
+  const gal = Number(form.galaxy.value), sys = Number(form.system.value), pos = Number(form.position.value);
+  const ships = {};
+  Object.keys(defs.ships).forEach(k=>{ if(defs.ships[k].role!=='power' && defs.ships[k].role!=='sentinel' && form[k]) ships[k]=Number(form[k].value)||0; });
+  const totalShips = Object.values(ships).reduce((a,b)=>a+b,0);
+  if(totalShips<=0 || !validCoord(gal,sys,pos)){ el.textContent=''; return; }
+  const toCoord=[gal,sys,pos];
+  const dur = fleetDuration(p.coords, toCoord, ships);
+  const fuelType = form.fuelType ? form.fuelType.value : 'refinedFuel';
+  const fuel = Math.ceil(fuelForShips(ships)*Math.max(1,dur/20)*FUEL_EFFICIENCY[fuelType]);
+  const haveFuel = p.resources[fuelType]||0;
+  const fuelWarn = fuel>haveFuel ? ' <span class="warn-text">(zu wenig vorhanden)</span>' : '';
+  const parts = [`Flugzeit ${formatDuration(dur*1000)}`, `Treibstoff ${fmt(fuel)} ${RESOURCE_INFO[fuelType].name}${fuelWarn}`];
+  if(form.mission.value==='transport'){
+    const cargo = {}; RESOURCE_KEYS.forEach(k=>{ if(form['cargo_'+k]) cargo[k]=Math.max(0, Number(form['cargo_'+k].value)||0); });
+    const totalCargo = Object.values(cargo).reduce((a,b)=>a+b,0);
+    const cap = capacityForShips(ships);
+    const capWarn = totalCargo>cap ? ' <span class="warn-text">(zu wenig Ladekapazität)</span>' : '';
+    parts.push(`Fracht ${fmt(totalCargo)} / ${fmt(cap)}${capWarn}`);
+  }
+  el.innerHTML = parts.join(' · ');
+}
 function sendExpedition(shipsMap, durationSlot){ postAction('sendExpedition', {planetIndex: state.activePlanet, ships: shipsMap, durationSlot}); }
 function activeMoon(){ return state.activeMoonIndex!=null ? state.moons[state.activeMoonIndex] : null; }
 function enqueueMoonBuild(key){
   if(state.activeMoonIndex==null) return showError('Kein Mond ausgewählt');
   postAction('enqueueMoonBuild', {planetIndex: state.activePlanet, moonIndex: state.activeMoonIndex, key});
 }
-function jumpGateTransfer(fromMoonIdx, toMoonIdx, cargo, ships){
+function jumpGateTransfer(fromMoonIdx, toMoonIdx, ships){
   postAction('jumpGateTransfer', {fromMoonIndex: fromMoonIdx, toMoonIndex: toMoonIdx, ships});
 }
 function transferSentinelOrbit(planetIdx, toMoon, count){ postAction('transferSentinelOrbit', {planetIndex: planetIdx, toMoon, count}); }
@@ -1130,7 +1163,7 @@ function energyStats(p){
   const solar=defs.buildings.solarPlant.power(p.buildings.solarPlant||0);
   const nuclear=defs.buildings.nuclearReactor.power(p.buildings.nuclearReactor||0);
   const coalPower=defs.buildings.coalPlant.power(p.buildings.coalPlant||0);
-  const satellites=(p.ships.solarSatellite||0)*20;
+  const satellites=(p.ships.solarSatellite||0)*defs.ships.solarSatellite.power;
   const sails = (p.buildings.solarSailI||0)*defs.buildings.solarSailI.power
               + (p.buildings.solarSailII||0)*defs.buildings.solarSailII.power
               + (p.buildings.solarSailIII||0)*defs.buildings.solarSailIII.power;
@@ -1409,6 +1442,7 @@ function viewFleet(){
     </div>
     <div class="info-modal-subhead" style="margin-top:6px">Fracht (nur bei Transport relevant)</div>
     <div class="grid4">${RESOURCE_KEYS.map(k=>`<label>${RESOURCE_INFO[k].name}<input type="number" min="0" name="cargo_${k}" value="0"></label>`).join('')}</div>
+    <div id="fleetPreview" class="small" style="margin-top:8px"></div>
     <button class="btn" type="submit">Flotte starten</button>
   </form></div>
   <div class="card"><h3>Hinweise</h3><div class="small">Transport bewegt Ressourcen. Spionage liefert einen Bericht. Angriff löst eine mehrstufige Kampfsimulation gegen NPC-Kolonien aus (bis zu 6 Runden, Schilde regenerieren pro Runde). Kolonisierung braucht ein Kolonieschiff, ein leeres Feld und freie Kolonieplätze (Astrophysik). Eigene Planeten können nicht angegriffen werden.</div><div style="height:10px"></div><table><tr><th>Schiff</th><th>Angriff</th><th>Hülle</th><th>Ladung</th></tr>${Object.entries(defs.ships).map(([k,d])=>`<tr><td>${d.name}</td><td>${d.attack}</td><td>${fmt(d.hull)}</td><td>${fmt(d.cargo)}</td></tr>`).join('')}</table></div>
@@ -1667,8 +1701,10 @@ function viewOfficers(){
   }).join('')}</div>`; }
 
 
-function merchantCost(amount){ return Math.ceil((Number(amount)||0)/5); }
-function viewMarket(){ const r=state.marketRate; const initialAmount=1000; const initialCost=merchantCost(initialAmount); const initialAffordable = initialCost>0 && initialCost<=state.darkMatter;
+// Kurs wie am Markt an der individuellen Rohstoff-Wertigkeit ausgerichtet (RESOURCE_VALUE) -
+// muss den Server-Fix in merchantBuy() exakt spiegeln, sonst weicht die Kostenanzeige ab.
+function merchantCost(amount, resourceType){ const rate = 5/(RESOURCE_VALUE[resourceType]||1); return Math.max(1, Math.ceil((Number(amount)||0)/rate)); }
+function viewMarket(){ const r=state.marketRate; const initialAmount=1000; const initialResource=RESOURCE_KEYS[0]; const initialCost=merchantCost(initialAmount, initialResource); const initialAffordable = initialCost>0 && initialCost<=state.darkMatter;
   const a = state.auction;
   const secsLeft = a ? Math.max(0, Math.ceil((a.endsAt-Date.now())/1000)) : 0;
   const mins = Math.floor(secsLeft/60), secs = secsLeft%60;
@@ -1677,7 +1713,7 @@ function viewMarket(){ const r=state.marketRate; const initialAmount=1000; const
   const resOptions = RESOURCE_KEYS.map(k=>`<option value="${k}">${RESOURCE_INFO[k].name}</option>`).join('');
   const rateCards = RESOURCE_KEYS.map(k=>`<div class="card"><div class="label">${RESOURCE_INFO[k].name}</div><div class="value">${fmt1(r[k]||0)}</div></div>`).join('');
   const stLinkCard = `<div class="small" style="margin-top:16px">Stellaris-Token (ST): Premium-Währung für Auktionshaus, Offiziere und den Händler. <button class="btn alt" type="button" data-open-st-shop style="margin-left:8px">Stellaris-Token kaufen →</button></div>`;
-  return `<h2>Markt</h2><div class="small">Kurswerte (relativer Tauschwert pro Einheit; 10% Marktabschlag beim Tausch):</div><div style="height:8px"></div><div class="grid4">${rateCards}</div>${stLinkCard}<div style="height:16px"></div><div class="grid2"><div class="card"><h3>Ressourcen handeln</h3><form class="market-form" id="marketForm"><label>Abgeben<select name="give">${resOptions}</select></label><label>Erhalten<select name="want">${resOptions}</select></label><label>Menge<input type="number" min="1" value="100" name="amount"></label><button class="btn good" type="submit">Am Markt tauschen</button></form></div><div class="card"><h3>Händler (Stellaris-Token)</h3><div class="small">Tausche Stellaris-Token sofort gegen Ressourcen. Kurs: 5 Einheiten pro 1 ST.</div><div style="height:10px"></div><form class="market-form" id="merchantForm"><label>Ressource<select name="resource">${resOptions}</select></label><label>Menge<input type="number" min="1" value="${initialAmount}" name="amount" id="merchantAmount"></label><div class="small" id="merchantCostHint">Kosten: ${fmt(initialCost)} Stellaris-Token</div><button class="btn warn" type="submit" id="merchantBuyBtn" ${initialAffordable?'':'disabled'}>Kaufen</button></form><div class="small" style="margin-top:8px">Stellaris-Token: ${fmt(state.darkMatter)}</div></div>${auctionCard}</div>`; }
+  return `<h2>Markt</h2><div class="small">Kurswerte (relativer Tauschwert pro Einheit; 10% Marktabschlag beim Tausch):</div><div style="height:8px"></div><div class="grid4">${rateCards}</div>${stLinkCard}<div style="height:16px"></div><div class="grid2"><div class="card"><h3>Ressourcen handeln</h3><form class="market-form" id="marketForm"><label>Abgeben<select name="give">${resOptions}</select></label><label>Erhalten<select name="want">${resOptions}</select></label><label>Menge<input type="number" min="1" value="100" name="amount"></label><button class="btn good" type="submit">Am Markt tauschen</button></form></div><div class="card"><h3>Händler (Stellaris-Token)</h3><div class="small">Tausche Stellaris-Token sofort gegen Ressourcen. Kurs je nach Rohstoffwert unterschiedlich.</div><div style="height:10px"></div><form class="market-form" id="merchantForm"><label>Ressource<select name="resource">${resOptions}</select></label><label>Menge<input type="number" min="1" value="${initialAmount}" name="amount" id="merchantAmount"></label><div class="small" id="merchantCostHint">Kosten: ${fmt(initialCost)} Stellaris-Token</div><button class="btn warn" type="submit" id="merchantBuyBtn" ${initialAffordable?'':'disabled'}>Kaufen</button></form><div class="small" style="margin-top:8px">Stellaris-Token: ${fmt(state.darkMatter)}</div></div>${auctionCard}</div>`; }
 
 // Dedizierter Stellaris-Token-Kaufbildschirm, erreichbar per Klick auf das Guthaben oben
 // rechts im Topbar (oder den Link in der Marktansicht) - rein informativ/UI-Vorbereitung,
@@ -1802,10 +1838,15 @@ function renderView(bind=true){
     document.querySelectorAll('[data-multibuild]').forEach(b=>b.onclick=()=>enqueueMultiBuild(b.dataset.multibuild));
     const ff=$('#fleetForm'); if(ff){
       ff.onsubmit=e=>{e.preventDefault(); const gal=Number(ff.galaxy.value), sys=Number(ff.system.value), pos=Number(ff.position.value); $('#targetField').value = gal+':'+sys+':'+pos; state.fleetPrefill=null; sendFleet(ff)};
-      ff.mission.onchange=()=>{ state.fleetPrefill=null; const acsField=$('#acsField'); if(acsField) acsField.style.display = ff.mission.value==='attack' ? 'block' : 'none'; };
-      ff.galaxy.onchange=()=>{ state.fleetPrefill=null; };
-      ff.system.onchange=()=>{ state.fleetPrefill=null; };
-      ff.position.onchange=()=>{ state.fleetPrefill=null; };
+      const refreshPreview=()=>updateFleetPreview(ff);
+      ff.mission.onchange=()=>{ state.fleetPrefill=null; const acsField=$('#acsField'); if(acsField) acsField.style.display = ff.mission.value==='attack' ? 'block' : 'none'; refreshPreview(); };
+      ff.galaxy.oninput=()=>{ state.fleetPrefill=null; refreshPreview(); };
+      ff.system.oninput=()=>{ state.fleetPrefill=null; refreshPreview(); };
+      ff.position.oninput=()=>{ state.fleetPrefill=null; refreshPreview(); };
+      ff.fuelType.onchange=refreshPreview;
+      Object.keys(defs.ships).forEach(k=>{ if(ff[k]) ff[k].onchange=refreshPreview; });
+      RESOURCE_KEYS.forEach(k=>{ if(ff['cargo_'+k]) ff['cargo_'+k].oninput=refreshPreview; });
+      refreshPreview();
     }
     const mf=$('#marketForm'); if(mf) mf.onsubmit=e=>{e.preventDefault(); marketTrade(mf.give.value,mf.want.value,mf.amount.value)};
     // Stellaris-Token-Kaufpakete: rein informativer Platzhalter, bucht bewusst NICHTS gut
@@ -1818,11 +1859,13 @@ function renderView(bind=true){
       merchForm.onsubmit=e=>{e.preventDefault(); merchantBuy(merchForm.resource.value, merchForm.amount.value)};
       const merchAmountInput=$('#merchantAmount'), merchHint=$('#merchantCostHint'), merchBtn=$('#merchantBuyBtn');
       if(merchAmountInput && merchHint && merchBtn){
-        merchAmountInput.oninput=()=>{
-          const cost = merchantCost(merchAmountInput.value);
+        const updateMerchHint=()=>{
+          const cost = merchantCost(merchAmountInput.value, merchForm.resource.value);
           merchHint.textContent = 'Kosten: '+fmt(cost)+' Stellaris-Token';
           merchBtn.disabled = !(cost>0 && cost<=state.darkMatter);
         };
+        merchAmountInput.oninput=updateMerchHint;
+        merchForm.resource.onchange=updateMerchHint;
       }
     }
     const msf=$('#missileForm'); if(msf) msf.onsubmit=e=>{e.preventDefault(); launchMissiles(msf.position.value, msf.count.value)};
@@ -1862,7 +1905,7 @@ function renderView(bind=true){
     document.querySelectorAll('[data-battle-sim]').forEach(b=>b.onclick=()=>openBattleSimulator(Number(b.dataset.battleSim)));
     document.querySelectorAll('[data-moon-select]').forEach(b=>b.onclick=()=>{ state.activeMoonIndex=Number(b.dataset.moonSelect); renderView(true); });
     document.querySelectorAll('[data-moon-build]').forEach(b=>b.onclick=()=>enqueueMoonBuild(b.dataset.moonBuild));
-    const jgf=$('#jumpGateForm'); if(jgf) jgf.onsubmit=e=>{e.preventDefault(); const toIdx=Number(jgf.targetMoon.value); const ships={lightFighter:Number(jgf.lightFighter.value)||0, cruiser:Number(jgf.cruiser.value)||0}; jumpGateTransfer(state.activeMoonIndex, toIdx, {}, ships); };
+    const jgf=$('#jumpGateForm'); if(jgf) jgf.onsubmit=e=>{e.preventDefault(); const toIdx=Number(jgf.targetMoon.value); const ships={lightFighter:Number(jgf.lightFighter.value)||0, cruiser:Number(jgf.cruiser.value)||0}; jumpGateTransfer(state.activeMoonIndex, toIdx, ships); };
     const phf=$('#phalanxForm'); if(phf) phf.onsubmit=e=>{e.preventDefault(); postAction('scanSystem', {moonIndex: state.activeMoonIndex, planetIndex: state.activePlanet, gal: Number(phf.galaxy.value), sys: Number(phf.system.value), pos: Number(phf.position.value)}).then(()=>{ state.view='reports'; render(); }); };
     const stmf=$('#sentinelToMoonForm'); if(stmf){ const am=activeMoon(); const coPl=am?state.planets.find(pl=>pl.coords[0]===am.coord[0]&&pl.coords[1]===am.coord[1]&&pl.coords[2]===am.coord[2]):null; const coIdx=coPl?state.planets.indexOf(coPl):-1; stmf.onsubmit=e=>{e.preventDefault(); transferSentinelOrbit(coIdx, true, Number(stmf.count.value)||0); }; }
     const stpf=$('#sentinelToPlanetForm'); if(stpf){ const am=activeMoon(); const coPl=am?state.planets.find(pl=>pl.coords[0]===am.coord[0]&&pl.coords[1]===am.coord[1]&&pl.coords[2]===am.coord[2]):null; const coIdx=coPl?state.planets.indexOf(coPl):-1; stpf.onsubmit=e=>{e.preventDefault(); transferSentinelOrbit(coIdx, false, Number(stpf.count.value)||0); }; }
@@ -1873,7 +1916,7 @@ function renderView(bind=true){
 
 function ensurePlanetDefaults(p){ Object.keys(defs.buildings).forEach(k=>{ if(p.buildings[k]==null) p.buildings[k]=0; }); Object.keys(defs.research).forEach(k=>{ if(p.research[k]==null) p.research[k]=0; }); Object.keys(defs.ships).forEach(k=>{ if(p.ships[k]==null) p.ships[k]=0; }); if(!p.buildQueue) p.buildQueue=[]; if(!p.researchQueue) p.researchQueue=[]; if(!p.shipQueue) p.shipQueue=[]; }
 function ensureMoonDefaults(m){ ['lunarBase','sensorPhalanx','jumpGate'].forEach(k=>{ if(m.buildings[k]==null) m.buildings[k]=0; }); Object.keys(defs.ships).forEach(k=>{ if(m.ships[k]==null) m.ships[k]=0; }); if(!m.buildQueue) m.buildQueue=[]; }
-function ensureAllDefaults(){ state.planets.forEach(ensurePlanetDefaults); state.moons.forEach(ensureMoonDefaults); if(!state.officerExpiry) state.officerExpiry={}; }
+function ensureAllDefaults(){ state.planets.forEach(ensurePlanetDefaults); state.moons.forEach(ensureMoonDefaults); if(!state.officerExpiry) state.officerExpiry={}; if(!state.itemExpiry) state.itemExpiry={}; }
 
 function render(){
   const phase = computePhase();

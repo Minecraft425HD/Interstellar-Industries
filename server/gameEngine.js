@@ -174,8 +174,8 @@ const defs = {
     rareEarthsMine:{name:'Seltenerdmine', resource:'rareEarths', costMagnitude:93, powerUse:l=>13*l, prod:l=>12*l*Math.pow(1.1,l)},
     sulfurMine:{name:'Schwefelmine', resource:'sulfur', costMagnitude:52, powerUse:l=>9*l, prod:l=>18*l*Math.pow(1.1,l)},
     phosphateMine:{name:'Phosphatmine', resource:'phosphate', costMagnitude:56, powerUse:l=>9*l, prod:l=>18*l*Math.pow(1.1,l)},
-    crudeOilPump:{name:'Ölbohrturm', resource:'crudeOil', costMagnitude:300, powerUse:l=>20*l, prod:l=>10*l*Math.pow(1.1,l)},
-    naturalGasPump:{name:'Erdgasförderanlage', resource:'naturalGas', costMagnitude:270, powerUse:l=>18*l, prod:l=>11*l*Math.pow(1.1,l)},
+    crudeOilPump:{name:'Ölbohrturm', resource:'crudeOil', costMagnitude:80, powerUse:l=>20*l, prod:l=>10*l*Math.pow(1.1,l)},
+    naturalGasPump:{name:'Erdgasförderanlage', resource:'naturalGas', costMagnitude:75, powerUse:l=>18*l, prod:l=>11*l*Math.pow(1.1,l)},
     coalMine:{name:'Kohlebergwerk', resource:'coal', costMagnitude:70, powerUse:l=>10*l, prod:l=>20*l*Math.pow(1.1,l)},
     freshwaterExtractor:{name:'Süßwassergewinnung', resource:'freshwater', costMagnitude:50, powerUse:l=>7*l, prod:l=>20*l*Math.pow(1.1,l)},
     saltwaterDesalinator:{name:'Meerwasserpumpe', resource:'saltwater', costMagnitude:43, powerUse:l=>6*l, prod:l=>22*l*Math.pow(1.1,l)},
@@ -323,7 +323,7 @@ const defs = {
     laserTech:{name:'Lasertechnik', base:{copper:180, silver:120, electronics:80}, requires:{researchLab:1, energyTech:2}},
     ionTech:{name:'Iontechnik', base:{aluminium:800, lithium:400, naturalGas:200, electronics:150}, requires:{researchLab:4, laserTech:5, energyTech:4}},
     plasmaTech:{name:'Plasmatechnik', base:{aluminium:2000, rareEarths:4200, uranium:800, compositeMaterial:300}, requires:{researchLab:4, energyTech:8, laserTech:10, ionTech:5}},
-    gravitonTech:{name:'Gravitationstechnik', base:{}, requires:{researchLab:12}},
+    gravitonTech:{name:'Gravitationstechnik', base:{aluminium:80000, rareEarths:120000, uranium:40000, precisionComponents:2000}, requires:{researchLab:12}},
     astrophysics:{name:'Astrophysik', base:{aluminium:5000, lithium:7000, crudeOil:4000, alloy:900}, requires:{researchLab:3, espionageTech:4, impulseDrive:3}},
     intergalacticNetwork:{name:'Intergalaktisches Forschungsnetzwerk', base:{aluminium:250000, rareEarths:400000, naturalGas:150000, machineParts:1500}, requires:{researchLab:10, computerTech:8}},
     asteroidMiningTech:{name:'Asteroidenbergbau', base:{iron:2000, steel:600, electronics:300, machineParts:150}, requires:{researchLab:5, energyTech:2}},
@@ -347,7 +347,7 @@ const defs = {
     reaper:{name:'Reaper', cost:{iron:85000, aluminium:50000, rareEarths:25000, machineParts:4000}, cargo:10000, speed:0.6, fuel:80, attack:2800, shield:700, hull:140000, role:'combat', requires:{shipyard:10, spaceDock:1, hyperspaceTech:6, hyperspaceDrive:7}},
     pathfinder:{name:'Pfadfinder', cost:{aluminium:10000, lithium:14000, crudeOil:7000, electronics:1500}, cargo:10000, speed:1.6, fuel:20, attack:200, shield:100, hull:23000, role:'combat', requires:{shipyard:5, spaceDock:1, hyperspaceDrive:2, hyperspaceTech:3}},
     deathstar:{name:'Todesstern', cost:{iron:4000000, aluminium:3000000, rareEarths:2000000, precisionComponents:15000}, cargo:1000000, speed:0.4, fuel:1, attack:200000, shield:50000, hull:9000000, role:'combat', requires:{shipyard:12, hyperspaceTech:6, gravitonTech:1}},
-    solarSatellite:{name:'Solarsatellit', cost:{silver:1800, crudeOil:700}, cargo:0, speed:0, fuel:0, attack:1, shield:1, hull:2000, role:'power', requires:{}},
+    solarSatellite:{name:'Solarsatellit', cost:{silver:1800, crudeOil:700}, cargo:0, speed:0, fuel:0, attack:1, shield:1, hull:2000, power:20, role:'power', requires:{}},
     sentinelSatellite:{name:'Frühwarn-Satellit', cost:{silver:2200, lithium:1200, electronics:800}, cargo:0, speed:0, fuel:0, attack:1, shield:1, hull:2000, role:'sentinel', requires:{shipyard:6, espionageTech:5}},
     recycler:{name:'Recycler', cost:{iron:11000, aluminium:5000, crudeOil:2000, steel:800}, cargo:20000, speed:0.7, fuel:30, attack:1, shield:10, hull:16000, role:'recycler', requires:{shipyard:4, combustion:6}},
     asteroidMiner:{name:'Asteroidenminer', cost:{iron:9000, aluminium:6000, crudeOil:2500, steel:1200, electronics:400}, cargo:18000, speed:0.6, fuel:35, attack:1, shield:15, hull:14000, role:'miner', requires:{shipyard:5, combustion:5, asteroidMiningTech:1}},
@@ -822,7 +822,7 @@ function adminGrantResources(universe, username, res){
   const p = state.planets[0];
   if(!p) return { ok:false, error:'Spieler hat keinen Planeten' };
   const grant = {};
-  for(const k of RESOURCE_KEYS){ if(res[k]!=null) grant[k] = Number(res[k])||0; }
+  for(const k of RESOURCE_KEYS){ if(res[k]!=null) grant[k] = Math.max(0, Number(res[k])||0); }
   addRes(p, grant);
   log(state, 'Admin hat Ressourcen gutgeschrieben');
   return { ok:true };
@@ -881,7 +881,6 @@ function maybeCreateMoon(state, coord, debrisTotal){
     }
   }
 }
-function allianceRank(points){ if(points>=2000000) return 'Elite-Kommandant'; if(points>=500000) return 'Kommandeur'; if(points>=100000) return 'Veteran'; if(points>=10000) return 'Krieger'; return 'Rekrut'; }
 function deathStarDestroyChance(count){ return Math.min(0.7, count*0.01); }
 // Markiert den Planeten als zerstoert, OHNE ihn aus dem planets-Array zu entfernen - viele
 // Stellen im Code (in transit befindliche Flotten, activePlanet, planetIndex in Aktionen)
@@ -943,7 +942,6 @@ function applyLosses(shipMap, ratio){ const res={}; for(const [k,v] of Object.en
 function diffLosses(before, after){ const res={}; for(const k of Object.keys(before||{})){ res[k]=Math.max(0,(before[k]||0)-(after[k]||0)); } return res; }
 function shipCostSum(shipMap, resource){ let sum=0; for(const [k,v] of Object.entries(shipMap||{})){ if(v && defs.ships[k]) sum += (defs.ships[k].cost[resource]||0)*v; } return sum; }
 // Verlustwert eines Schiffsverbands ueber ALLE 18 Rohstoffe hinweg (fuer Truemmerfeld-Beitrag).
-function shipCostBag(shipMap){ const bag=zeroResources(); for(const k of RESOURCE_KEYS) bag[k]=shipCostSum(shipMap,k); return bag; }
 function mergeShipMaps(list){ const result={}; for(const m of list){ for(const [k,v] of Object.entries(m||{})){ result[k]=(result[k]||0)+(v||0); } } return result; }
 // ACS (Allianz-Kampfstärke): findet eine bereits unterwegs befindliche Angriffsflotte mit
 // derselben acsId + Ziel, ueber ALLE Spieler hinweg (nicht nur den eigenen Zustand), damit
@@ -967,7 +965,7 @@ function energyStats(state, p){
   const solar=defs.buildings.solarPlant.power(p.buildings.solarPlant);
   const nuclear=defs.buildings.nuclearReactor.power(p.buildings.nuclearReactor||0);
   const coalPower=defs.buildings.coalPlant.power(p.buildings.coalPlant||0);
-  const satellites=(p.ships.solarSatellite||0)*20;
+  const satellites=(p.ships.solarSatellite||0)*defs.ships.solarSatellite.power;
   const sails = (p.buildings.solarSailI||0)*defs.buildings.solarSailI.power
               + (p.buildings.solarSailII||0)*defs.buildings.solarSailII.power
               + (p.buildings.solarSailIII||0)*defs.buildings.solarSailIII.power;
@@ -1048,9 +1046,9 @@ function hourly(state, p, universe){
 function maxStorage(p){
   const cap = {};
   for(const k of RESOURCE_KEYS){
-    const group = RESOURCE_INFO[k].group;
-    const storageKey = RESOURCE_GROUPS[group].storageBuilding;
-    cap[k] = Math.max(5000, 5000*(p.buildings[storageKey]||0));
+    const group = RESOURCE_INFO[k] && RESOURCE_INFO[k].group;
+    const storageKey = group && RESOURCE_GROUPS[group] && RESOURCE_GROUPS[group].storageBuilding;
+    cap[k] = Math.max(5000, 5000*(storageKey ? (p.buildings[storageKey]||0) : 0));
   }
   return cap;
 }
@@ -1366,6 +1364,11 @@ function sendFleet(universe, username, planetIndex, params){
   if(mission==='mine' && ships.asteroidMiner<1) return fail(state, 'Asteroidenabbau braucht mindestens einen Asteroidenminer');
   if(mission==='mine' && !asteroidSlot) return fail(state, 'Kein Asteroidenfeld auf diesem Feld');
   if(mission==='mine' && asteroidSlot && asteroidSlot.tier > (p.research.asteroidMiningTech||0)) return fail(state, 'Asteroidenbergbau-Forschung Stufe '+asteroidSlot.tier+' erforderlich (aktuell Stufe '+(p.research.asteroidMiningTech||0)+')');
+  // Transport braucht - anders als spy/attack/colonize/harvest/mine - bisher KEINE Ziel-
+  // Validierung: ohne diese Pruefung liesse sich Fracht zu einem leeren Feld/NPC-Slot
+  // schicken, wo sie beim Eintreffen nirgends gutgeschrieben und beim Rueckflug nicht
+  // zurueckerstattet wird - Ressourcen und Treibstoff verschwinden kommentarlos.
+  if(mission==='transport' && toPlanetIndex==null) return fail(state, 'Transport nur zu einem bewohnten Planeten möglich');
 
   const cargo = zeroResources();
   const cargoParam = params.cargo||{};
@@ -1393,7 +1396,7 @@ function sendFleet(universe, username, planetIndex, params){
   let arrive = Date.now()+dur*1000;
   let acsId = null, acsAllianceTag = null;
   if(mission==='attack' && params.acsId){
-    acsId = String(params.acsId).trim().slice(0,24);
+    acsId = sanitizePlanetName(String(params.acsId).trim()).slice(0,24);
     if(acsId){
       const existing = findAcsWave(universe, acsId, toCoord);
       const myTag = state.allianceTag || '-';
@@ -1480,7 +1483,8 @@ function sendExpedition(state, planetIndex, shipsMap, durationSlot){
   const total = Object.values(ships).reduce((a,b)=>a+b,0);
   if(total<1) return fail(state, 'Keine Schiffe für Expedition gewählt');
   for(const [k,v] of Object.entries(ships)) p.ships[k]-=v;
-  const secs = (Number(durationSlot)||1)*900;
+  const slot = Math.min(3, Math.max(1, Math.floor(Number(durationSlot))||1));
+  const secs = slot*900;
   state.expeditions.push({from:planetIndex, ships, done:Date.now()+secs*1000});
   return ok(state, 'Expedition gestartet');
 }
@@ -1691,7 +1695,7 @@ function removePlayerFromAlliance(universe, username){
 function foundAlliance(universe, username, payload){
   const state = universe.players[username];
   if(state.allianceTag) return fail(state, 'Du bist bereits Mitglied einer Allianz. Verlasse sie zuerst.');
-  const name = String(payload.name||'').trim();
+  const name = sanitizePlanetName(String(payload.name||'').trim());
   const tag = String(payload.tag||'').trim().toUpperCase();
   if(!name) return fail(state, 'Allianzname darf nicht leer sein');
   if(name.length>ALLIANCE_NAME_MAX_LEN) return fail(state, 'Allianzname zu lang (max. '+ALLIANCE_NAME_MAX_LEN+' Zeichen)');
@@ -1765,8 +1769,10 @@ function merchantBuy(state, planetIndex, resourceType, amount){
   const p = requirePlanet(state, planetIndex);
   amount = Math.floor(Number(amount))||0;
   if(amount<=0 || !RESOURCE_KEYS.includes(resourceType)) return fail(state, 'Ungültige Menge');
-  const rate = 5;
-  const cost = Math.ceil(amount/rate);
+  // Kurs wie am Markt an der individuellen Rohstoff-Wertigkeit ausgerichtet (RESOURCE_VALUE),
+  // statt eines Pauschalkurses - sonst waeren teure Tier-3-Gueter genauso billig wie Wasser.
+  const rate = 5/(RESOURCE_VALUE[resourceType]||1);
+  const cost = Math.max(1, Math.ceil(amount/rate));
   if(state.darkMatter<cost) return fail(state, 'Nicht genug Stellaris-Token');
   state.darkMatter-=cost;
   addRes(p, {[resourceType]:amount});
