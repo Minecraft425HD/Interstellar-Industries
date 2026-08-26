@@ -471,7 +471,7 @@ function eventResourceMultiplier(universe, resource){
   return (RESOURCE_INFO[resource] && RESOURCE_INFO[resource].group===e.group) ? e.multiplier : 1;
 }
 
-function createUniverse(){ const u = { accounts: {}, players: {}, alliances: {}, asteroidFields: {} }; ensureAuction(u); return u; }
+function createUniverse(){ const u = { accounts: {}, players: {}, alliances: {}, asteroidFields: {}, tradeOffers: [], napOffers: [] }; ensureAuction(u); return u; }
 
 function coordStr(c){ return '['+c[0]+':'+c[1]+':'+c[2]+']'; }
 function coordLinkHtml(coord, label){ return `<button type="button" class="coord-link" data-coord="${coord[0]}:${coord[1]}:${coord[2]}">${label!=null?label:coordStr(coord)}</button>`; }
@@ -707,7 +707,9 @@ function seedGalaxy(universe, galaxy, system, viewerUsername){
       continue;
     }
     const r = rnd(pos+system);
-    if(r < 0.35){
+    // NPC-Dichte auf ein Viertel der urspruenglichen 35% reduziert (Nutzerwunsch) -
+    // die frei werdenden Positionen fallen in den else-Zweig (leer oder Schwarzes Loch).
+    if(r < 0.0875){
       // Level uses its own wide, independent roll (3-35) so NPC strength actually
       // spans the full tier range; only the presence check above (r<0.35) is kept
       // on the original formula to avoid shifting which positions are occupied.
@@ -819,6 +821,10 @@ function adminDeletePlayer(universe, username){
     universe.auction.currentBidder = null;
     universe.auction.currentBid = 0;
   }
+  // Offene Handelsangebote des geloeschten Kontos entfernen - die eingezahlte Ware
+  // ist mit dem Konto weg, aber ein verwaistes Angebot duerfte sonst ewig als
+  // "annehmbar" in der Liste anderer Spieler stehen bleiben, ohne je ausgeliefert zu werden.
+  if(universe.tradeOffers) universe.tradeOffers = universe.tradeOffers.filter(o=>o.from!==username);
   delete universe.players[username];
   delete universe.accounts[username];
   return { ok:true };
@@ -1213,11 +1219,18 @@ function normalizePlayerState(data){
 }
 
 function normalizeUniverse(data){
-  const universe = { accounts: (data && data.accounts) || {}, players: {}, alliances: (data && data.alliances) || {}, auction: (data && data.auction) || null, event: (data && data.event) || null, nextEventAt: (data && data.nextEventAt) || null, asteroidFields: (data && data.asteroidFields) || {} };
+  const universe = { accounts: (data && data.accounts) || {}, players: {}, alliances: (data && data.alliances) || {}, auction: (data && data.auction) || null, event: (data && data.event) || null, nextEventAt: (data && data.nextEventAt) || null, asteroidFields: (data && data.asteroidFields) || {}, tradeOffers: (data && data.tradeOffers) || [], napOffers: (data && data.napOffers) || [] };
   const playersData = (data && data.players) || {};
   for(const [username, pstate] of Object.entries(playersData)){
     ensureAllDefaults(pstate);
     universe.players[username] = pstate;
+  }
+  // Bestandsallianzen aus einer Zeit vor der Diplomatie-Funktion bekommen die neuen
+  // Listen nachtraeglich - ohne das wuerden sie beim ersten Kriegs-/NAP-Zugriff als
+  // undefined statt als leeres Array behandelt.
+  for(const a of Object.values(universe.alliances)){
+    if(!a.atWarWith) a.atWarWith = [];
+    if(!a.napWith) a.napWith = [];
   }
   ensureAuction(universe);
   return universe;
@@ -1666,7 +1679,7 @@ function getAllianceView(universe, tag){
   const a = universe.alliances[tag];
   if(!a) return null;
   const points = a.members.reduce((sum,m)=> sum + (universe.players[m] ? totalPlayerPoints(universe.players[m]) : 0), 0);
-  return { tag:a.tag, name:a.name, founder:a.founder, members:[...a.members], applications:[...a.applications], depot:{...a.depot}, points, createdAt:a.createdAt };
+  return { tag:a.tag, name:a.name, founder:a.founder, members:[...a.members], applications:[...a.applications], depot:{...a.depot}, points, createdAt:a.createdAt, atWarWith:[...(a.atWarWith||[])], napWith:[...(a.napWith||[])] };
 }
 function getPlayerAllianceView(universe, username){
   const state = universe.players[username];
@@ -1701,6 +1714,13 @@ function removePlayerFromAlliance(universe, username){
       if(newFounder) message(newFounder, 'Du bist jetzt Gründer der Allianz ['+tag+'] '+alliance.name+'.');
     } else {
       delete universe.alliances[tag];
+      // Kriegs-/Friedensvertraege anderer Allianzen mit der aufgeloesten Allianz sind
+      // sonst tote Referenzen auf einen nicht mehr existierenden Tag.
+      for(const other of Object.values(universe.alliances)){
+        if(other.atWarWith) other.atWarWith = other.atWarWith.filter(t=>t!==tag);
+        if(other.napWith) other.napWith = other.napWith.filter(t=>t!==tag);
+      }
+      if(universe.napOffers) universe.napOffers = universe.napOffers.filter(o=>o.from!==tag && o.to!==tag);
     }
   }
 }
@@ -1719,7 +1739,7 @@ function foundAlliance(universe, username, payload){
   const p = requirePlanet(state, payload.planetIndex);
   if(!hasRes(p, ALLIANCE_FOUND_COST)) return fail(state, 'Nicht genug Ressourcen zum Gründen');
   spend(p, ALLIANCE_FOUND_COST);
-  universe.alliances[tag] = { tag, name, founder:username, members:[username], applications:[], depot:zeroResources(), createdAt:Date.now() };
+  universe.alliances[tag] = { tag, name, founder:username, members:[username], applications:[], depot:zeroResources(), createdAt:Date.now(), atWarWith:[], napWith:[] };
   state.allianceTag = tag;
   return ok(state, 'Allianz ['+tag+'] '+name+' gegründet');
 }
@@ -1765,6 +1785,180 @@ function leaveAlliance(universe, username){
   const tag = state.allianceTag;
   removePlayerFromAlliance(universe, username);
   return ok(state, 'Allianz ['+tag+'] verlassen');
+}
+
+// ---- Allianz-Diplomatie (Krieg/Neutralitätsabkommen zwischen zwei Allianzen) ----
+// Kriegserklaerung und -beendigung sind bewusst einseitig (wie in echten Konflikten
+// braucht niemand die Zustimmung des Gegners) - ein Neutralitaetsabkommen (NAP) dagegen
+// braucht beidseitige Zustimmung ueber universe.napOffers (analog zu Allianz-Bewerbungen).
+// Alle vier Aktionen sind Gruender-only, exakt wie respondToApplication().
+// Gibt bei Erfolg {state, tag, alliance} zurueck, bei einem Fehler direkt das fertige
+// {ok:false, message} von fail() - der Aufrufer erkennt das am fehlenden "alliance"-Feld.
+function requireAllianceFounder(universe, username){
+  const state = universe.players[username];
+  const tag = state.allianceTag;
+  if(!tag) return fail(state, 'Du bist in keiner Allianz');
+  const alliance = universe.alliances[tag];
+  if(!alliance) return fail(state, 'Allianz nicht gefunden');
+  if(alliance.founder!==username) return fail(state, 'Nur der Gründer kann die Diplomatie verwalten');
+  return { state, tag, alliance };
+}
+function declareWar(universe, username, payload){
+  const ctx = requireAllianceFounder(universe, username);
+  if(!ctx.alliance) return ctx;
+  const { state, tag, alliance } = ctx;
+  const targetTag = String(payload.targetTag||'').trim().toUpperCase();
+  const target = universe.alliances[targetTag];
+  if(!target) return fail(state, 'Ziel-Allianz nicht gefunden');
+  if(targetTag===tag) return fail(state, 'Du kannst deiner eigenen Allianz nicht den Krieg erklären');
+  if(alliance.atWarWith.includes(targetTag)) return fail(state, 'Ihr seid bereits im Krieg mit ['+targetTag+']');
+  alliance.napWith = alliance.napWith.filter(t=>t!==targetTag);
+  target.napWith = target.napWith.filter(t=>t!==tag);
+  alliance.atWarWith.push(targetTag);
+  target.atWarWith.push(tag);
+  const targetFounder = universe.players[target.founder];
+  if(targetFounder) message(targetFounder, 'Die Allianz ['+tag+'] '+alliance.name+' hat euch den Krieg erklärt!');
+  return ok(state, 'Krieg gegen ['+targetTag+'] '+target.name+' erklärt');
+}
+function endWar(universe, username, payload){
+  const ctx = requireAllianceFounder(universe, username);
+  if(!ctx.alliance) return ctx;
+  const { state, tag, alliance } = ctx;
+  const targetTag = String(payload.targetTag||'').trim().toUpperCase();
+  if(!alliance.atWarWith.includes(targetTag)) return fail(state, 'Ihr seid nicht im Krieg mit ['+targetTag+']');
+  alliance.atWarWith = alliance.atWarWith.filter(t=>t!==targetTag);
+  const target = universe.alliances[targetTag];
+  if(target){
+    target.atWarWith = target.atWarWith.filter(t=>t!==tag);
+    const targetFounder = universe.players[target.founder];
+    if(targetFounder) message(targetFounder, 'Die Allianz ['+tag+'] '+alliance.name+' hat den Krieg gegen euch beendet.');
+  }
+  return ok(state, 'Krieg gegen ['+targetTag+'] beendet');
+}
+function offerNap(universe, username, payload){
+  const ctx = requireAllianceFounder(universe, username);
+  if(!ctx.alliance) return ctx;
+  const { state, tag, alliance } = ctx;
+  const targetTag = String(payload.targetTag||'').trim().toUpperCase();
+  const target = universe.alliances[targetTag];
+  if(!target) return fail(state, 'Ziel-Allianz nicht gefunden');
+  if(targetTag===tag) return fail(state, 'Ungültiges Ziel');
+  if(alliance.atWarWith.includes(targetTag)) return fail(state, 'Erst den Krieg beenden, bevor ein Abkommen angeboten werden kann');
+  if(alliance.napWith.includes(targetTag)) return fail(state, 'Ihr habt bereits ein Abkommen mit ['+targetTag+']');
+  if(!universe.napOffers) universe.napOffers=[];
+  if(universe.napOffers.some(o=>o.from===tag && o.to===targetTag)) return fail(state, 'Angebot bereits gesendet');
+  universe.napOffers.push({ from:tag, to:targetTag, createdAt:Date.now() });
+  const targetFounder = universe.players[target.founder];
+  if(targetFounder) message(targetFounder, 'Die Allianz ['+tag+'] '+alliance.name+' bietet ein Neutralitätsabkommen an.');
+  return ok(state, 'Abkommen an ['+targetTag+'] '+target.name+' angeboten');
+}
+function cancelNapOffer(universe, username, payload){
+  const ctx = requireAllianceFounder(universe, username);
+  if(!ctx.alliance) return ctx;
+  const { state, tag } = ctx;
+  const targetTag = String(payload.targetTag||'').trim().toUpperCase();
+  const idx = (universe.napOffers||[]).findIndex(o=>o.from===tag && o.to===targetTag);
+  if(idx<0) return fail(state, 'Kein offenes Angebot an ['+targetTag+']');
+  universe.napOffers.splice(idx,1);
+  return ok(state, 'Angebot an ['+targetTag+'] zurückgezogen');
+}
+function respondToNap(universe, username, payload){
+  const ctx = requireAllianceFounder(universe, username);
+  if(!ctx.alliance) return ctx;
+  const { state, tag, alliance } = ctx;
+  const fromTag = String(payload.fromTag||'').trim().toUpperCase();
+  const idx = (universe.napOffers||[]).findIndex(o=>o.from===fromTag && o.to===tag);
+  if(idx<0) return fail(state, 'Kein Abkommen-Angebot von ['+fromTag+'] gefunden');
+  universe.napOffers.splice(idx,1);
+  const fromAlliance = universe.alliances[fromTag];
+  if(payload.accept){
+    if(!fromAlliance) return fail(state, 'Anbietende Allianz existiert nicht mehr');
+    alliance.napWith.push(fromTag);
+    fromAlliance.napWith.push(tag);
+    const fromFounder = universe.players[fromAlliance.founder];
+    if(fromFounder) message(fromFounder, 'Die Allianz ['+tag+'] '+alliance.name+' hat euer Neutralitätsabkommen angenommen!');
+    return ok(state, 'Abkommen mit ['+fromTag+'] geschlossen');
+  } else {
+    if(fromAlliance){
+      const fromFounder = universe.players[fromAlliance.founder];
+      if(fromFounder) message(fromFounder, 'Die Allianz ['+tag+'] '+alliance.name+' hat euer Neutralitätsabkommen abgelehnt.');
+    }
+    return ok(state, 'Abkommen von ['+fromTag+'] abgelehnt');
+  }
+}
+function endNap(universe, username, payload){
+  const ctx = requireAllianceFounder(universe, username);
+  if(!ctx.alliance) return ctx;
+  const { state, tag, alliance } = ctx;
+  const targetTag = String(payload.targetTag||'').trim().toUpperCase();
+  if(!alliance.napWith.includes(targetTag)) return fail(state, 'Kein Abkommen mit ['+targetTag+']');
+  alliance.napWith = alliance.napWith.filter(t=>t!==targetTag);
+  const target = universe.alliances[targetTag];
+  if(target){
+    target.napWith = target.napWith.filter(t=>t!==tag);
+    const targetFounder = universe.players[target.founder];
+    if(targetFounder) message(targetFounder, 'Die Allianz ['+tag+'] '+alliance.name+' hat das Neutralitätsabkommen aufgekündigt.');
+  }
+  return ok(state, 'Abkommen mit ['+targetTag+'] aufgekündigt');
+}
+function getPublicNapOffersView(universe){
+  return (universe.napOffers||[]).map(o=>({ from:o.from, to:o.to, createdAt:o.createdAt }));
+}
+
+// ---- Spieler-zu-Spieler-Handel (universe.tradeOffers, analog zur Auktion global sichtbar) ----
+// Anders als marketTrade/merchantBuy (Kurs gegen NPC/Markt) handeln hier zwei echte Konten
+// direkt miteinander zu einem selbst festgelegten Kurs. Die angebotene Ware wird beim
+// Erstellen sofort vom anstellenden Planeten abgebucht ("Hinterlegung") - so kann niemand
+// dieselbe Ware doppelt anbieten, und eine Annahme ist immer sofort und vollständig erfüllbar.
+const MAX_OPEN_TRADE_OFFERS_PER_PLAYER = 10;
+function firstAlivePlanetIndex(state){ return state.planets.findIndex(pl=>!pl.destroyed); }
+function createTradeOffer(universe, username, payload){
+  const state = universe.players[username];
+  const p = requirePlanet(state, payload.planetIndex);
+  const give = payload.give, want = payload.want;
+  const giveAmount = Math.floor(Number(payload.giveAmount))||0;
+  const wantAmount = Math.floor(Number(payload.wantAmount))||0;
+  if(!RESOURCE_KEYS.includes(give) || !RESOURCE_KEYS.includes(want)) return fail(state, 'Unbekannte Ressource');
+  if(give===want) return fail(state, 'Angebotene und gewünschte Ressource müssen unterschiedlich sein');
+  if(giveAmount<=0 || wantAmount<=0) return fail(state, 'Ungültige Menge');
+  const openCount = universe.tradeOffers.filter(o=>o.from===username).length;
+  if(openCount>=MAX_OPEN_TRADE_OFFERS_PER_PLAYER) return fail(state, 'Maximal '+MAX_OPEN_TRADE_OFFERS_PER_PLAYER+' offene Handelsangebote gleichzeitig erlaubt');
+  if((p.resources[give]||0) < giveAmount) return fail(state, 'Nicht genug '+RESOURCE_INFO[give].name);
+  p.resources[give] -= giveAmount;
+  const offer = { id:'trade_'+Date.now()+'_'+Math.floor(Math.random()*1e6), from:username, fromPlanetIndex:payload.planetIndex, give, giveAmount, want, wantAmount, createdAt:Date.now() };
+  universe.tradeOffers.push(offer);
+  return ok(state, 'Handelsangebot erstellt: '+giveAmount+' '+RESOURCE_INFO[give].name+' gegen '+wantAmount+' '+RESOURCE_INFO[want].name);
+}
+function cancelTradeOffer(universe, username, payload){
+  const state = universe.players[username];
+  const idx = universe.tradeOffers.findIndex(o=>o.id===payload.offerId);
+  if(idx<0) return fail(state, 'Handelsangebot nicht gefunden');
+  const offer = universe.tradeOffers[idx];
+  if(offer.from!==username) return fail(state, 'Das ist nicht dein Handelsangebot');
+  universe.tradeOffers.splice(idx,1);
+  const refundIdx = (state.planets[offer.fromPlanetIndex] && !state.planets[offer.fromPlanetIndex].destroyed) ? offer.fromPlanetIndex : firstAlivePlanetIndex(state);
+  if(refundIdx>=0) state.planets[refundIdx].resources[offer.give] = (state.planets[refundIdx].resources[offer.give]||0) + offer.giveAmount;
+  return ok(state, 'Handelsangebot storniert, '+offer.giveAmount+' '+RESOURCE_INFO[offer.give].name+' zurückerstattet');
+}
+function acceptTradeOffer(universe, username, payload){
+  const state = universe.players[username];
+  const offer = universe.tradeOffers.find(o=>o.id===payload.offerId);
+  if(!offer) return fail(state, 'Handelsangebot nicht gefunden (evtl. bereits angenommen oder storniert)');
+  if(offer.from===username) return fail(state, 'Du kannst dein eigenes Angebot nicht annehmen');
+  const p = requirePlanet(state, payload.planetIndex);
+  if((p.resources[offer.want]||0) < offer.wantAmount) return fail(state, 'Nicht genug '+RESOURCE_INFO[offer.want].name);
+  const sellerState = universe.players[offer.from];
+  if(!sellerState) return fail(state, 'Anbieter existiert nicht mehr');
+  universe.tradeOffers.splice(universe.tradeOffers.indexOf(offer), 1);
+  p.resources[offer.want] -= offer.wantAmount;
+  p.resources[offer.give] = (p.resources[offer.give]||0) + offer.giveAmount;
+  const sellerCreditIdx = (sellerState.planets[offer.fromPlanetIndex] && !sellerState.planets[offer.fromPlanetIndex].destroyed) ? offer.fromPlanetIndex : firstAlivePlanetIndex(sellerState);
+  if(sellerCreditIdx>=0) sellerState.planets[sellerCreditIdx].resources[offer.want] = (sellerState.planets[sellerCreditIdx].resources[offer.want]||0) + offer.wantAmount;
+  message(sellerState, username+' hat dein Handelsangebot angenommen: '+offer.giveAmount+' '+RESOURCE_INFO[offer.give].name+' gegen '+offer.wantAmount+' '+RESOURCE_INFO[offer.want].name+'.');
+  return ok(state, 'Handel abgeschlossen: '+offer.wantAmount+' '+RESOURCE_INFO[offer.want].name+' bezahlt, '+offer.giveAmount+' '+RESOURCE_INFO[offer.give].name+' erhalten');
+}
+function getPublicTradeOffersView(universe){
+  return universe.tradeOffers.map(o=>({ id:o.id, from:o.from, give:o.give, giveAmount:o.giveAmount, want:o.want, wantAmount:o.wantAmount, createdAt:o.createdAt }));
 }
 function marketTrade(state, planetIndex, giveType, wantType, amount){
   const p = requirePlanet(state, planetIndex);
@@ -2227,6 +2421,15 @@ function applyAction(universe, username, type, payload){
     case 'applyToAlliance': return applyToAlliance(universe, username, payload);
     case 'respondToApplication': return respondToApplication(universe, username, payload);
     case 'leaveAlliance': return leaveAlliance(universe, username);
+    case 'declareWar': return declareWar(universe, username, payload);
+    case 'endWar': return endWar(universe, username, payload);
+    case 'offerNap': return offerNap(universe, username, payload);
+    case 'cancelNapOffer': return cancelNapOffer(universe, username, payload);
+    case 'respondToNap': return respondToNap(universe, username, payload);
+    case 'endNap': return endNap(universe, username, payload);
+    case 'createTradeOffer': return createTradeOffer(universe, username, payload);
+    case 'cancelTradeOffer': return cancelTradeOffer(universe, username, payload);
+    case 'acceptTradeOffer': return acceptTradeOffer(universe, username, payload);
     case 'marketTrade': return marketTrade(state, payload.planetIndex, payload.give, payload.want, payload.amount);
     case 'merchantBuy': return merchantBuy(state, payload.planetIndex, payload.resourceType, payload.amount);
     case 'launchMissiles': return launchMissiles(universe, username, payload.planetIndex, payload.targetPos, payload.count);
@@ -2245,6 +2448,6 @@ module.exports = {
   seedGalaxy, sanitizeGalaxySlotsForClient, validCoord, coordStr, coordLinkHtml, debrisKey,
   computeHighscore, adminListPlayers, adminDeletePlayer, adminGrantResources,
   applyAction, tick, getPublicAuctionView, getPublicEventView,
-  getPlayerAllianceView, getAlliancesListView,
+  getPlayerAllianceView, getAlliancesListView, getPublicTradeOffersView, getPublicNapOffersView,
   hourly, energyStats, maxStorage, factoryThrottle, applyFactories, zeroResources, resTotal,
 };

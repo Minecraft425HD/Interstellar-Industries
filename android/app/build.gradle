@@ -15,8 +15,8 @@ android {
         // "adb install -r") die APK nicht zuverlaessig als Update und behaelt die alte
         // Version - genau das Symptom, das hier aufgetreten ist (versionCode stand die
         // ganze Session ueber unveraendert auf 1).
-        versionCode 31
-        versionName "1.30"
+        versionCode 32
+        versionName "1.31"
     }
 
     buildTypes {
@@ -30,4 +30,10 @@ android {
         sourceCompatibility JavaVersion.VERSION_17
         targetCompatibility JavaVersion.VERSION_17
     }
+}
+
+dependencies {
+    // Fuer den periodischen Hintergrund-Abgleich (NotificationPollWorker) - laeuft auch
+    // weiter, wenn die App-Activity nicht sichtbar/geschlossen ist.
+    implementation 'androidx.work:work-runtime:2.9.1'
 }

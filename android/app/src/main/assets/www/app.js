@@ -260,6 +260,8 @@ const state = {
   onboarded: true,
   marketRate: {},
   auction: null,
+  tradeOffers: [],
+  napOffers: [],
   logs: [],
   galaxyIndex: 1,
   galaxySystem: 145,
@@ -598,9 +600,19 @@ const SERVER_KEY = 'stellareIndustrienServerUrl';
 const TOKEN_KEY = 'stellareIndustrienToken';
 const USERNAME_KEY = 'stellareIndustrienUsername';
 function getServerUrl(){ return (localStorage.getItem(SERVER_KEY)||'').trim(); }
-function setServerUrl(url){ if(url) localStorage.setItem(SERVER_KEY, url); else localStorage.removeItem(SERVER_KEY); }
+function setServerUrl(url){ if(url) localStorage.setItem(SERVER_KEY, url); else localStorage.removeItem(SERVER_KEY); syncAndroidCredentials(); }
 function getToken(){ return localStorage.getItem(TOKEN_KEY)||''; }
-function setToken(t){ if(t) localStorage.setItem(TOKEN_KEY, t); else localStorage.removeItem(TOKEN_KEY); }
+function setToken(t){ if(t) localStorage.setItem(TOKEN_KEY, t); else localStorage.removeItem(TOKEN_KEY); syncAndroidCredentials(); }
+// Spiegelt Server-URL+Token an die native Android-Bruecke, damit ein WorkManager-
+// Hintergrunddienst auch bei geschlossener App periodisch nach neuen Ereignissen fragen
+// kann (die WebView-eigene localStorage ist aus nativem Code sonst nicht ohne Weiteres
+// erreichbar). Bei Logout (leerer Token) wird die Bruecke bewusst mitgeleert, damit der
+// Hintergrunddienst nicht mit einem ungueltigen Token weiterlaeuft.
+function syncAndroidCredentials(){
+  if(window.Android && window.Android.storeCredentials){
+    window.Android.storeCredentials(getServerUrl(), getToken());
+  }
+}
 function getStoredUsername(){ return localStorage.getItem(USERNAME_KEY)||''; }
 function setStoredUsername(u){ if(u) localStorage.setItem(USERNAME_KEY, u); else localStorage.removeItem(USERNAME_KEY); }
 
@@ -612,6 +624,10 @@ function setNotificationsEnabled(on){
   if(on && !(window.Android && window.Android.showNotification) && typeof Notification!=='undefined' && Notification.permission==='default'){
     Notification.requestPermission();
   }
+  // Auch fuer den native Hintergrunddienst spiegeln (siehe syncAndroidCredentials) - ohne
+  // das wuerde WorkManager weiter benachrichtigen, obwohl der Nutzer es in der App gerade
+  // ausgeschaltet hat.
+  if(window.Android && window.Android.setNotificationsEnabled) window.Android.setNotificationsEnabled(on);
 }
 // Bevorzugt die native Android-Bridge (funktioniert auch in der WebView-App, wo die Web
 // Notifications API ohne diese Bridge wirkungslos waere); faellt im Browser auf die
@@ -750,6 +766,8 @@ function applyServerState(serverState, opts){
   if(serverState.onboarded !== undefined) state.onboarded = !!serverState.onboarded;
   state.marketRate = serverState.marketRate || state.marketRate;
   state.auction = serverState.auction || state.auction;
+  state.tradeOffers = serverState.tradeOffers || state.tradeOffers;
+  state.napOffers = serverState.napOffers || state.napOffers;
   if(serverState.event !== undefined) state.event = serverState.event;
   state.logs = serverState.logs || [];
   const wasEverConnected = everConnected;
@@ -1204,6 +1222,9 @@ function transferSentinelOrbit(planetIdx, toMoon, count){ postAction('transferSe
 function depositAlliance(){ postAction('depositAlliance', {planetIndex: state.activePlanet}); }
 function marketTrade(giveType, wantType, amount){ postAction('marketTrade', {planetIndex: state.activePlanet, give: giveType, want: wantType, amount}); }
 function merchantBuy(resourceType, amount){ postAction('merchantBuy', {planetIndex: state.activePlanet, resourceType, amount}); }
+function createTradeOffer(give, giveAmount, want, wantAmount){ postAction('createTradeOffer', {planetIndex: state.activePlanet, give, giveAmount, want, wantAmount}); }
+function cancelTradeOffer(offerId){ postAction('cancelTradeOffer', {offerId}); }
+function acceptTradeOffer(offerId){ postAction('acceptTradeOffer', {planetIndex: state.activePlanet, offerId}); }
 function launchMissiles(targetPos, count){ postAction('launchMissiles', {planetIndex: state.activePlanet, targetPos, count}); }
 
 // ---- Backup / restore (server persists automatically; this is a local safety copy) ----
@@ -1328,7 +1349,7 @@ function computePoints(p){
 }
 function totalPlayerPoints(){ return Math.floor(state.planets.filter(p=>!p.destroyed).reduce((s,p)=>s+computePoints(p),0)/1000); }
 
-const navItems = [['overview','Übersicht'],['buildings','Gebäude'],['facilities','Anlagen'],['factories','Fabriken'],['defense','Verteidigung'],['research','Forschung'],['shipyard','Werft'],['fleet','Flotte'],['expeditions','Expeditionen'],['galaxy','Galaxie'],['alliance','Allianz'],['officers','Offiziere'],['market','Markt'],['reports','Berichte'],['messages','Nachrichten'],['empire','Imperium'],['highscore','Rangliste'],['settings','Einstellungen']];
+const navItems = [['overview','Übersicht'],['buildings','Gebäude'],['facilities','Anlagen'],['factories','Fabriken'],['defense','Verteidigung'],['research','Forschung'],['shipyard','Werft'],['fleet','Flotte'],['expeditions','Expeditionen'],['galaxy','Galaxie'],['alliance','Allianz'],['officers','Offiziere'],['market','Markt'],['trade','Handel'],['reports','Berichte'],['messages','Nachrichten'],['empire','Imperium'],['highscore','Rangliste'],['settings','Einstellungen']];
 
 function unreadMailCount(){ return (state.mail||[]).filter(m=>m.direction==='in' && !m.read).length; }
 function renderNav(){ const unread=unreadMailCount(); $('#nav').innerHTML = navItems.map(([id,label])=>`<button class="${state.view===id?'active':''}" data-view="${id}">${label}${id==='messages'&&unread>0?` <span class="pill active" style="padding:1px 6px;font-size:11px">${unread}</span>`:''}</button>`).join(''); document.querySelectorAll('[data-view]').forEach(b=>b.onclick=()=>{ if(b.dataset.view!=='fleet') state.fleetPrefill=null; if(b.dataset.view==='highscore') highscoreCache=null; if(b.dataset.view==='galaxy') galaxyCache={}; state.view=b.dataset.view; if(b.dataset.view==='messages' && unreadMailCount()>0) postAction('markMailRead', {}); render(); }); }
@@ -1775,10 +1796,46 @@ function viewAlliance(){
   }
   const rank = allianceRank(a.points);
   const applicationsHtml = a.isFounder && a.applications.length ? `<div class="card" style="margin-top:16px"><h3>Bewerbungen</h3><table><tr><th>Spieler</th><th></th></tr>${a.applications.map(u=>`<tr><td>${escapeHtml(u)}</td><td><button class="btn good" data-respond-application="${escapeHtml(u)}:1">Annehmen</button> <button class="btn danger" data-respond-application="${escapeHtml(u)}:0">Ablehnen</button></td></tr>`).join('')}</table></div>` : '';
+  const diplomacyHtml = diplomacyCardHtml(a);
   return `<h2>Allianz</h2><div class="grid2">
   <div class="card"><h3>${escapeHtml(a.name)} [${escapeHtml(a.tag)}]</h3><div class="small">Gründer: ${escapeHtml(a.founder)}${a.isFounder?' (Du)':''} · Rang: ${rank} · Allianzpunkte: ${fmt(a.points)}</div><div style="height:10px"></div><table><tr><th>Mitglied</th></tr>${a.members.map(m=>`<tr><td>${escapeHtml(m)}${m===state.username?' (Du)':''}</td></tr>`).join('')}</table><div style="height:10px"></div><button class="btn danger" id="leaveAllianceBtn">Allianz verlassen</button></div>
   <div class="card"><h3>Allianzdepot</h3><div class="grid4">${RESOURCE_KEYS.filter(k=>(a.depot[k]||0)>0).map(k=>`<div class="card"><div class="label">${RESOURCE_INFO[k].name}</div><div class="value">${fmt(a.depot[k]||0)}</div></div>`).join('') || '<div class="small">Noch keine Einzahlungen.</div>'}</div><div style="height:10px"></div><button class="btn alt" id="depositBtn">Bis zu 1000 von jeder Ressource einzahlen</button></div>
-  </div>${applicationsHtml}`; }
+  </div>${applicationsHtml}${diplomacyHtml}`; }
+
+// Diplomatie zwischen Allianzen: Kriegserklaerung/-beendigung ist einseitig (keine
+// Zustimmung des Gegners noetig), ein Neutralitaetsabkommen (NAP) braucht dagegen beide
+// Seiten - ueber die globale universe.napOffers-Warteliste (state.napOffers). Verwalten
+// kann nur der Gruender (server-seitig per requireAllianceFounder erzwungen); Mitglieder
+// sehen den Status nur lesend.
+function diplomacyCardHtml(a){
+  const myTag = a.tag;
+  const atWar = a.atWarWith||[], atPeace = a.napWith||[];
+  const napOffers = state.napOffers||[];
+  const incoming = napOffers.filter(o=>o.to===myTag);
+  const outgoing = napOffers.filter(o=>o.from===myTag);
+  const otherAlliances = (state.alliancesList||[]).filter(x=>x.tag!==myTag);
+  const tagName = t => { const x=(state.alliancesList||[]).find(y=>y.tag===t); return x ? escapeHtml(x.name)+' ['+escapeHtml(t)+']' : '['+escapeHtml(t)+']'; };
+  const warRows = atWar.length ? atWar.map(t=>`<tr><td>${tagName(t)}</td><td>${a.isFounder?`<button class="btn alt" data-end-war="${escapeHtml(t)}">Frieden schließen</button>`:'Krieg'}</td></tr>`).join('') : '<tr><td colspan="2" class="small">Mit niemandem im Krieg.</td></tr>';
+  const napRows = atPeace.length ? atPeace.map(t=>`<tr><td>${tagName(t)}</td><td>${a.isFounder?`<button class="btn danger" data-end-nap="${escapeHtml(t)}">Abkommen aufkündigen</button>`:'Abkommen'}</td></tr>`).join('') : '<tr><td colspan="2" class="small">Keine Abkommen.</td></tr>';
+  const foundersOnlyHtml = a.isFounder ? `
+    <div style="height:10px"></div>
+    ${incoming.length ? `<div class="small" style="margin-top:6px"><strong>Eingehende Abkommen-Angebote:</strong></div><table><tr><th>Von</th><th></th></tr>${incoming.map(o=>`<tr><td>${tagName(o.from)}</td><td><button class="btn good" data-respond-nap="${escapeHtml(o.from)}:1">Annehmen</button> <button class="btn danger" data-respond-nap="${escapeHtml(o.from)}:0">Ablehnen</button></td></tr>`).join('')}</table>` : ''}
+    ${outgoing.length ? `<div class="small" style="margin-top:6px"><strong>Ausstehende eigene Angebote:</strong></div><table><tr><th>An</th><th></th></tr>${outgoing.map(o=>`<tr><td>${tagName(o.to)}</td><td><button class="btn alt" data-cancel-nap="${escapeHtml(o.to)}">Zurückziehen</button></td></tr>`).join('')}</table>` : ''}
+    <div class="small" style="margin-top:10px"><strong>Andere Allianzen:</strong></div>
+    ${otherAlliances.length ? `<table><tr><th>Allianz</th><th></th></tr>${otherAlliances.map(x=>{
+      if(atWar.includes(x.tag)) return `<tr><td>${escapeHtml(x.name)} [${escapeHtml(x.tag)}]</td><td class="small">Im Krieg</td></tr>`;
+      if(atPeace.includes(x.tag)) return `<tr><td>${escapeHtml(x.name)} [${escapeHtml(x.tag)}]</td><td class="small">Abkommen</td></tr>`;
+      if(outgoing.some(o=>o.to===x.tag)) return `<tr><td>${escapeHtml(x.name)} [${escapeHtml(x.tag)}]</td><td class="small">Abkommen angeboten</td></tr>`;
+      return `<tr><td>${escapeHtml(x.name)} [${escapeHtml(x.tag)}]</td><td><button class="btn danger" data-declare-war="${escapeHtml(x.tag)}">Krieg erklären</button> <button class="btn alt" data-offer-nap="${escapeHtml(x.tag)}">Abkommen anbieten</button></td></tr>`;
+    }).join('')}</table>` : '<div class="small">Keine weiteren Allianzen vorhanden.</div>'}
+  ` : '';
+  return `<div class="card" style="margin-top:16px"><h3>Diplomatie</h3>
+    <table><tr><th>Krieg mit</th><th></th></tr>${warRows}</table>
+    <div style="height:10px"></div>
+    <table><tr><th>Abkommen mit</th><th></th></tr>${napRows}</table>
+    ${foundersOnlyHtml}
+  </div>`;
+}
 
 function viewOfficers(){
   const list=[['commander','Kommandant','Reduziert Baukosten für Gebäude und Verteidigung leicht (-5%).'],['admiral','Admiral','Erhöht die Flottengeschwindigkeit (+10%).'],['engineer','Ingenieur','Erhöht die Energieproduktion (+10%).'],['geologist','Geologe','Erhöht die Rohstoffproduktion um 10%.'],['technocrat','Technokrat','Beschleunigt die Forschung (-15% Zeit).']];
@@ -1804,6 +1861,32 @@ function viewMarket(){ const r=state.marketRate; const initialAmount=1000; const
   const rateCards = RESOURCE_KEYS.map(k=>`<div class="card"><div class="label">${RESOURCE_INFO[k].name}</div><div class="value">${fmt1(r[k]||0)}</div></div>`).join('');
   const stLinkCard = `<div class="small" style="margin-top:16px">Stellaris-Token (ST): Premium-Währung für Auktionshaus, Offiziere und den Händler. <button class="btn alt" type="button" data-open-st-shop style="margin-left:8px">Stellaris-Token kaufen →</button></div>`;
   return `<h2>Markt</h2><div class="small">Kurswerte (relativer Tauschwert pro Einheit; 10% Marktabschlag beim Tausch):</div><div style="height:8px"></div><div class="grid4">${rateCards}</div>${stLinkCard}<div style="height:16px"></div><div class="grid2"><div class="card"><h3>Ressourcen handeln</h3><form class="market-form" id="marketForm"><label>Abgeben<select name="give">${resOptions}</select></label><label>Erhalten<select name="want">${resOptions}</select></label><label>Menge<input type="number" min="1" value="100" name="amount"></label><button class="btn good" type="submit">Am Markt tauschen</button></form></div><div class="card"><h3>Händler (Stellaris-Token)</h3><div class="small">Tausche Stellaris-Token sofort gegen Ressourcen. Kurs je nach Rohstoffwert unterschiedlich.</div><div style="height:10px"></div><form class="market-form" id="merchantForm"><label>Ressource<select name="resource">${resOptions}</select></label><label>Menge<input type="number" min="1" value="${initialAmount}" name="amount" id="merchantAmount"></label><div class="small" id="merchantCostHint">Kosten: ${fmt(initialCost)} Stellaris-Token</div><button class="btn warn" type="submit" id="merchantBuyBtn" ${initialAffordable?'':'disabled'}>Kaufen</button></form><div class="small" style="margin-top:8px">Stellaris-Token: ${fmt(state.darkMatter)}</div></div>${auctionCard}</div>`; }
+
+// Direkter Spieler-zu-Spieler-Handel (im Gegensatz zum Markt/Haendler oben, die beide
+// gegen einen NPC-Kurs laufen): die angebotene Ware wird beim Erstellen sofort auf dem
+// gewaehlten Planeten hinterlegt (siehe createTradeOffer() im Server), daher kein
+// "Bestand reicht nicht"-Fehler beim Annehmen moeglich.
+function viewTrade(){
+  const resOptions = RESOURCE_KEYS.map(k=>`<option value="${k}">${RESOURCE_INFO[k].name}</option>`).join('');
+  const offers = state.tradeOffers||[];
+  const myOffers = offers.filter(o=>o.from===state.username);
+  const otherOffers = offers.filter(o=>o.from!==state.username);
+  const offerRow = (o, mine) => `<tr><td>${escapeHtml(o.from)}${mine?' (Du)':''}</td><td>${fmt(o.giveAmount)} ${RESOURCE_INFO[o.give].name}</td><td>${fmt(o.wantAmount)} ${RESOURCE_INFO[o.want].name}</td><td>${mine ? `<button class="btn danger" data-cancel-trade="${o.id}">Stornieren</button>` : `<button class="btn good" data-accept-trade="${o.id}">Annehmen</button>`}</td></tr>`;
+  const myOffersHtml = myOffers.length ? `<table><tr><th>Von</th><th>Bietet</th><th>Möchte</th><th></th></tr>${myOffers.map(o=>offerRow(o,true)).join('')}</table>` : '<div class="small">Du hast keine offenen Angebote.</div>';
+  const otherOffersHtml = otherOffers.length ? `<table><tr><th>Von</th><th>Bietet</th><th>Möchte</th><th></th></tr>${otherOffers.map(o=>offerRow(o,false)).join('')}</table>` : '<div class="small">Derzeit keine offenen Angebote anderer Spieler.</div>';
+  return `<h2>Handel</h2><div class="small">Direkter Ressourcentausch zwischen Spielern zu einem selbst festgelegten Kurs - die angebotene Ware wird beim Erstellen sofort hinterlegt (max. 10 offene Angebote gleichzeitig).</div><div style="height:16px"></div>
+  <div class="card"><h3>Neues Angebot erstellen</h3><form class="market-form" id="createTradeForm">
+    <label>Ich biete<select name="give">${resOptions}</select></label>
+    <label>Menge<input type="number" min="1" value="1000" name="giveAmount"></label>
+    <label>Ich möchte<select name="want">${resOptions}</select></label>
+    <label>Menge<input type="number" min="1" value="1000" name="wantAmount"></label>
+    <button class="btn good" type="submit">Angebot erstellen</button>
+  </form></div>
+  <div style="height:16px"></div>
+  <div class="card"><h3>Deine offenen Angebote</h3>${myOffersHtml}</div>
+  <div style="height:16px"></div>
+  <div class="card"><h3>Angebote anderer Spieler</h3>${otherOffersHtml}</div>`;
+}
 
 // Dedizierter Stellaris-Token-Kaufbildschirm, erreichbar per Klick auf das Guthaben oben
 // rechts im Topbar (oder den Link in der Marktansicht) - rein informativ/UI-Vorbereitung,
@@ -1915,7 +1998,7 @@ function viewHighscore(){
 }
 
 function renderView(bind=true){
-  const views={overview:viewOverview,buildings:viewBuildings,facilities:viewFacilities,factories:viewFactories,defense:viewDefense,research:viewResearch,shipyard:viewShipyard,fleet:viewFleet,expeditions:viewExpeditions,galaxy:viewGalaxy,alliance:viewAlliance,officers:viewOfficers,market:viewMarket,reports:viewReports,messages:viewMessages,empire:viewEmpire,highscore:viewHighscore,settings:viewSettings,stellarisShop:viewStellarisShop};
+  const views={overview:viewOverview,buildings:viewBuildings,facilities:viewFacilities,factories:viewFactories,defense:viewDefense,research:viewResearch,shipyard:viewShipyard,fleet:viewFleet,expeditions:viewExpeditions,galaxy:viewGalaxy,alliance:viewAlliance,officers:viewOfficers,market:viewMarket,trade:viewTrade,reports:viewReports,messages:viewMessages,empire:viewEmpire,highscore:viewHighscore,settings:viewSettings,stellarisShop:viewStellarisShop};
   $('#view').innerHTML = views[state.view]();
   if(bind){
     document.querySelectorAll('[data-factory-tab]').forEach(b=>b.onclick=()=>{ state.factoryTab=b.dataset.factoryTab; renderView(); });
@@ -1945,6 +2028,9 @@ function renderView(bind=true){
       showError('Echtgeld-Zahlung ist noch nicht verfügbar - Zahlungsanbieter folgt in Kürze.');
     });
     const auctionForm=$('#auctionForm'); if(auctionForm) auctionForm.onsubmit=e=>{e.preventDefault(); postAction('bidAuction', {amount: Number(auctionForm.amount.value)||0});};
+    const ctf=$('#createTradeForm'); if(ctf) ctf.onsubmit=e=>{e.preventDefault(); createTradeOffer(ctf.give.value, ctf.giveAmount.value, ctf.want.value, ctf.wantAmount.value);};
+    document.querySelectorAll('[data-cancel-trade]').forEach(b=>b.onclick=()=>{ if(confirm('Angebot wirklich stornieren?')) cancelTradeOffer(b.dataset.cancelTrade); });
+    document.querySelectorAll('[data-accept-trade]').forEach(b=>b.onclick=()=>acceptTradeOffer(b.dataset.acceptTrade));
     const merchForm=$('#merchantForm'); if(merchForm){
       merchForm.onsubmit=e=>{e.preventDefault(); merchantBuy(merchForm.resource.value, merchForm.amount.value)};
       const merchAmountInput=$('#merchantAmount'), merchHint=$('#merchantCostHint'), merchBtn=$('#merchantBuyBtn');
@@ -1991,6 +2077,12 @@ function renderView(bind=true){
     document.querySelectorAll('[data-apply-alliance]').forEach(b=>b.onclick=()=>postAction('applyToAlliance', {tag:b.dataset.applyAlliance}));
     document.querySelectorAll('[data-respond-application]').forEach(b=>b.onclick=()=>{ const [applicantUsername,acceptFlag]=b.dataset.respondApplication.split(':'); postAction('respondToApplication', {applicantUsername, accept: acceptFlag==='1'}); });
     const leaveAllianceBtn=$('#leaveAllianceBtn'); if(leaveAllianceBtn) leaveAllianceBtn.onclick=()=>{ if(confirm('Allianz wirklich verlassen?')) postAction('leaveAlliance', {}); };
+    document.querySelectorAll('[data-declare-war]').forEach(b=>b.onclick=()=>{ if(confirm('Diplomatie ['+b.dataset.declareWar+'] wirklich den Krieg erklären?')) postAction('declareWar', {targetTag:b.dataset.declareWar}); });
+    document.querySelectorAll('[data-end-war]').forEach(b=>b.onclick=()=>postAction('endWar', {targetTag:b.dataset.endWar}));
+    document.querySelectorAll('[data-offer-nap]').forEach(b=>b.onclick=()=>postAction('offerNap', {targetTag:b.dataset.offerNap}));
+    document.querySelectorAll('[data-cancel-nap]').forEach(b=>b.onclick=()=>postAction('cancelNapOffer', {targetTag:b.dataset.cancelNap}));
+    document.querySelectorAll('[data-end-nap]').forEach(b=>b.onclick=()=>{ if(confirm('Abkommen wirklich aufkündigen?')) postAction('endNap', {targetTag:b.dataset.endNap}); });
+    document.querySelectorAll('[data-respond-nap]').forEach(b=>b.onclick=()=>{ const [fromTag,acceptFlag]=b.dataset.respondNap.split(':'); postAction('respondToNap', {fromTag, accept: acceptFlag==='1'}); });
     document.querySelectorAll('[data-officer]').forEach(b=>b.onclick=()=>{ if(officerActive(b.dataset.officer)) return; postAction('activateOfficer', {key:b.dataset.officer}); });
     document.querySelectorAll('[data-highscore-cat]').forEach(b=>b.onclick=()=>{ highscoreCategory=b.dataset.highscoreCat; renderView(); });
     document.querySelectorAll('[data-battle-sim]').forEach(b=>b.onclick=()=>openBattleSimulator(Number(b.dataset.battleSim)));
@@ -2025,6 +2117,8 @@ function render(){
 
 function initConnection(){
   render();
+  syncAndroidCredentials();
+  if(window.Android && window.Android.setNotificationsEnabled) window.Android.setNotificationsEnabled(notificationsEnabled());
   if(getServerUrl() && getToken()){
     connectionStatus='connecting';
     pollState();

@@ -3,12 +3,7 @@ package com.interstellar.industries;
 import android.Manifest;
 import android.annotation.SuppressLint;
 import android.app.Activity;
-import android.app.Notification;
-import android.app.NotificationChannel;
-import android.app.NotificationManager;
-import android.app.PendingIntent;
 import android.content.ContentValues;
-import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.net.Uri;
@@ -26,6 +21,12 @@ import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.Toast;
 
+import androidx.work.Constraints;
+import androidx.work.ExistingPeriodicWorkPolicy;
+import androidx.work.NetworkType;
+import androidx.work.PeriodicWorkRequest;
+import androidx.work.WorkManager;
+
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileOutputStream;
@@ -33,13 +34,13 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
+import java.util.concurrent.TimeUnit;
 
 public class MainActivity extends Activity {
 
     private static final int REQUEST_FILE_CHOOSER = 51;
     private static final int REQUEST_LOAD_SAVE = 52;
-    private static final String NOTIFICATION_CHANNEL_ID = "game_events";
-    private static final int NOTIFICATION_ID = 1001;
+    private static final String POLL_WORK_NAME = "notification_poll";
 
     private WebView webView;
     private ValueCallback<Uri[]> filePathCallback;
@@ -48,7 +49,7 @@ public class MainActivity extends Activity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        createNotificationChannel();
+        NotificationHelper.createChannel(this);
         requestNotificationPermissionIfNeeded();
 
         webView = new WebView(this);
@@ -106,8 +107,45 @@ public class MainActivity extends Activity {
         // WebView diese ohne zusaetzliche JS-Bridge nicht implementiert.
         @JavascriptInterface
         public void showNotification(final String title, final String body) {
-            runOnUiThread(() -> postNotification(title, body));
+            runOnUiThread(() -> NotificationHelper.post(MainActivity.this, title, body));
         }
+
+        // Spiegelt Server-URL+Token in SharedPreferences (siehe GamePrefs), damit der
+        // periodische NotificationPollWorker auch bei geschlossener App darauf zugreifen kann -
+        // die WebView-eigene localStorage ist aus nativem Code sonst nicht erreichbar. Ein
+        // leerer Token (Logout) stoppt den Hintergrunddienst wieder.
+        @JavascriptInterface
+        public void storeCredentials(final String serverUrl, final String token) {
+            runOnUiThread(() -> {
+                GamePrefs.setCredentials(MainActivity.this, serverUrl, token);
+                if (serverUrl != null && !serverUrl.isEmpty() && token != null && !token.isEmpty()) {
+                    schedulePollWork();
+                } else {
+                    WorkManager.getInstance(MainActivity.this).cancelUniqueWork(POLL_WORK_NAME);
+                }
+            });
+        }
+
+        // Spiegelt die Benachrichtigungs-Einstellung aus den Client-Einstellungen (siehe
+        // setNotificationsEnabled() in app.js), damit der Hintergrunddienst respektiert, wenn
+        // der Nutzer Benachrichtigungen in der App wieder ausgeschaltet hat.
+        @JavascriptInterface
+        public void setNotificationsEnabled(final boolean on) {
+            runOnUiThread(() -> GamePrefs.setNotificationsEnabled(MainActivity.this, on));
+        }
+    }
+
+    // WorkManager erlaubt periodische Arbeit nur alle 15 Minuten oder seltener - das ist der
+    // kuerzestmoegliche Abstand fuer diesen Hintergrund-Abgleich. KEEP sorgt dafuer, dass ein
+    // bereits laufender periodischer Auftrag nicht bei jedem App-Start/Login neu getaktet wird.
+    private void schedulePollWork() {
+        Constraints constraints = new Constraints.Builder()
+                .setRequiredNetworkType(NetworkType.CONNECTED)
+                .build();
+        PeriodicWorkRequest request = new PeriodicWorkRequest.Builder(NotificationPollWorker.class, 15, TimeUnit.MINUTES)
+                .setConstraints(constraints)
+                .build();
+        WorkManager.getInstance(this).enqueueUniquePeriodicWork(POLL_WORK_NAME, ExistingPeriodicWorkPolicy.KEEP, request);
     }
 
     private void requestNotificationPermissionIfNeeded() {
@@ -120,40 +158,6 @@ public class MainActivity extends Activity {
                 requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, 60);
             }
         }
-    }
-
-    private void createNotificationChannel() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            NotificationChannel channel = new NotificationChannel(
-                    NOTIFICATION_CHANNEL_ID, "Spielereignisse", NotificationManager.IMPORTANCE_HIGH);
-            channel.setDescription("Angriffe, Flottenankünfte und andere wichtige Ereignisse");
-            NotificationManager manager = getSystemService(NotificationManager.class);
-            if (manager != null) manager.createNotificationChannel(channel);
-        }
-    }
-
-    @SuppressWarnings("deprecation")
-    private void postNotification(String title, String body) {
-        Intent intent = new Intent(this, MainActivity.class);
-        intent.setFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_CLEAR_TOP);
-        int flags = PendingIntent.FLAG_UPDATE_CURRENT
-                | (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M ? PendingIntent.FLAG_IMMUTABLE : 0);
-        PendingIntent pendingIntent = PendingIntent.getActivity(this, 0, intent, flags);
-        // Notification.Builder(Context, String) braucht API 26+ (Kanal-Pflicht); minSdk hier ist
-        // 24, daher fuer aeltere Geraete auf den alten Einzel-Argument-Konstruktor ausweichen
-        // (ohne Kanal - dort gibt es das Konzept noch nicht).
-        Notification.Builder builder = (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
-                ? new Notification.Builder(this, NOTIFICATION_CHANNEL_ID)
-                : new Notification.Builder(this);
-        Notification notification = builder
-                .setContentTitle(title)
-                .setContentText(body)
-                .setSmallIcon(android.R.drawable.ic_dialog_alert)
-                .setAutoCancel(true)
-                .setContentIntent(pendingIntent)
-                .build();
-        NotificationManager manager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
-        if (manager != null) manager.notify(NOTIFICATION_ID, notification);
     }
 
     private void writeSaveFile(String json) {
