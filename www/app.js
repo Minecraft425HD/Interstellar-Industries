@@ -1,3 +1,8 @@
+// App-Version zur Anzeige in den Einstellungen (Diagnose-Hilfe: laesst sich damit sofort
+// pruefen, ob eine installierte APK tatsaechlich die neueste ist) - manuell synchron zu
+// android/app/build.gradle versionName halten, bei jedem Versionsbump mitziehen.
+const APP_VERSION = '1.32';
+
 // ---- Rohstoffe & Planetentypen (Spiegelbild von server/gameEngine.js) ----
 const RESOURCE_KEYS = [
   'iron','copper','aluminium','gold','silver','lithium','rareEarths','nickel','uranium','limestone',
@@ -1698,7 +1703,7 @@ function viewSettings(){
   const notifyOn = notificationsEnabled();
   const notifyCard = `<div class="card"><h3>Benachrichtigungen</h3><div class="small">Zeigt eine Benachrichtigung, wenn dein Planet angegriffen, ausspioniert oder bombardiert wird, oder ein Transport eintrifft.</div><div style="height:10px"></div><label style="display:flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" id="notifyToggle" ${notifyOn?'checked':''}> Bei Angriffen/Ankünften benachrichtigen</label></div>`;
   return `<h2>Einstellungen</h2><div class="grid2">
-  <div class="card"><h3>Konto</h3><div class="small">Angemeldet als <strong>${state.username||'-'}</strong></div><div class="small" style="color:${statusColor}">Server-Status: ${statusLabel}</div><div class="small">Server: ${url}</div><div style="height:10px"></div><button class="btn danger" id="logoutBtn">Abmelden</button> <button class="btn alt" id="changeServerBtn2">Server wechseln</button></div>
+  <div class="card"><h3>Konto</h3><div class="small">Angemeldet als <strong>${state.username||'-'}</strong></div><div class="small" style="color:${statusColor}">Server-Status: ${statusLabel}</div><div class="small">Server: ${url}</div><div class="small">App-Version: ${APP_VERSION}</div><div style="height:10px"></div><button class="btn danger" id="logoutBtn">Abmelden</button> <button class="btn alt" id="changeServerBtn2">Server wechseln</button></div>
   ${notifyCard}
   ${renameCard}
   </div>`;
