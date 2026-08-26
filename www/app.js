@@ -1,7 +1,7 @@
 // App-Version zur Anzeige in den Einstellungen (Diagnose-Hilfe: laesst sich damit sofort
 // pruefen, ob eine installierte APK tatsaechlich die neueste ist) - manuell synchron zu
 // android/app/build.gradle versionName halten, bei jedem Versionsbump mitziehen.
-const APP_VERSION = '1.33';
+const APP_VERSION = '1.34';
 
 // Globaler Fehlerfaenger: zeigt jede unbehandelte JS-Exception als sichtbaren Toast an,
 // statt sie nur (fuer den Nutzer unsichtbar) in der Android-WebView-Konsole verschwinden zu
@@ -335,14 +335,60 @@ function infoIconHtml(type, key, level){ return `<button type="button" class="in
 function closeInfoModal(){ const m=document.getElementById('infoModal'); if(m) m.remove(); }
 
 // ---- Einfuehrungs-Tutorial fuer brandneue Spieler (state.onboarded, serverseitig gesetzt) ----
+// Jeder Schritt kann optional view (+ Unter-Tab) angeben - beim Weiter-/Zurueck-Klick
+// wechselt die Seite dahinter automatisch zum passenden Tab, damit der Spieler die
+// erklaerte Stelle direkt vor sich sieht statt nur davon zu lesen (siehe goToOnboardingStep()).
+// Deckt bewusst ALLE Spielsysteme ab (siehe auch die ausfuehrlichere Dauerreferenz in den
+// Einstellungen unter "Spielhilfe" - HELP_CATEGORIES weiter unten), damit am Ende keine
+// offenen Fragen bleiben.
 const ONBOARDING_STEPS = [
-  {title:'Willkommen bei Stellare Industrien!', body:'Du hast gerade dein erstes Imperium gegründet. Diese kurze Einführung zeigt dir in wenigen Schritten, wie du loslegst. Du kannst sie jederzeit überspringen.'},
-  {title:'Rohstoffe & Gebäude', body:'Im Tab <strong>Gebäude</strong> baust du Minen für Erze, Energieträger und mehr, sowie Kraftwerke für Energie - ohne Energie produzieren deine Minen nicht auf voller Leistung. Im Tab <strong>Übersicht</strong> siehst du deine aktuelle Produktion pro Stunde.'},
-  {title:'Forschung & Fabriken', body:'Im Tab <strong>Forschung</strong> schaltest du neue Technologien frei, die Gebäude, Schiffe und Verteidigung verbessern oder erst freischalten. Im Tab <strong>Fabriken</strong> verarbeitest du Rohstoffe zu wertvolleren Gütern wie Stahl oder Elektronik.'},
-  {title:'Werft & Flotte', body:'Im Tab <strong>Werft</strong> baust du Schiffe. Im Tab <strong>Flotte</strong> versendest du sie - zum Transportieren, Spionieren, Angreifen oder Kolonisieren. Für weite Reisen brauchst du Treibstoff (Kraftstoff oder Wasserstoff).'},
-  {title:'Galaxie & Allianzen', body:'Im Tab <strong>Galaxie</strong> erkundest du das Universum und findest Ziele für deine Flotte. Im Tab <strong>Allianz</strong> kannst du dich mit anderen Spielern zusammenschließen. Viel Erfolg - dein Imperium wartet!'},
+  {title:'Willkommen bei Stellare Industrien!', view:'overview',
+   body:'Du hast gerade dein erstes Imperium gegründet. Diese Einführung zeigt dir jedes Spielsystem einmal kurz - jeder Schritt wechselt automatisch zum passenden Tab. Du kannst jederzeit überspringen; alle Themen findest du danach jederzeit wieder unter <strong>Einstellungen → Spielhilfe</strong>.'},
+  {title:'Rohstoffe & Planetentyp', view:'overview',
+   body:'Dein Planet hat einen festen <strong>Planetentyp</strong> (hier: siehe Übersicht) - er bestimmt, welche der 27 Rohstoffe du nativ abbauen kannst. Alles andere brauchst du per Handel, Kolonie auf einem anderen Typ oder über eine schwächere, typunabhängige Alternativquelle. Jede Rohstoffgruppe hat ihre eigene Lagerkapazität (Basis 5000, mehr durch Lagergebäude).'},
+  {title:'Gebäude: Minen, Energie & Lager', view:'buildings', buildingTab:'all',
+   body:'Im Tab <strong>Gebäude</strong> baust du Minen für deine heimischen Rohstoffe, Kraftwerke für Energie (ohne genug Energie läuft die Produktion gedrosselt) und Lagergebäude für mehr Kapazität. Frühe Stufen bauen bis zu 4× schneller; eine spätere <strong>Nanitenfabrik</strong> (Anlagen-Tab) halbiert die Bauzeit zusätzlich pro Stufe.'},
+  {title:'Anlagen & Monde', view:'facilities', facilityTab:'planet',
+   body:'Im Tab <strong>Anlagen</strong> findest du Spezialgebäude wie Nanitenfabrik, Terraformer (schaltet Holzanbau frei), Weltraum-Teleskop (zeigt Asteroidenfelder in Nachbarsystemen) und Raketensilo. Nach gewonnenen Schlachten mit großem Trümmerfeld kann sich ein <strong>Mond</strong> bilden - der bekommt im Unter-Tab „Monde" eigene Gebäude wie Sensorphalanx und Sprungtor.'},
+  {title:'Forschung', view:'research',
+   body:'Im Tab <strong>Forschung</strong> schaltest du Technologien frei: Waffen-/Schild-/Rumpftechnik verbessern Flotte und Verteidigung, Antriebstechnologien erhöhen die Geschwindigkeit, <strong>Astrophysik</strong> erlaubt mehr Kolonien und Expeditionen gleichzeitig, <strong>Gravitationstechnik</strong> ist Voraussetzung für den Todesstern. Ein Forschungslabor beschleunigt alle Forschungen.'},
+  {title:'Fabriken', view:'factories', factoryTab:'all',
+   body:'Im Tab <strong>Fabriken</strong> verarbeitest du Rohstoffe zu wertvolleren Gütern - Tier 1 direkt aus Rohstoffen (z.B. Stahl, Kraftstoff, Wasserstoff mit Sauerstoff als Nebenprodukt), Tier 2/3 aus Tier-1-Gütern. Fehlt ein Eingaberohstoff, wird die Produktion proportional gedrosselt - der Unter-Tab „Engpässe" zeigt dir sofort, wo es klemmt.'},
+  {title:'Verteidigung', view:'defense',
+   body:'Im Tab <strong>Verteidigung</strong> baust du stationäre Abwehr für deinen Planeten - von einfachen Raketenwerfern bis zu Plasmawerfern und Schildkuppeln (max. 1 pro Planet). Interplanetare Raketen greifen aus der Ferne gegnerische Verteidigung an, gelagert im Raketensilo.'},
+  {title:'Werft & dein erstes Kolonieschiff', view:'shipyard',
+   body:'Im Tab <strong>Werft</strong> baust du Schiffe: Transporter für Fracht, Spionagesonden, Kampfschiffe - und das <strong>Kolonieschiff</strong>, das du brauchst, um ein zweites Imperium auf einem leeren Feld zu gründen (mehr Kolonien = mehr Rohstoffgruppen gleichzeitig verfügbar). Recycler bergen Trümmerfelder, Asteroidenminer bauen Asteroidenfelder ab.'},
+  {title:'Flotte & Missionen', view:'fleet',
+   body:'Im Tab <strong>Flotte</strong> versendest du deine Schiffe: <strong>Transport</strong> (Fracht liefern), <strong>Spionage</strong> (gestaffelter Bericht), <strong>Angriff</strong>, <strong>Kolonisierung</strong> (braucht ein Kolonieschiff), <strong>Trümmerfeld-Bergung</strong> und <strong>Asteroiden-Abbau</strong>. Für weite Reisen brauchst du Treibstoff - wähle zwischen Kraftstoff (aus Rohöl raffiniert) und dem 20% effizienteren Wasserstoff (per Elektrolyse).'},
+  {title:'Expeditionen', view:'expeditions',
+   body:'Im Tab <strong>Expeditionen</strong> schickst du eine Flotte unbekannten Zielen entgegen (Anzahl gleichzeitiger Slots hängt von Astrophysik ab). Mögliche Ergebnisse: Rohstofffund, Stellaris-Token-Fund, unbeschadete Rückkehr, ein Bonus-Schiff, ein Kampf gegen Piraten oder - mit etwas Pech - der Totalverlust der Flotte.'},
+  {title:'Galaxie: NPCs, Gefahren & Kolonisieren', view:'galaxy',
+   body:'Im Tab <strong>Galaxie</strong> erkundest du das Universum: eigene und fremde Spieler, NPC-Kolonien (per Spionage/Angriff/Forschungsdiebstahl angreifbar), leere Felder (zum Kolonisieren), Asteroidenfelder (zum Abbauen) und <strong>Schwarze Löcher</strong> (machen ihr ganzes System zur Gefahrenzone: +25% Flugzeit, Verlustrisiko). Ein Frühwarn-Satellit in der Nähe kann dich vor eingehenden Angriffen warnen.'},
+  {title:'Allianzen & Diplomatie', view:'alliance',
+   body:'Im Tab <strong>Allianz</strong> gründest du ab 1000 Punkten eine eigene Allianz oder bewirbst dich bei einer bestehenden. Mitglieder können ins gemeinsame Depot einzahlen. Als Gründer verwaltest du die <strong>Diplomatie</strong>-Karte: Krieg erklären/beenden (einseitig) oder ein Neutralitätsabkommen anbieten (braucht Zustimmung der Gegenseite).'},
+  {title:'Markt, Handel & Auktionshaus', view:'market',
+   body:'Im Tab <strong>Markt</strong> tauschst du Ressourcen zu einem festen NPC-Kurs oder kaufst sie sofort gegen Stellaris-Token beim Händler; dort läuft auch das Auktionshaus mit zeitlich begrenzten Boostern. Im separaten Tab <strong>Handel</strong> bietest du Ressourcen direkt anderen Spielern zu deinem eigenen Kurs an - die Ware wird sofort hinterlegt, eine Annahme kann also nie fehlschlagen.'},
+  {title:'Offiziere', view:'officers',
+   body:'Im Tab <strong>Offiziere</strong> aktivierst du für je 500 Stellaris-Token und 7 Tage Spezialisten: Kommandant (günstigere Bauten), Admiral (schnellere Flotten), Ingenieur (mehr Energie), Geologe (mehr Rohstoffproduktion) und Technokrat (schnellere Forschung). Stellaris-Token verdienst du u.a. kostenlos über Expeditionen.'},
+  {title:'Rangliste, Nachrichten & Berichte', view:'messages',
+   body:'Im Tab <strong>Rangliste</strong> siehst du deine Platzierung in 5 Kategorien. Im Tab <strong>Nachrichten</strong> schreibst du anderen Spielern direkt (mit Namens-Autovervollständigung). Im Tab <strong>Berichte</strong> landen Spionageberichte (gestaffelt nach Technikvorsprung), Sensorphalanx-Scans und ein Kampfsimulator für Berichte mit bekannter Verteidigermacht.'},
+  {title:'Der Rest: Todesstern, Spionageabwehr & Hilfe', view:'overview',
+   body:'Ein paar Dinge noch: Ein Todesstern kann bei einem vollständigen Sieg den gegnerischen Planeten zerstören. Spionageversuche können abgewehrt werden - du wirst benachrichtigt. Und falls du unterwegs eine Erinnerung brauchst: unter <strong>Einstellungen → Spielhilfe</strong> findest du jederzeit alle Themen dieser Einführung noch einmal ausführlich zum Nachlesen. Viel Erfolg - dein Imperium wartet!'},
 ];
 let onboardingStep = 0;
+// Wechselt beim Schrittwechsel automatisch zum im Schritt hinterlegten Tab (+ Unter-Tab,
+// falls angegeben), damit der Spieler die erklaerte Stelle direkt sieht statt nur davon zu
+// lesen. Nur der VOLLE render() (nicht nur renderOnboarding()) uebernimmt einen State-
+// Wechsel wie state.view tatsaechlich sichtbar in Nav/Inhalt.
+function goToOnboardingStep(i){
+  onboardingStep = i;
+  const step = ONBOARDING_STEPS[i];
+  if(step.view) state.view = step.view;
+  if(step.buildingTab) state.buildingTab = step.buildingTab;
+  if(step.facilityTab) state.facilityTab = step.facilityTab;
+  if(step.factoryTab) state.factoryTab = step.factoryTab;
+  render();
+}
 // Nicht-blockierendes Banner statt Vollbild-Modal: faengt keine Klicks auf dem Rest
 // der Seite ab, damit brandneue Spieler (state.onboarded===false) sofort mit der
 // UI interagieren koennen, statt vom Tutorial gesperrt zu werden.
@@ -351,27 +397,28 @@ function renderOnboarding(){
   if(!el) return;
   if(state.onboarded){ el.style.display='none'; return; }
   const step = ONBOARDING_STEPS[onboardingStep];
+  const isFirst = onboardingStep<=0;
   const isLast = onboardingStep>=ONBOARDING_STEPS.length-1;
   const dots = ONBOARDING_STEPS.map((_,i)=>`<span style="background:${i===onboardingStep?'var(--accent2)':'var(--border)'}"></span>`).join('');
   el.style.display='block';
   el.innerHTML = `
-    <div class="onboarding-banner-head"><strong>${step.title}</strong><button type="button" id="onboardingSkip" class="info-modal-close" title="Überspringen">&times;</button></div>
+    <div class="onboarding-banner-head"><strong>${step.title}</strong><span class="small">Schritt ${onboardingStep+1}/${ONBOARDING_STEPS.length}</span><button type="button" id="onboardingSkip" class="info-modal-close" title="Überspringen">&times;</button></div>
     <p>${step.body}</p>
     <div class="onboarding-banner-foot">
       <div class="onboarding-banner-dots">${dots}</div>
       <div style="display:flex;gap:10px">
         <button class="btn alt" type="button" id="onboardingSkip2">Überspringen</button>
+        ${isFirst?'':'<button class="btn alt" type="button" id="onboardingBack">Zurück</button>'}
         <button class="btn good" type="button" id="onboardingNext">${isLast?'Los geht\'s!':'Weiter'}</button>
       </div>
     </div>`;
-  const advance = ()=>{
-    if(isLast){ state.onboarded=true; postAction('completeOnboarding', {}); renderOnboarding(); }
-    else { onboardingStep++; renderOnboarding(); }
-  };
-  const skip = ()=>{ state.onboarded=true; postAction('completeOnboarding', {}); renderOnboarding(); };
+  const finish = ()=>{ state.onboarded=true; postAction('completeOnboarding', {}); render(); };
+  const advance = ()=>{ if(isLast) finish(); else goToOnboardingStep(onboardingStep+1); };
+  const back = ()=>{ if(!isFirst) goToOnboardingStep(onboardingStep-1); };
   $('#onboardingNext').onclick = advance;
-  $('#onboardingSkip').onclick = skip;
-  $('#onboardingSkip2').onclick = skip;
+  $('#onboardingSkip').onclick = finish;
+  $('#onboardingSkip2').onclick = finish;
+  const backBtn = $('#onboardingBack'); if(backBtn) backBtn.onclick = back;
 }
 function levelEffectText(d, key, lvl){
   const parts = [];
@@ -550,7 +597,21 @@ document.addEventListener('click', (e)=>{
     return;
   }
   if(e.target.closest('[data-view-back]')){
-    state.view = state.viewBeforeShop || 'overview'; render(); return;
+    if(state.view==='help') state.view = state.viewBeforeHelp || 'settings';
+    else state.view = state.viewBeforeShop || 'overview';
+    render(); return;
+  }
+  // Spielhilfe: per Klick auf die Karte in den Einstellungen erreichbar; die Ausgangsansicht
+  // wird gemerkt, damit "Zurück" (siehe data-view-back oben) dorthin zurueckfuehrt.
+  if(e.target.closest('[data-open-help]')){
+    if(state.view!=='help'){ state.viewBeforeHelp = state.view; state.view='help'; render(); }
+    return;
+  }
+  const helpToggle = e.target.closest('[data-help-toggle]');
+  if(helpToggle){
+    helpOpenCategory = helpOpenCategory===helpToggle.dataset.helpToggle ? null : helpToggle.dataset.helpToggle;
+    render();
+    return;
   }
 });
 
@@ -1724,8 +1785,10 @@ function viewSettings(){
   const versionLine = state.serverVersion==null
     ? `<div class="small">App-Version: ${APP_VERSION} · Server-Version: wird geladen…</div>`
     : `<div class="small"${versionMismatch?' style="color:var(--danger);font-weight:700"':''}>App-Version: ${APP_VERSION} · Server-Version: ${escapeHtml(state.serverVersion)}${versionMismatch?' ⚠ unterschiedlich - Server wurde vermutlich nicht neu gestartet!':''}</div>`;
+  const helpCard = `<div class="card"><h3>Spielhilfe</h3><div class="small">Ausführliche Nachschlage-Referenz zu jedem Spielsystem - jederzeit erreichbar, auch lange nach der Einführung für neue Spieler.</div><div style="height:10px"></div><button class="btn alt" type="button" data-open-help>Spielhilfe öffnen →</button></div>`;
   return `<h2>Einstellungen</h2><div class="grid2">
   <div class="card"><h3>Konto</h3><div class="small">Angemeldet als <strong>${state.username||'-'}</strong></div><div class="small" style="color:${statusColor}">Server-Status: ${statusLabel}</div><div class="small">Server: ${url}</div>${versionLine}<div style="height:10px"></div><button class="btn danger" id="logoutBtn">Abmelden</button> <button class="btn alt" id="changeServerBtn2">Server wechseln</button></div>
+  ${helpCard}
   ${notifyCard}
   ${renameCard}
   </div>`;
@@ -1944,6 +2007,160 @@ function viewStellarisShop(){
   </div>`;
 }
 
+// ---- Spielhilfe: dauerhafte, jederzeit erreichbare Nachschlage-Referenz (Einstellungen →
+// "Spielhilfe") - im Gegensatz zum Onboarding-Banner (linear, nur fuer neue Spieler, verschwindet
+// nach Abschluss) bleibt das hier immer verfuegbar und deckt jedes Spielsystem ausfuehrlich ab,
+// damit auf Wunsch wirklich keine offene Frage bleibt. Fakten 1:1 aus server/gameEngine.js.
+const HELP_CATEGORIES = [
+  {id:'resources', title:'Rohstoffe & Lagerung', body:`
+    <p>27 Rohstoffe in 7 Gruppen, jede mit eigener Lagerkapazität (Basis 5000, +5000 pro Stufe des zugehörigen Lagergebäudes):</p>
+    <ul>
+      <li><strong>Erze</strong> (Erzlager): Eisen, Kupfer, Aluminium, Nickel, Kalkstein</li>
+      <li><strong>Technologiemetalle</strong> (Technologielager): Gold, Silber, Lithium, Seltene Erden</li>
+      <li><strong>Energieträger</strong> (Energielager): Rohöl, Erdgas, Kohle, Uran</li>
+      <li><strong>Sonderrohstoffe</strong> (Rohstofflager): Schwefel, Phosphat, Holz</li>
+      <li><strong>Wasser</strong> (teilt sich das Rohstofflager): Süßwasser, Salzwasser</li>
+      <li><strong>Industriegüter</strong> (Güterlager): Stahl, Elektronik, Kunststoff, Legierung, Beton, Batteriezellen, Sauerstoff, Maschinenteile, Verbundwerkstoff, Präzisionskomponenten</li>
+      <li><strong>Treibstoff</strong> (teilt sich das Güterlager): Kraftstoff, Wasserstoff</li>
+    </ul>
+    <p>6 Planetentypen bestimmen, welche Rohstoffe dein Planet <em>nativ</em> abbaut: Gesteinsplanet (Eisen/Kupfer/Aluminium/Nickel/Kalkstein), Wüstenplanet (Gold/Silber/Uran/Seltene Erden/Schwefel/Phosphat), Eiswelt (Süßwasser/Lithium/Erdgas), Ozeanplanet (Salzwasser/Süßwasser/Kalkstein/Phosphat, sehr selten), Vulkanplanet (Kohle/Rohöl/Schwefel/Seltene Erden) und Gasriesenmond (Erdgas/Aluminium/Lithium). Für alles andere gibt es schwächere, typunabhängige Alternativquellen (Sekundär-Gebäude) - oder Handel/Kolonisierung. Neue Spieler starten mit 500 Einheiten jedes Rohstoffs als einmaligem Anschubkapital.</p>`},
+  {id:'buildings', title:'Gebäude', body:`
+    <p>Tab „Gebäude", Unter-Tabs Minen/Sekundär/Energie/Lager/Infrastruktur:</p>
+    <ul>
+      <li><strong>Minen</strong>: eine pro heimischem Rohstoff, Produktion steigt mit Stufe (Basis×Stufe×1,1<sup>Stufe</sup>).</li>
+      <li><strong>Sekundär</strong>: typunabhängige Alternativquellen für nicht-heimische Rohstoffe (nur ~20-30% der Fördermenge einer echten Mine) plus Forstplantage (Holz, braucht Terraformer).</li>
+      <li><strong>Energie</strong>: Solarkraftwerk (überall, selbstfinanziert), Kernreaktor (verbraucht laufend Uran), Kohlekraftwerk (verbraucht laufend Kohle), Solarsegel I-III (mehrfach baubar).</li>
+      <li><strong>Lager</strong>: je ein Gebäude pro Rohstoffgruppe (siehe „Rohstoffe & Lagerung").</li>
+      <li><strong>Infrastruktur</strong>: Roboterfabrik (beschleunigt Gebäudebau), Raumschiffwerft (Voraussetzung für Schiffe/Verteidigung), Raumstation (stärkste Kriegsschiffe), Forschungslabor.</li>
+    </ul>
+    <p><strong>Bautempo</strong>: frühe Stufen bauen bis zu 4× schneller (Bonus fällt bis Stufe 6 linear auf 1). Eine Nanitenfabrik halbiert zusätzlich pro eigener Stufe die Bauzeit von Gebäuden/Schiffen/Verteidigung (nicht Forschung) - sie selbst ist vom Frühstufen-Bonus ausgenommen.</p>`},
+  {id:'facilities', title:'Anlagen & Monde', body:`
+    <p>Tab „Anlagen", Unter-Tabs Planet/Monde:</p>
+    <ul>
+      <li><strong>Nanitenfabrik</strong>: hochentwickelte Fertigung, Voraussetzung für die fortgeschrittensten Bauten, halbiert Bauzeiten (siehe „Gebäude").</li>
+      <li><strong>Terraformer</strong>: künstliche Biosphäre, schaltet Holzanbau frei.</li>
+      <li><strong>Allianzdepot</strong>: Lagerplatz für gemeinsame Allianz-Ressourcen.</li>
+      <li><strong>Raketensilo</strong>: lagert und startet interplanetare Raketen (Kapazität = Stufe × 10).</li>
+      <li><strong>Weltraum-Teleskop</strong>: zeigt Asteroidenfelder mehrerer Nachbarsysteme gesammelt an, Reichweite wächst mit der Stufe.</li>
+    </ul>
+    <p><strong>Monde</strong> entstehen mit einer Chance (bis 20%) nach Schlachten mit großem Trümmerfeld. Mondgebäude (Unter-Tab „Monde", Kosten zahlt der gewählte Heimatplanet): Lunarbasis (Grundvoraussetzung), Sensorphalanx (überwacht fremde Systeme, Reichweite = Stufe × 3 Systeme, kostet 5000 Rohöl pro Scan), Sprungtor (verzögerungsfreier Flottentransfer zwischen zwei eigenen Monden).</p>`},
+  {id:'factories', title:'Fabriken', body:`
+    <p>Tab „Fabriken", Unter-Tabs Alle/Tier 1/Tier 2/Tier 3/Engpässe - nicht planetentyp-gebunden:</p>
+    <ul>
+      <li><strong>Tier 1</strong> (aus Rohstoffen): Stahlwerk, Elektronikfabrik, Kunststoffwerk, Ölraffinerie (→ Kraftstoff), Elektrolyseanlage (→ Wasserstoff, mit Sauerstoff als Nebenprodukt), Legierungsschmelze, Betonwerk, Batteriefabrik.</li>
+      <li><strong>Tier 2</strong> (aus Tier-1-Gütern): Maschinenbauwerk (→ Maschinenteile), Verbundstoffwerk (→ Verbundwerkstoff).</li>
+      <li><strong>Tier 3</strong>: Präzisionswerk (→ Präzisionskomponenten, braucht Maschinenbauwerk 5 + Verbundstoffwerk 5).</li>
+    </ul>
+    <p><strong>Engpässe</strong>: Ist ein Eingaberohstoff knapp, wird der Output proportional gedrosselt. Der Unter-Tab „Engpässe" zeigt alle aktuell gedrosselten Fabriken samt limitierendem Rohstoff.</p>`},
+  {id:'research', title:'Forschung', body:`
+    <p>Tab „Forschung", ein Forschungslabor beschleunigt alle Forschungen:</p>
+    <ul>
+      <li><strong>Energietechnik</strong>: Grundlage für effizientere Energiegewinnung, Voraussetzung für vieles.</li>
+      <li><strong>Verbrennungstriebwerk, Impulstriebwerk, Hyperraumtechnik/-antrieb</strong>: verbessern Schiffsantriebe/Geschwindigkeit.</li>
+      <li><strong>Waffen-, Schild-, Rumpfpanzerung-, Laser-, Ionen-, Plasmatechnik</strong>: verbessern Angriff/Schild/Hülle von Schiffen und Verteidigung.</li>
+      <li><strong>Computertechnik</strong>: erhöht maximale gleichzeitige Flottenbewegungen.</li>
+      <li><strong>Spionagetechnik</strong>: bessere Spionageberichte, höhere Erfolgschance bei Forschungsdiebstahl.</li>
+      <li><strong>Gravitationstechnik</strong>: Voraussetzung für den Todesstern.</li>
+      <li><strong>Astrophysik</strong>: mehr gleichzeitige Kolonien und Expeditionen.</li>
+      <li><strong>Intergalaktisches Forschungsnetzwerk</strong>: beschleunigt Forschung zusätzlich.</li>
+      <li><strong>Asteroidenbergbau</strong>: erlaubt dem Asteroidenminer höherstufige Felder abzubauen.</li>
+    </ul>`},
+  {id:'shipyard', title:'Werft & Schiffe', body:`
+    <p>Tab „Werft":</p>
+    <ul>
+      <li><strong>Fracht/Kolonie</strong>: Kleiner Transporter (5000 Ladung), Großer Transporter (25000 Ladung), <strong>Kolonieschiff</strong> (Pflicht für Koloniegründung).</li>
+      <li><strong>Sonden</strong>: Spionagesonde; Forschungssonde (baugleich, ermöglicht zusätzlich Forschungsdiebstahl bei NPC-Spionage).</li>
+      <li><strong>Kampfschiffe</strong>: Leichter/Schwerer Jäger, Kreuzer, Schlachtschiff, Großer Kreuzer, Bomber, Zerstörer, Reaper (Elite, braucht Raumstation), Pfadfinder (schnell + Ladekapazität, braucht Raumstation), Todesstern (kann Planeten zerstören).</li>
+      <li><strong>Sonderrollen</strong> (nicht per Flotte versendbar außer Recycler/Miner): Solarsatellit (Energie), Frühwarn-Satellit (Angriffswarnung, per Umlaufbahn-Transfer zwischen Planet/Mond verschiebbar), Recycler (Trümmerfeld-Bergung), Asteroidenminer (Asteroiden-Abbau).</li>
+    </ul>`},
+  {id:'defense', title:'Verteidigung', body:`
+    <p>Tab „Verteidigung", mehrfach baubar außer den beiden Schildkuppeln (max. 1 pro Planet):</p>
+    <ul>
+      <li>Raketenwerfer, Leichtes Laser-Geschütz, Schweres Laser-Geschütz, Gauß-Kanone, Ionenkanone, Plasmawerfer - steigende Kosten/Feuerkraft in dieser Reihenfolge.</li>
+      <li>Kleine Schildkuppel, Große Schildkuppel (braucht Werft 6) - Schutzschild um den gesamten Planeten.</li>
+      <li>Interplanetare Rakete - Einweg-Fernwaffe gegen gegnerische Verteidigung, Kapazität = Raketensilo-Stufe × 10.</li>
+    </ul>`},
+  {id:'fleet', title:'Flotte & Missionen', body:`
+    <p>Tab „Flotte", 6 Missionstypen:</p>
+    <ul>
+      <li><strong>Transport</strong>: Fracht zu einem bewohnten Planeten (eigen oder fremd), wird dem Empfänger gutgeschrieben.</li>
+      <li><strong>Spionage</strong>: gestaffelter Bericht (mind. 1 Spionagesonde), Erfolgschance abhängig vom Spionagetechnik-Vorsprung; mit Forschungssonde zusätzlicher Forschungsdiebstahl-Versuch gegen NPCs.</li>
+      <li><strong>Angriff</strong>: löst eine Kampfsimulation aus (bis zu 6 Runden), eigene Planeten nicht angreifbar.</li>
+      <li><strong>Kolonisierung</strong>: gründet eine neue Kolonie auf leerem Feld (Kolonieschiff Pflicht, Limit durch Astrophysik).</li>
+      <li><strong>Trümmerfeld-Bergung</strong>: sammelt ein Trümmerfeld ein (Recycler Pflicht).</li>
+      <li><strong>Asteroiden-Abbau</strong>: baut ein Asteroidenfeld ab (Asteroidenminer Pflicht, Feldstufe ≤ Asteroidenbergbau-Forschung).</li>
+    </ul>
+    <p><strong>Treibstoff</strong>: Wahl zwischen Kraftstoff (aus Rohöl raffiniert) und dem 20% effizienteren Wasserstoff (per Elektrolyse) - rohes Rohöl selbst ist nicht direkt tankbar. <strong>ACS</strong>: mehrere Angriffsflotten mit gleichem Code + Ziel + Allianz-Tag synchronisieren ihre Ankunft und kämpfen gemeinsam. <strong>Schwarze Löcher</strong> machen ihr ganzes System zur Gefahrenzone (+25% Flugzeit, 2% Verlustchance pro Mission). Ein fremder <strong>Frühwarn-Satellit</strong> in Reichweite kann eine Angriffsflotte vorab entdecken und den Verteidiger warnen.</p>`},
+  {id:'expeditions', title:'Expeditionen', body:`
+    <p>Tab „Expeditionen" - Slot-Anzahl abhängig von Astrophysik, Dauer wählbar (1-3 Slots à 15 Minuten). Mögliche Ergebnisse:</p>
+    <ul>
+      <li>30% Ressourcenfund (bis zu 8000 je heimischem Rohstoff)</li>
+      <li>12% Stellaris-Token-Fund (100-500 ST)</li>
+      <li>13% unbeschadete Rückkehr (keine Belohnung, keine Verluste)</li>
+      <li>7% Schiffswrack geborgen (+1 Bonus-Schiff)</li>
+      <li>28% Piraten-Begegnung (Kampf, Sieg oder Teilverlust)</li>
+      <li>10% Flotte verschollen (Totalverlust)</li>
+    </ul>`},
+  {id:'galaxy', title:'Galaxie', body:`
+    <p>Tab „Galaxie" - 9 Galaxien × 499 Systeme × 15 Positionen, deterministisch (gleiche Koordinate = immer gleiches Ergebnis).</p>
+    <ul>
+      <li><strong>Feldtypen</strong>: eigen, fremder Spieler, NPC (Level 3-35, per Spionage erkundbar), leer (kolonisierbar), Schwarzes Loch (Gefahrenzone, siehe „Flotte & Missionen").</li>
+      <li><strong>Asteroidenfelder</strong>: Overlay auf jeder Feldart, Tier 1-3, regenerieren 5% der Kapazität pro Stunde.</li>
+      <li><strong>Weltraum-Teleskop</strong> (Anlagen-Tab) zeigt Asteroidenfelder mehrerer Nachbarsysteme gesammelt an.</li>
+      <li><strong>Kolonisierung</strong>: neue Kolonie startet mit 200 Einheiten je nativer Ressource, erbt die Heimatforschung, bekommt automatisch eine passende Mine + Solarkraftwerk Stufe 1.</li>
+    </ul>`},
+  {id:'alliance', title:'Allianzen & Diplomatie', body:`
+    <p>Tab „Allianz":</p>
+    <ul>
+      <li><strong>Gründen</strong>: ab 1000 Punkten, Kosten 6000 Eisen + 4000 Silber + 2000 Rohöl, eindeutiger Name + Tag (2-5 Zeichen).</li>
+      <li><strong>Bewerben/Aufnehmen</strong>: nur der Gründer entscheidet über Bewerbungen.</li>
+      <li><strong>Depot</strong>: Mitglieder zahlen bis zu 1000 Einheiten jeder Ressource pro Einzahlung ein.</li>
+      <li><strong>Verlassen</strong>: verlässt der Gründer, wird das älteste Mitglied automatisch neuer Gründer; bleibt niemand übrig, löst sich die Allianz auf.</li>
+      <li><strong>Diplomatie</strong> (nur Gründer): Krieg erklären/beenden (einseitig, keine Zustimmung nötig), Neutralitätsabkommen anbieten (braucht Zustimmung der Gegenseite) oder aufkündigen.</li>
+    </ul>`},
+  {id:'trade', title:'Markt, Händler & Spieler-Handel', body:`
+    <p>Zwei getrennte Systeme:</p>
+    <ul>
+      <li><strong>Markt-Tausch</strong> (Tab „Markt"): tauscht Ressourcen zu einem festen, rohstoffwertbasierten NPC-Kurs, 10% Marktabschlag.</li>
+      <li><strong>Söldnerhändler</strong> (Tab „Markt"): kauft Ressourcen sofort gegen Stellaris-Token - teurere Rohstoffe kosten proportional mehr.</li>
+      <li><strong>Auktionshaus</strong> (Tab „Markt"): 20 Minuten Laufzeit, höchstes Gebot in Stellaris-Token gewinnt, unterlegene Gebote werden erstattet. Items: Produktionsbooster (+50%) für jede Rohstoffgruppe sowie ein Flottengeschwindigkeitsbooster (+30%), jeweils 24h Wirkdauer.</li>
+      <li><strong>Spieler-Handel</strong> (eigener Tab „Handel"): direkter Tausch zwischen zwei echten Konten zu frei verhandeltem Kurs. Die angebotene Ware wird beim Erstellen sofort hinterlegt - eine Annahme kann daher nie fehlschlagen. Max. 10 offene Angebote gleichzeitig, Stornieren erstattet die Ware zurück.</li>
+    </ul>`},
+  {id:'events', title:'Server-Events & Offiziere', body:`
+    <p><strong>Server-Events</strong>: zeitlich begrenzte (30 Min.) universumsweite Boosts für ALLE Spieler gleichzeitig, Abstand dazwischen 20-45 Minuten zufällig - je ein Rausch-Event pro Rohstoffgruppe (+50%) sowie ein „Galaktischer Boom" (+25% auf wirklich alle Rohstoffe).</p>
+    <p><strong>Offiziere</strong> (Tab „Offiziere", je 500 Stellaris-Token für 7 Tage): Kommandant (-5% Baukosten Gebäude/Verteidigung), Admiral (+10% Flottengeschwindigkeit), Ingenieur (+10% Energieproduktion), Geologe (+10% Rohstoffproduktion), Technokrat (-15% Forschungszeit).</p>`},
+  {id:'highscore', title:'Rangliste, Nachrichten & Berichte', body:`
+    <ul>
+      <li><strong>Rangliste</strong>: 5 Kategorien (Gesamt, Gebäude, Forschung, Flotte, Verteidigung), berechnet aus dem investierten Ressourcenwert über alle nicht-zerstörten Planeten.</li>
+      <li><strong>Nachrichten</strong>: Direktnachrichten an andere Spieler (max. 1000 Zeichen), mit Empfänger-Autovervollständigung; getrennt davon automatische Systemnachrichten (Angriffe, Ankünfte, Auktionsgewinn usw.).</li>
+      <li><strong>Berichte</strong>: gestaffelte Spionageberichte (Ressourcen immer sichtbar, Flotte/Verteidigung/Gebäude/Forschung je nach Technikvorsprung), Sensorphalanx-Scans (ein-/ausgehende Flottenbewegungen) und ein Kampfsimulator für Berichte mit bekannter Verteidigermacht.</li>
+    </ul>`},
+  {id:'misc', title:'Sonstiges', body:`
+    <ul>
+      <li><strong>Todesstern & Planetenzerstörung</strong>: gewinnst du einen Angriff mit Todesstern(en) vollständig (Verteidiger ohne jede Flotte/Verteidigung) und es ist nicht dessen letzter Planet, besteht eine Chance, den Planeten komplett zu zerstören.</li>
+      <li><strong>Spionageabwehr</strong>: jeder Spionageversuch kann fehlschlagen - bei Misserfolg wirst du als Verteidiger benachrichtigt.</li>
+      <li><strong>Stellaris-Token</strong> (Premium-Währung, Start 500): verdienst du u.a. über Expeditionen und Auktionsgewinne, brauchst du für Auktionsgebote, Offiziere und den Söldnerhändler. Ein Echtgeld-Shop ist als Platzhalter sichtbar, aber noch nicht angebunden.</li>
+      <li><strong>Benachrichtigungen</strong> (Einstellungen): warnen bei Angriffen/Spionage/Ankünften - über die native Android-Benachrichtigung oder die Web-Notifications-API; auf Android läuft dafür auch ein Hintergrunddienst bei geschlossener App.</li>
+      <li><strong>Planet umbenennen</strong> (Einstellungen): einmal pro Woche möglich.</li>
+    </ul>`},
+];
+let helpOpenCategory = null;
+function viewHelp(){
+  const rows = HELP_CATEGORIES.map(c=>{
+    const open = helpOpenCategory===c.id;
+    return `<div class="card" style="margin-bottom:10px">
+      <button type="button" class="btn alt" data-help-toggle="${c.id}" style="width:100%;text-align:left;display:flex;justify-content:space-between;align-items:center">
+        <span>${escapeHtml(c.title)}</span><span>${open?'▲':'▼'}</span>
+      </button>
+      ${open?`<div style="margin-top:12px;font-size:13px;line-height:1.6">${c.body}</div>`:''}
+    </div>`;
+  }).join('');
+  return `<h2>Spielhilfe</h2>
+  <button class="btn" type="button" data-view-back style="margin-bottom:12px">← Zurück</button>
+  <div class="small" style="margin-bottom:14px">Vollständige Nachschlage-Referenz für alle Spielsysteme - jederzeit erreichbar, unabhängig von der Einführung für neue Spieler. Auf ein Thema klicken zum Auf-/Zuklappen.</div>
+  ${rows}`;
+}
+
 // Mond-Fakten eines Spionageberichts (oder des eigenen Mondes) - Mond erscheint immer an
 // erster Stelle, wo verfuegbar, wie vom Nutzer explizit gewuenscht. Gebaeude/Flotte des
 // Mondes folgen denselben Spionagestufen wie die des Planeten (kein eigenes Stufensystem
@@ -2025,7 +2242,7 @@ function viewHighscore(){
 }
 
 function renderView(bind=true){
-  const views={overview:viewOverview,buildings:viewBuildings,facilities:viewFacilities,factories:viewFactories,defense:viewDefense,research:viewResearch,shipyard:viewShipyard,fleet:viewFleet,expeditions:viewExpeditions,galaxy:viewGalaxy,alliance:viewAlliance,officers:viewOfficers,market:viewMarket,trade:viewTrade,reports:viewReports,messages:viewMessages,empire:viewEmpire,highscore:viewHighscore,settings:viewSettings,stellarisShop:viewStellarisShop};
+  const views={overview:viewOverview,buildings:viewBuildings,facilities:viewFacilities,factories:viewFactories,defense:viewDefense,research:viewResearch,shipyard:viewShipyard,fleet:viewFleet,expeditions:viewExpeditions,galaxy:viewGalaxy,alliance:viewAlliance,officers:viewOfficers,market:viewMarket,trade:viewTrade,reports:viewReports,messages:viewMessages,empire:viewEmpire,highscore:viewHighscore,settings:viewSettings,stellarisShop:viewStellarisShop,help:viewHelp};
   $('#view').innerHTML = views[state.view]();
   if(bind){
     document.querySelectorAll('[data-factory-tab]').forEach(b=>b.onclick=()=>{ state.factoryTab=b.dataset.factoryTab; renderView(); });

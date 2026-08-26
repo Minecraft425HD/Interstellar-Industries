@@ -10,7 +10,7 @@ const auth = require('./auth');
 // /api/health (kein Login noetig) laesst sich damit von jedem Browser aus sofort pruefen,
 // ob ein Server nach einem "git pull" auch wirklich neu gestartet wurde (Node laedt
 // geaenderten Code nicht automatisch nach, nur ein Prozess-Neustart tut das).
-const SERVER_VERSION = '1.33';
+const SERVER_VERSION = '1.34';
 
 const PORT = process.env.PORT || 3000;
 const DATA_DIR = path.join(__dirname, 'data');
