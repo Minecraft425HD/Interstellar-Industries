@@ -1,7 +1,21 @@
 // App-Version zur Anzeige in den Einstellungen (Diagnose-Hilfe: laesst sich damit sofort
 // pruefen, ob eine installierte APK tatsaechlich die neueste ist) - manuell synchron zu
 // android/app/build.gradle versionName halten, bei jedem Versionsbump mitziehen.
-const APP_VERSION = '1.32';
+const APP_VERSION = '1.33';
+
+// Globaler Fehlerfaenger: zeigt jede unbehandelte JS-Exception als sichtbaren Toast an,
+// statt sie nur (fuer den Nutzer unsichtbar) in der Android-WebView-Konsole verschwinden zu
+// lassen - ohne USB-Debugging (chrome://inspect) waere ein stiller Fehler sonst gar nicht
+// diagnostizierbar. Ganz am Dateianfang, bevor irgendein anderer Code laufen kann, damit
+// wirklich jeder spaetere Fehler abgefangen wird. showToast() selbst erzeugt sein Element
+// dynamisch und haengt nicht vom render()-Zustand ab, funktioniert also auch wenn render()
+// selbst gerade die Exception geworfen hat.
+window.addEventListener('error', (e) => {
+  try { showToast('JS-Fehler: '+(e.message||(e.error&&e.error.message)||'unbekannt')); } catch(_){}
+});
+window.addEventListener('unhandledrejection', (e) => {
+  try { showToast('Promise-Fehler: '+((e.reason&&e.reason.message)||e.reason||'unbekannt')); } catch(_){}
+});
 
 // ---- Rohstoffe & Planetentypen (Spiegelbild von server/gameEngine.js) ----
 const RESOURCE_KEYS = [
@@ -267,6 +281,7 @@ const state = {
   auction: null,
   tradeOffers: [],
   napOffers: [],
+  serverVersion: null,
   logs: [],
   galaxyIndex: 1,
   galaxySystem: 145,
@@ -773,6 +788,7 @@ function applyServerState(serverState, opts){
   state.auction = serverState.auction || state.auction;
   state.tradeOffers = serverState.tradeOffers || state.tradeOffers;
   state.napOffers = serverState.napOffers || state.napOffers;
+  if(serverState.serverVersion !== undefined) state.serverVersion = serverState.serverVersion;
   if(serverState.event !== undefined) state.event = serverState.event;
   state.logs = serverState.logs || [];
   const wasEverConnected = everConnected;
@@ -1702,8 +1718,14 @@ function viewSettings(){
     : `<div class="card"><h3>Planet umbenennen</h3><div class="small">Planeten können nur einmal pro Woche umbenannt werden.</div><div style="height:10px"></div><form id="renamePlanetForm" class="market-form"><label>Neuer Name<input type="text" name="name" maxlength="30" value="${escapeHtml(p.name)}"></label><button class="btn alt" type="submit">Speichern</button></form></div>`;
   const notifyOn = notificationsEnabled();
   const notifyCard = `<div class="card"><h3>Benachrichtigungen</h3><div class="small">Zeigt eine Benachrichtigung, wenn dein Planet angegriffen, ausspioniert oder bombardiert wird, oder ein Transport eintrifft.</div><div style="height:10px"></div><label style="display:flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" id="notifyToggle" ${notifyOn?'checked':''}> Bei Angriffen/Ankünften benachrichtigen</label></div>`;
+  // Server-Version kommt erst mit dem ersten /api/state zurueck (siehe applyServerState) -
+  // bis dahin "wird geladen…" statt eines irrefuehrenden Mismatch-Warnhinweises.
+  const versionMismatch = state.serverVersion!=null && state.serverVersion!==APP_VERSION;
+  const versionLine = state.serverVersion==null
+    ? `<div class="small">App-Version: ${APP_VERSION} · Server-Version: wird geladen…</div>`
+    : `<div class="small"${versionMismatch?' style="color:var(--danger);font-weight:700"':''}>App-Version: ${APP_VERSION} · Server-Version: ${escapeHtml(state.serverVersion)}${versionMismatch?' ⚠ unterschiedlich - Server wurde vermutlich nicht neu gestartet!':''}</div>`;
   return `<h2>Einstellungen</h2><div class="grid2">
-  <div class="card"><h3>Konto</h3><div class="small">Angemeldet als <strong>${state.username||'-'}</strong></div><div class="small" style="color:${statusColor}">Server-Status: ${statusLabel}</div><div class="small">Server: ${url}</div><div class="small">App-Version: ${APP_VERSION}</div><div style="height:10px"></div><button class="btn danger" id="logoutBtn">Abmelden</button> <button class="btn alt" id="changeServerBtn2">Server wechseln</button></div>
+  <div class="card"><h3>Konto</h3><div class="small">Angemeldet als <strong>${state.username||'-'}</strong></div><div class="small" style="color:${statusColor}">Server-Status: ${statusLabel}</div><div class="small">Server: ${url}</div>${versionLine}<div style="height:10px"></div><button class="btn danger" id="logoutBtn">Abmelden</button> <button class="btn alt" id="changeServerBtn2">Server wechseln</button></div>
   ${notifyCard}
   ${renameCard}
   </div>`;

@@ -6,6 +6,12 @@ const path = require('path');
 const engine = require('./gameEngine');
 const auth = require('./auth');
 
+// Manuell synchron zu www/app.js APP_VERSION halten - dient als Diagnosehilfe: ueber
+// /api/health (kein Login noetig) laesst sich damit von jedem Browser aus sofort pruefen,
+// ob ein Server nach einem "git pull" auch wirklich neu gestartet wurde (Node laedt
+// geaenderten Code nicht automatisch nach, nur ein Prozess-Neustart tut das).
+const SERVER_VERSION = '1.33';
+
 const PORT = process.env.PORT || 3000;
 const DATA_DIR = path.join(__dirname, 'data');
 const DATA_FILE = path.join(DATA_DIR, 'universe.json');
@@ -145,7 +151,7 @@ function requireAdmin(req, res, next){
 }
 
 app.get('/api/health', (req, res) => {
-  res.json({ ok:true, uptime: process.uptime(), players: Object.keys(universe.players).length });
+  res.json({ ok:true, version: SERVER_VERSION, uptime: process.uptime(), players: Object.keys(universe.players).length });
 });
 
 // Coordinate occupancy for a system — public so the registration screen (no token yet) can show free slots.
@@ -204,7 +210,7 @@ app.post('/api/logout', requireAuth, (req, res) => {
 app.get('/api/state', requireAuth, (req, res) => {
   const empire = universe.players[req.username];
   if(!empire) return res.json({ ok:true, isAdmin: req.isAdmin, username: req.username, planets: null });
-  res.json(Object.assign({ ok:true, isAdmin: req.isAdmin, username: req.username, auction: engine.getPublicAuctionView(universe), event: engine.getPublicEventView(universe), alliance: engine.getPlayerAllianceView(universe, req.username), alliancesList: engine.getAlliancesListView(universe), tradeOffers: engine.getPublicTradeOffersView(universe), napOffers: engine.getPublicNapOffersView(universe) }, empire));
+  res.json(Object.assign({ ok:true, isAdmin: req.isAdmin, username: req.username, serverVersion: SERVER_VERSION, auction: engine.getPublicAuctionView(universe), event: engine.getPublicEventView(universe), alliance: engine.getPlayerAllianceView(universe, req.username), alliancesList: engine.getAlliancesListView(universe), tradeOffers: engine.getPublicTradeOffersView(universe), napOffers: engine.getPublicNapOffersView(universe) }, empire));
 });
 
 app.post('/api/action', requireAuth, (req, res) => {
