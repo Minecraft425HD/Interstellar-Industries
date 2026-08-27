@@ -172,13 +172,18 @@ const defs = {
     silverMine:{name:'Silbermine', resource:'silver', costMagnitude:70, powerUse:l=>12*l, prod:l=>16*l*Math.pow(1.1,l)},
     uraniumMine:{name:'Uranmine', resource:'uranium', costMagnitude:110, powerUse:l=>14*l, prod:l=>10*l*Math.pow(1.1,l)},
     rareEarthsMine:{name:'Seltenerdmine', resource:'rareEarths', costMagnitude:93, powerUse:l=>13*l, prod:l=>12*l*Math.pow(1.1,l)},
-    sulfurMine:{name:'Schwefelmine', resource:'sulfur', costMagnitude:52, powerUse:l=>9*l, prod:l=>18*l*Math.pow(1.1,l)},
+    // sulfurMine/crudeOilPump/saltwaterDesalinator (unten) hatten je den mit Abstand
+    // schlechtesten Ertrag/Kosten-Wert ihres Planetentyp-Pools (Analyse: ROI = prod-Koeffizient
+    // / costMagnitude * RESOURCE_VALUE - z.B. Schwefel 0.485 vs. Gold 1.36 im selben
+    // Wuesten-Pool). Ertrag moderat angehoben (~35-60%), um den Abstand deutlich zu verkleinern,
+    // ohne die jeweils staerkere Alternative im selben Pool zu ueberholen.
+    sulfurMine:{name:'Schwefelmine', resource:'sulfur', costMagnitude:52, powerUse:l=>9*l, prod:l=>25*l*Math.pow(1.1,l)},
     phosphateMine:{name:'Phosphatmine', resource:'phosphate', costMagnitude:56, powerUse:l=>9*l, prod:l=>18*l*Math.pow(1.1,l)},
-    crudeOilPump:{name:'Ölbohrturm', resource:'crudeOil', costMagnitude:80, powerUse:l=>20*l, prod:l=>10*l*Math.pow(1.1,l)},
+    crudeOilPump:{name:'Ölbohrturm', resource:'crudeOil', costMagnitude:80, powerUse:l=>20*l, prod:l=>16*l*Math.pow(1.1,l)},
     naturalGasPump:{name:'Erdgasförderanlage', resource:'naturalGas', costMagnitude:75, powerUse:l=>18*l, prod:l=>11*l*Math.pow(1.1,l)},
     coalMine:{name:'Kohlebergwerk', resource:'coal', costMagnitude:70, powerUse:l=>10*l, prod:l=>20*l*Math.pow(1.1,l)},
     freshwaterExtractor:{name:'Süßwassergewinnung', resource:'freshwater', costMagnitude:50, powerUse:l=>7*l, prod:l=>20*l*Math.pow(1.1,l)},
-    saltwaterDesalinator:{name:'Meerwasserpumpe', resource:'saltwater', costMagnitude:43, powerUse:l=>6*l, prod:l=>22*l*Math.pow(1.1,l)},
+    saltwaterDesalinator:{name:'Meerwasserpumpe', resource:'saltwater', costMagnitude:43, powerUse:l=>6*l, prod:l=>33*l*Math.pow(1.1,l)},
     lithiumExtractor:{name:'Lithium-Solefeld', resource:'lithium', costMagnitude:76, powerUse:l=>11*l, prod:l=>13*l*Math.pow(1.1,l)},
     // Jeder Spieler braucht IRGENDEINEN verlaesslichen Weg an jeden nicht-heimischen
     // Rohstoff zu kommen, auch ohne Handel oder das Glueck, den passenden Planetentyp zu
@@ -316,8 +321,13 @@ const defs = {
     allianceDepot:{name:'Allianzdepot', base:{limestone:30000, gold:30000, phosphate:5000, concrete:6000}, requires:{shipyard:3}, facility:true},
     missileSilo:{name:'Raketensilo', base:{iron:30000, sulfur:11000, steel:3000}, requires:{shipyard:1}, facility:true},
     spaceTelescope:{name:'Weltraum-Teleskop', base:{copper:20000, silver:24000, naturalGas:10000, electronics:4000}, requires:{researchLab:6, espionageTech:4}, facility:true},
-    sensorPhalanx:{name:'Sensorphalanx', base:{copper:30000, silver:35000, naturalGas:15000, electronics:6000}, requires:{naniteFactory:1}, moonOnly:true, facility:true},
-    jumpGate:{name:'Sprungtor', base:{aluminium:2000000, lithium:3500000, uranium:1300000, precisionComponents:5000}, requires:{naniteFactory:1, hyperspaceTech:7}, moonOnly:true, facility:true},
+    // requires.lunarBase wird gegen die Gebaeude des MONDES selbst geprueft (siehe
+    // meetsMoonRequirements), nicht gegen den finanzierenden Planeten - vorher war die
+    // Lunarbasis voll kostenpflichtig, aber ohne jede Wirkung: kein Code las
+    // m.buildings.lunarBase fuer irgendeine Pruefung. Jetzt ist sie echte Voraussetzung
+    // fuer die beiden anderen Mondgebaeude (analog zu OGames Mondbasis-Vorstufe).
+    sensorPhalanx:{name:'Sensorphalanx', base:{copper:30000, silver:35000, naturalGas:15000, electronics:6000}, requires:{naniteFactory:1, lunarBase:1}, moonOnly:true, facility:true},
+    jumpGate:{name:'Sprungtor', base:{aluminium:2000000, lithium:3500000, uranium:1300000, precisionComponents:5000}, requires:{naniteFactory:1, hyperspaceTech:7, lunarBase:1}, moonOnly:true, facility:true},
     lunarBase:{name:'Lunarbasis', base:{limestone:40000, aluminium:40000, concrete:10000}, requires:{}, moonOnly:true, facility:true},
 
     // ---- Verteidigung ----
@@ -326,7 +336,11 @@ const defs = {
     heavyLaser:{name:'Schweres Laser-Geschütz', base:{iron:5500, silver:2500, electronics:600}, isDefense:true, attack:250, shield:100, hull:8000, requires:{shipyard:4, energyTech:3}},
     gaussCannon:{name:'Gauß-Kanone', base:{iron:22000, silver:11000, naturalGas:4000, machineParts:800}, isDefense:true, attack:1100, shield:200, hull:35000, requires:{shipyard:6, weaponsTech:3, shieldingTech:1, energyTech:6}},
     ionCannon:{name:'Ionenkanone', base:{aluminium:5000, lithium:3000, electronics:400}, isDefense:true, attack:150, shield:500, hull:8000, requires:{shipyard:4, ionTech:4}},
-    plasmaTurret:{name:'Plasmawerfer', base:{aluminium:60000, rareEarths:45000, uranium:25000, precisionComponents:200}, isDefense:true, attack:3000, shield:300, hull:100000, requires:{shipyard:8, plasmaTech:7}},
+    // rareEarths/uranium-Anteil gesenkt: vorher lag die Angriff/Huelle-pro-Kosten-Effizienz
+    // bei etwa der Haelfte bzw. einem Drittel der guenstigeren gaussCannon/heavyLaser
+    // (0.0053 vs. 0.0135 Angriff/Wert, 0.178 vs. 0.43 Huelle/Wert) - 80% der Kosten steckten
+    // in den beiden knappsten/am schwersten skalierbaren Rohstoffen.
+    plasmaTurret:{name:'Plasmawerfer', base:{aluminium:60000, rareEarths:20000, uranium:12000, precisionComponents:200}, isDefense:true, attack:3000, shield:300, hull:100000, requires:{shipyard:8, plasmaTech:7}},
     smallShield:{name:'Kleine Schildkuppel', base:{aluminium:12000, silver:8000, alloy:1500}, isDefense:true, unique:true, attack:1, shield:2000, hull:20000, requires:{shieldingTech:2}},
     largeShield:{name:'Große Schildkuppel', base:{aluminium:60000, silver:40000, alloy:6000}, isDefense:true, unique:true, attack:1, shield:10000, hull:100000, requires:{shipyard:6, shieldingTech:6}},
     interplanetaryMissile:{name:'Interplanetare Rakete', base:{iron:10000, sulfur:5000, steel:2000}, isDefense:true, attack:12000, shield:0, hull:1, requires:{missileSilo:4}},
@@ -363,7 +377,12 @@ const defs = {
     heavyFighter:{name:'Schwerer Jäger', cost:{iron:6000, aluminium:3000, copper:1000, steel:900}, cargo:100, speed:1.0, fuel:25, attack:150, shield:25, hull:10000, role:'combat', requires:{shipyard:3, armourTech:2, impulseDrive:2}},
     cruiser:{name:'Kreuzer', cost:{iron:18000, aluminium:8000, crudeOil:3000, steel:2500}, cargo:800, speed:1.1, fuel:40, attack:400, shield:50, hull:27000, role:'combat', requires:{shipyard:5, weaponsTech:2}},
     battleship:{name:'Schlachtschiff', cost:{iron:42000, aluminium:18000, steel:5000}, cargo:1500, speed:0.8, fuel:50, attack:1000, shield:200, hull:60000, role:'combat', requires:{shipyard:7, hyperspaceDrive:4}},
-    battlecruiser:{name:'Großer Kreuzer', cost:{aluminium:35000, lithium:35000, crudeOil:15000, alloy:4000}, cargo:750, speed:0.9, fuel:250, attack:700, shield:400, hull:70000, role:'combat', requires:{shipyard:8, hyperspaceTech:5, laserTech:12}},
+    // Attack/Treibstoff angehoben: bei einem hoeheren Rohstoffwert als der Bomber (~229k vs.
+    // ~149k RESOURCE_VALUE-Summe) war der Grosse Kreuzer bei GLEICHZEITIG weniger Angriff,
+    // weniger Huelle UND 3,8x hoeherem Treibstoffverbrauch strikt dominiert - nur die Ladung
+    // (750 vs. 500) sprach fuer ihn. Jetzt konkurrenzfaehig, aber weiterhin unter dem
+    // spezialisierten Bomber bei reinem Angriffswert.
+    battlecruiser:{name:'Großer Kreuzer', cost:{aluminium:35000, lithium:35000, crudeOil:15000, alloy:4000}, cargo:750, speed:0.9, fuel:110, attack:950, shield:400, hull:70000, role:'combat', requires:{shipyard:8, hyperspaceTech:5, laserTech:12}},
     bomber:{name:'Bomber', cost:{iron:50000, aluminium:25000, crudeOil:15000, machineParts:2000}, cargo:500, speed:0.6, fuel:65, attack:1000, shield:500, hull:75000, role:'combat', requires:{shipyard:8, plasmaTech:5, impulseDrive:6}},
     destroyer:{name:'Zerstörer', cost:{iron:65000, aluminium:45000, crudeOil:15000, alloy:6000}, cargo:2000, speed:0.7, fuel:100, attack:2000, shield:500, hull:110000, role:'combat', requires:{shipyard:9, hyperspaceTech:5, hyperspaceDrive:6}},
     reaper:{name:'Reaper', cost:{iron:85000, aluminium:50000, rareEarths:25000, machineParts:4000}, cargo:10000, speed:0.6, fuel:80, attack:2800, shield:700, hull:140000, role:'combat', requires:{shipyard:10, spaceDock:1, hyperspaceTech:6, hyperspaceDrive:7}},
@@ -877,6 +896,21 @@ function meetsRequirements(p, req){
   }
   return true;
 }
+// Wie meetsRequirements(), aber fuer Mondgebaeude: eine requires-Angabe auf ein anderes
+// moonOnly-Gebaeude (z.B. sensorPhalanx.requires.lunarBase) bezieht sich auf die Gebaeude
+// des MONDES selbst, nicht des finanzierenden Planeten - der Mond hat naemlich gar kein
+// eigenes lunarBase/sensorPhalanx/jumpGate-Level auf dem Planeten-Objekt. Alle anderen
+// requires-Schluessel (z.B. naniteFactory, hyperspaceTech) werden weiterhin wie bisher
+// gegen den Planeten geprueft.
+function meetsMoonRequirements(p, m, req){
+  if(!req) return true;
+  for(const [k,v] of Object.entries(req)){
+    const isMoonBuilding = defs.buildings[k] && defs.buildings[k].moonOnly;
+    const have = isMoonBuilding ? (m.buildings[k]||0) : (p.buildings[k]!=null ? p.buildings[k] : (p.research[k]!=null ? p.research[k] : 0));
+    if(have<v) return false;
+  }
+  return true;
+}
 // Prueft zusaetzlich, ob ein Gebaeude (typischerweise eine Mine) ueberhaupt auf dem
 // Planetentyp von p gebaut werden darf - unabhaengig von Stufen-Anforderungen.
 function meetsPlanetType(p, def){
@@ -955,11 +989,23 @@ function combinedDefenderPower(fleetShips, defenseShips){
   const d = sidePower(defenseShips, defs.buildings);
   return {attack: f.attack+d.attack, shield: f.shield+d.shield, hull: f.hull+d.hull};
 }
-function simulateBattle(attackerShips, defenderShips, defenderDefenseShips){
-  const att0 = sidePower(attackerShips, defs.ships);
+// weaponsTech/laserTech/ionTech/plasmaTech/shieldingTech/armourTech waren bisher reine
+// Freischalt-Gates (z.B. "gaussCannon braucht weaponsTech:3") OHNE jede mechanische Wirkung
+// im Kampf selbst - Stufen ueber das hoechste referenzierte Gate hinaus waren komplett
+// wirkungslos investierte Ressourcen. Ein moderater Pro-Stufe-Bonus (2%) gibt diesen
+// Forschungen endlich einen echten, aber bewusst gedaempften Effekt. attackerResearch/
+// defenderResearch sind OPTIONAL - werden sie weggelassen (wie bisher bei NPC-/Piraten-
+// Gefechten), ist der Multiplikator exakt 1 und das Kampfverhalten bleibt unveraendert.
+function techAttackMult(research){ const r=research||{}; return 1+0.02*((r.weaponsTech||0)+(r.laserTech||0)+(r.ionTech||0)+(r.plasmaTech||0)); }
+function techShieldMult(research){ return 1+0.02*((research||{}).shieldingTech||0); }
+function techHullMult(research){ return 1+0.02*((research||{}).armourTech||0); }
+function simulateBattle(attackerShips, defenderShips, defenderDefenseShips, attackerResearch, defenderResearch){
+  const att0raw = sidePower(attackerShips, defs.ships);
+  const att0 = {attack: att0raw.attack*techAttackMult(attackerResearch), shield: att0raw.shield*techShieldMult(attackerResearch), hull: att0raw.hull*techHullMult(attackerResearch)};
   const defFleet0 = sidePower(defenderShips, defs.ships);
   const defDef0 = sidePower(defenderDefenseShips, defs.buildings);
-  const def0 = {attack: defFleet0.attack+defDef0.attack, shield: defFleet0.shield+defDef0.shield, hull: defFleet0.hull+defDef0.hull};
+  const def0raw = {attack: defFleet0.attack+defDef0.attack, shield: defFleet0.shield+defDef0.shield, hull: defFleet0.hull+defDef0.hull};
+  const def0 = {attack: def0raw.attack*techAttackMult(defenderResearch), shield: def0raw.shield*techShieldMult(defenderResearch), hull: def0raw.hull*techHullMult(defenderResearch)};
   let attHull=att0.hull, defHull=def0.hull, rounds=0;
   const variance=()=>0.9+Math.random()*0.2;
   while(rounds<6 && attHull>0 && defHull>0){
@@ -997,10 +1043,19 @@ function spend(p,c){ for(const k of RESOURCE_KEYS){ p.resources[k] = (p.resource
 function addRes(p,c){ for(const k of RESOURCE_KEYS){ p.resources[k] = (p.resources[k]||0) + (c[k]||0); } }
 function fusionDeutUse(p){ return (p.buildings.nuclearReactor) ? defs.buildings.nuclearReactor.uraniumUse(p.buildings.nuclearReactor) : 0; }
 function fusionCoalUse(p){ return (p.buildings.coalPlant) ? defs.buildings.coalPlant.coalUse(p.buildings.coalPlant) : 0; }
+// Wie stark ein Brennstoff-Kraftwerk (Kernreaktor/Kohlekraftwerk) gerade gedrosselt laufen
+// muss: verhaeltnismaessig zum aktuellen Lagerbestand seines Brennstoffs, nicht hart an/aus -
+// exakt dasselbe Prinzip wie factoryThrottle() fuer Fabrik-Eingangsstoffe. Vorher lieferten
+// beide Kraftwerke IMMER volle Nennleistung, auch bei Brennstoff = 0 (uraniumMine.prod() und
+// nuclearReactor.uraniumUse() nutzen bewusst dieselbe Formel, das Lager leert sich also
+// garantiert - der Reaktor lief danach unbegrenzt und kostenlos mit voller Leistung weiter).
+function powerPlantThrottle(available, desiredPerHour){ return desiredPerHour>0 ? Math.min(1, Math.max(0, available||0)/desiredPerHour) : 1; }
 function energyStats(state, p){
   const solar=defs.buildings.solarPlant.power(p.buildings.solarPlant);
-  const nuclear=defs.buildings.nuclearReactor.power(p.buildings.nuclearReactor||0);
-  const coalPower=defs.buildings.coalPlant.power(p.buildings.coalPlant||0);
+  const nuclearThrottle = powerPlantThrottle(p.resources.uranium, fusionDeutUse(p));
+  const nuclear=defs.buildings.nuclearReactor.power(p.buildings.nuclearReactor||0)*nuclearThrottle;
+  const coalThrottle = powerPlantThrottle(p.resources.coal, fusionCoalUse(p));
+  const coalPower=defs.buildings.coalPlant.power(p.buildings.coalPlant||0)*coalThrottle;
   const satellites=(p.ships.solarSatellite||0)*defs.ships.solarSatellite.power;
   const sails = (p.buildings.solarSailI||0)*defs.buildings.solarSailI.power
               + (p.buildings.solarSailII||0)*defs.buildings.solarSailII.power
@@ -1013,7 +1068,7 @@ function energyStats(state, p){
   for(const key of FACTORY_KEYS){
     if(defs.buildings[key].powerUse) use += defs.buildings[key].powerUse(p.buildings[key]||0);
   }
-  return {prod,use,ratio: use? Math.min(1,prod/use):1};
+  return {prod,use,ratio: use? Math.min(1,prod/use):1, nuclearThrottle, coalThrottle};
 }
 // Wie stark eine Fabrik gerade gedrosselt laufen muss: verhaeltnismaessig zum knappsten
 // Eingaberohstoff (min(1, Lagerbestand/Bedarf) ueber alle inputsPerUnit), nicht hart
@@ -1075,7 +1130,7 @@ function itemGroupBoost(state, resource){
 // ueber sein `recipe`-Feld durch applyFactories() - dort haengen Suesswasser-Verbrauch und
 // Sauerstoff-Nebenprodukt der Forstplantage.
 function hourly(state, p, universe){
-  const e=energyStats(state, p).ratio; const bonus=officerBonus(state);
+  const stats=energyStats(state, p); const e=stats.ratio; const bonus=officerBonus(state);
   const inc = zeroResources();
   for(const res of PLANET_TYPES[p.planetType].resources){
     const mineKey = MINE_BY_RESOURCE[res];
@@ -1084,8 +1139,11 @@ function hourly(state, p, universe){
     const boost = itemGroupBoost(state,res) * eventResourceMultiplier(universe,res);
     inc[res] = defs.buildings[mineKey].prod(lvl)*e*bonus*boost;
   }
-  inc.uranium -= fusionDeutUse(p);
-  inc.coal -= fusionCoalUse(p);
+  // Brennstoffverbrauch wird um denselben Faktor gedrosselt wie die abgegebene Leistung
+  // (energyStats().nuclearThrottle/coalThrottle) - ein nur teilweise befeuertes Kraftwerk
+  // verbraucht sonst weiterhin die volle Nennmenge, obwohl es bereits gedrosselt ist.
+  inc.uranium -= fusionDeutUse(p)*stats.nuclearThrottle;
+  inc.coal -= fusionCoalUse(p)*stats.coalThrottle;
   applyFactories(state, p, universe, inc);
   return inc;
 }
@@ -1224,27 +1282,126 @@ function ensureAllDefaults(state){
   Object.values(state.debrisFields).forEach(ensureDebrisFieldDefaults);
 }
 
-function normalizePlayerState(data){
+// normalizePlayerState() ist die einzige Stelle im Spiel, die eine komplette Spielerakte
+// aus einer NICHT vertrauenswuerdigen Quelle uebernimmt (/api/restore - der Client laedt
+// eine vom Nutzer ausgewaehlte Datei, die aber auch frei von Hand manipuliert sein kann,
+// z.B. ueber die Android-Bruecke window.applyLoadedSave/-Base64). Jeder Zahlenwert und
+// jeder Objekt-Schluessel MUSS deshalb geklemmt/whitelisted werden, statt wie ensureAllDefaults()
+// nur FEHLENDE Felder aufzufuellen - sonst kann ein manipuliertes "Backup" beliebige
+// Ressourcen/Schiffe/Gebaeudestufen einschleusen oder eine Koordinate belegen, die bereits
+// einem anderen Spieler gehoert (findPlanetOwner() findet dann zwei Besitzer fuer dieselbe
+// Koordinate - undefiniertes Verhalten je nach Iterationsreihenfolge).
+function clampInt(v, min, max, fallback){
+  const n = Math.floor(Number(v));
+  if(!Number.isFinite(n)) return fallback;
+  return Math.max(min, Math.min(max, n));
+}
+function sanitizeRestoredResources(res){
+  const out = zeroResources();
+  if(res && typeof res==='object'){ for(const k of RESOURCE_KEYS) out[k] = clampInt((res||{})[k], 0, 1e12, 0); }
+  return out;
+}
+function sanitizeRestoredLevels(obj, keys, maxLevel){
+  const out = {};
+  const src = (obj && typeof obj==='object') ? obj : {};
+  for(const k of keys) out[k] = clampInt(src[k], 0, maxLevel, 0);
+  return out;
+}
+// Nur Warteschlangen-Eintraege mit einem bekannten Gebaeude/Forschung/Schiff-Schluessel und
+// endlichen Zahlenfeldern uebernehmen - alles andere wird stillschweigend verworfen statt
+// spaeter beim naechsten tick() eine Exception auszuloesen.
+function sanitizeRestoredQueue(queue, validKeys){
+  if(!Array.isArray(queue)) return [];
+  return queue.filter(q=>q && validKeys.has(q.key)).map(q=>({
+    type: typeof q.type==='string' ? q.type.slice(0,20) : 'building',
+    key: q.key,
+    name: typeof q.name==='string' ? q.name.slice(0,60) : String(q.key),
+    level: clampInt(q.level, 1, 1000, 1),
+    done: Number.isFinite(Number(q.done)) ? Number(q.done) : Date.now(),
+  })).slice(0, 50);
+}
+function sanitizeRestoredPlanet(raw, universe, username){
+  if(!raw || typeof raw!=='object' || !Array.isArray(raw.coords) || raw.coords.length!==3) return null;
+  const coords = [clampInt(raw.coords[0],1,UNIVERSE.galaxies,0), clampInt(raw.coords[1],1,UNIVERSE.systems,0), clampInt(raw.coords[2],1,UNIVERSE.positions,0)];
+  if(!validCoord(coords[0], coords[1], coords[2])) return null;
+  // Diese Koordinate darf keinem ANDEREN Spieler gehoeren - sonst haette findPlanetOwner()
+  // zwei Treffer fuer dieselbe Koordinate (Koordinaten-Uebernahme-Exploit).
+  if(findPlanetOwner(universe, coords, username)) return null;
+  const buildingKeys = Object.keys(defs.buildings);
+  const researchKeys = Object.keys(defs.research);
+  const shipKeys = Object.keys(defs.ships);
+  const buildings = sanitizeRestoredLevels(raw.buildings, buildingKeys, 500);
+  const validQueueKeys = new Set(buildingKeys);
+  return {
+    coords,
+    name: sanitizePlanetName(String(raw.name||'Planet')).trim().slice(0,30) || 'Planet',
+    planetType: (raw.planetType && PLANET_TYPES[raw.planetType]) ? raw.planetType : planetTypeForCoord(coords[0], coords[1], coords[2]),
+    resources: sanitizeRestoredResources(raw.resources),
+    buildings,
+    research: sanitizeRestoredLevels(raw.research, researchKeys, 500),
+    ships: sanitizeRestoredLevels(raw.ships, shipKeys, 1e7),
+    buildQueue: sanitizeRestoredQueue(raw.buildQueue, validQueueKeys),
+    researchQueue: sanitizeRestoredQueue(raw.researchQueue, new Set(researchKeys)),
+    shipQueue: sanitizeRestoredQueue(raw.shipQueue, new Set(shipKeys)),
+  };
+}
+function sanitizeRestoredMoon(raw, validPlanetCoordsKey){
+  if(!raw || typeof raw!=='object' || !Array.isArray(raw.coord) || raw.coord.length!==3) return null;
+  const coord = [clampInt(raw.coord[0],1,UNIVERSE.galaxies,0), clampInt(raw.coord[1],1,UNIVERSE.systems,0), clampInt(raw.coord[2],1,UNIVERSE.positions,0)];
+  if(!validCoord(coord[0], coord[1], coord[2])) return null;
+  // Ein Mond muss an einem der (bereits validierten) eigenen Planeten haengen - verhindert,
+  // dass ein manipuliertes Backup einen Mond an eine beliebige fremde Koordinate setzt.
+  if(!validPlanetCoordsKey.has(coord.join(':'))) return null;
+  return {
+    coord,
+    size: clampInt(raw.size, 500, 20000, 3000),
+    buildings: sanitizeRestoredLevels(raw.buildings, ['lunarBase','sensorPhalanx','jumpGate'], 500),
+    ships: sanitizeRestoredLevels(raw.ships, Object.keys(defs.ships), 1e7),
+    buildQueue: sanitizeRestoredQueue(raw.buildQueue, new Set(['lunarBase','sensorPhalanx','jumpGate'])),
+  };
+}
+function sanitizeRestoredFleet(raw, planetCount){
+  if(!raw || typeof raw!=='object') return null;
+  const from = clampInt(raw.from, 0, Math.max(0,planetCount-1), -1);
+  if(from<0) return null;
+  return Object.assign({}, raw, {
+    from,
+    ships: sanitizeRestoredLevels(raw.ships, Object.keys(defs.ships), 1e7),
+    cargo: sanitizeRestoredResources(raw.cargo),
+  });
+}
+function normalizePlayerState(data, universe, username){
+  data = (data && typeof data==='object') ? data : {};
   const fresh = createStarterEmpire([1,1,1], 'Heimatwelt');
+  const rawPlanets = Array.isArray(data.planets) ? data.planets : [];
+  let planets = rawPlanets.map(p=>sanitizeRestoredPlanet(p, universe||{players:{}}, username)).filter(Boolean);
+  if(!planets.length) planets = fresh.planets; // komplett leer/ungueltig -> Neustart statt leerem Konto
+  const planetCoordKeys = new Set(planets.map(p=>p.coords.join(':')));
+  const rawMoons = Array.isArray(data.moons) ? data.moons : [];
+  const moons = rawMoons.map(m=>sanitizeRestoredMoon(m, planetCoordKeys)).filter(Boolean);
+  const rawFleets = Array.isArray(data.fleets) ? data.fleets : [];
+  const fleets = rawFleets.map(f=>sanitizeRestoredFleet(f, planets.length)).filter(Boolean);
   const state = {
     timeScale: 20,
     now: Date.now(),
-    planets: data.planets || fresh.planets,
-    fleets: data.fleets || [],
-    reports: data.reports || [],
-    messages: data.messages || fresh.messages,
-    debrisFields: data.debrisFields || {},
-    moons: data.moons || [],
+    planets,
+    fleets,
+    reports: [],
+    messages: fresh.messages,
+    debrisFields: {},
+    moons,
     // Ein wiederhergestelltes Backup wird immer unabhängig: eine fremde/veraltete Allianz-
     // Mitgliedschaft aus der Backup-Datei koennte nicht mehr zur universe.alliances-Registry
     // passen (Allianz existiert nicht mehr, Konto ist bereits Mitglied einer anderen usw.).
     allianceTag: null,
-    officerExpiry: data.officerExpiry || {},
-    darkMatter: data.darkMatter!=null ? data.darkMatter : fresh.darkMatter,
-    expeditions: data.expeditions || [],
+    officerExpiry: {},
+    // Darf aus einem Restore NIE gewinnbringend uebernommen werden (virtuelle Waehrung) -
+    // das Konto behaelt seinen aktuellen Stand, ein Backup kann ihn nicht erhoehen.
+    darkMatter: (universe && universe.players[username] && universe.players[username].darkMatter) || 0,
+    expeditions: [],
     onboarded: true, // ein wiederhergestelltes Backup gehoert immer zu einem bereits eingefuehrten Konto
-    marketRate: data.marketRate || fresh.marketRate,
-    logs: data.logs || fresh.logs,
+    marketRate: fresh.marketRate,
+    logs: fresh.logs,
   };
   ensureAllDefaults(state);
   return state;
@@ -1273,6 +1430,10 @@ function normalizeUniverse(data){
 function requirePlanet(state, planetIndex){
   const p = state.planets[planetIndex];
   if(!p) throw new Error('Ungültiger Planet');
+  // Ein durch einen Todesstern zerstoerter Planet bleibt im Array (genullt) stehen, um die
+  // Indizes bestehender Flotten/Referenzen nicht zu verschieben - er darf aber fuer keine
+  // Spieleraktion (Bauen, Forschen, Flotte senden, Handel, ...) mehr als Ausgangspunkt dienen.
+  if(p.destroyed) throw new Error('Dieser Planet wurde zerstört');
   return p;
 }
 
@@ -1440,7 +1601,10 @@ function sendFleet(universe, username, planetIndex, params){
   const combatPower = Object.entries(ships).reduce((s,[k,v])=> s + (defs.ships[k] && defs.ships[k].role==='combat' ? v : 0), 0);
   if(mission==='colonize' && ships.colonyShip<1) return fail(state, 'Kolonisierung braucht mindestens ein Kolonieschiff');
   if(mission==='colonize' && !emptySlot) return fail(state, 'Zielfeld ist nicht leer');
-  if(mission==='colonize' && state.planets.length>=maxColonies(p)) return fail(state, 'Maximale Kolonieanzahl erreicht (Astrophysik ausbauen, aktuell max '+maxColonies(p)+')');
+  // Zerstoerte Planeten bleiben im Array stehen (Index-Stabilitaet), zaehlen aber wie ueberall
+  // sonst (totalPlayerPoints, computeHighscore) NICHT gegen die Koloniekapazitaet - sonst wuerde
+  // der Verlust eines Planeten die maximale Kolonieanzahl dauerhaft und unwiderruflich senken.
+  if(mission==='colonize' && state.planets.filter(pl=>!pl.destroyed).length>=maxColonies(p)) return fail(state, 'Maximale Kolonieanzahl erreicht (Astrophysik ausbauen, aktuell max '+maxColonies(p)+')');
   if(mission==='spy' && ships.espionageProbe<1) return fail(state, 'Spionage braucht mindestens eine Sonde');
   if(mission==='attack' && combatPower<1) return fail(state, 'Angriff braucht Kampfschiffe');
   if(mission==='harvest' && ships.recycler<1) return fail(state, 'Bergung braucht mindestens einen Recycler');
@@ -1611,7 +1775,7 @@ function enqueueMoonBuild(state, planetIndex, moonIndex, key){
   const def = defs.buildings[key];
   if(!def || !def.moonOnly) return fail(state, 'Unbekanntes Mondgebäude');
   const p = requirePlanet(state, planetIndex);
-  if(!meetsRequirements(p, def.requires)) return fail(state, def.name+' benötigt: '+requirementText(def.requires));
+  if(!meetsMoonRequirements(p, m, def.requires)) return fail(state, def.name+' benötigt: '+requirementText(def.requires));
   if(m.buildQueue.some(q=>q.key===key)) return fail(state, def.name+' wird bereits gebaut');
   const lvl = (m.buildings[key]||0)+1;
   const cost = scaledCost(def.base, lvl);
@@ -2019,6 +2183,17 @@ function acceptTradeOffer(universe, username, payload){
 function getPublicTradeOffersView(universe){
   return universe.tradeOffers.map(o=>({ id:o.id, from:o.from, give:o.give, giveAmount:o.giveAmount, want:o.want, wantAmount:o.wantAmount, createdAt:o.createdAt }));
 }
+// Der NPC-Markt tauschte bisher ZU JEDER MENGE, JEDERZEIT, ohne Obergrenze zu einem festen
+// RESOURCE_VALUE-Kurs (minus 10% Gebuehr). Da dieselbe RESOURCE_VALUE-Tabelle auch die
+// Fabrik-Rezepte bepreist (wo Output meist WENIGER wert ist als die Summe der Eingaben, siehe
+// die Rezept-Kommentare bei den Fabrikgebaeuden), liess sich damit jede Ressource beliebig oft
+// und verzoegerungsfrei billiger "diversifizieren" als sie ueber eine echte Fabrikkette
+// herzustellen - Fabriken wurden dadurch komplett umgangen. Ein taeglich zuruecksetzendes
+// Handelsvolumen-Limit (gekoppelt an die eigene Lagerkapazitaet, waechst also mit dem
+// Spielfortschritt) erlaubt weiterhin gelegentliches, grosszuegiges Umschichten, verhindert
+// aber die unbegrenzte Wiederholung als kostenlose Produktionsmethode.
+const MARKET_TRADE_WINDOW_MS = 24*3600*1000;
+function marketTradeCapFor(p){ return resTotal(maxStorage(p)); }
 function marketTrade(state, planetIndex, giveType, wantType, amount){
   const p = requirePlanet(state, planetIndex);
   amount = Number(amount)||0;
@@ -2026,6 +2201,14 @@ function marketTrade(state, planetIndex, giveType, wantType, amount){
   if(!state.marketRate[giveType] || !state.marketRate[wantType]) return fail(state, 'Unbekannte Ressource');
   if((p.resources[giveType]||0) < amount) return fail(state, 'Nicht genug '+giveType);
   const value = amount * state.marketRate[giveType];
+  const now = Date.now();
+  if(!p.marketTradeWindowStart || now - p.marketTradeWindowStart > MARKET_TRADE_WINDOW_MS){
+    p.marketTradeWindowStart = now; p.marketTradeValueUsed = 0;
+  }
+  const cap = marketTradeCapFor(p);
+  const remaining = Math.max(0, cap - (p.marketTradeValueUsed||0));
+  if(value > remaining) return fail(state, 'Markt-Handelslimit erreicht (max. '+Math.floor(cap)+' Wert pro Tag, noch '+Math.floor(remaining)+' verfügbar)');
+  p.marketTradeValueUsed = (p.marketTradeValueUsed||0) + value;
   const received = Math.floor(value / state.marketRate[wantType] * 0.9);
   p.resources[giveType]-=amount; p.resources[wantType]=(p.resources[wantType]||0)+received;
   return ok(state, 'Markt: '+amount+' '+giveType+' gegen '+received+' '+wantType+' getauscht');
@@ -2298,7 +2481,7 @@ function resolveAttackGroup(universe, participants){
   const waveNote = isGroup ? ' (ACS-Welle "'+first.acsId+'", '+participants.length+' Flotten)' : '';
   const combinedShips = mergeShipMaps(participants.map(x=>x.fleet.ships));
 
-  function applyGroupOutcome(battle, lostDefenderFleet, targetLabel, targetResources){
+  function applyGroupOutcome(battle, lostDefenderFleet, targetLabel, targetResources, defenderStateForMoon){
     const results = participants.map(({username, state, fleet})=>{
       const before = fleet.ships;
       const after = applyLosses(before, battle.attackerLossRatio);
@@ -2314,7 +2497,12 @@ function resolveAttackGroup(universe, participants){
     const debrisTotal = resTotal(debrisRes);
     if(debrisTotal>0){
       for(const r of results) addDebris(r.state, first.toCoord, debrisRes);
-      maybeCreateMoon(results[0].state, first.toCoord, debrisTotal);
+      // Ein durch Kampf entstehender Mond umkreist den ANGEGRIFFENEN Planeten - er gehoert
+      // also dem Verteidiger, nicht dem Angreifer. Bei NPC-Zielen (kein echter Spieler
+      // dahinter) gibt es kein Verteidiger-State-Objekt; dort bleibt der bisherige Fallback
+      // auf den erstbeteiligten Angreifer bestehen (kosmetisch, da NPCs sowieso nichts damit
+      // anfangen koennen).
+      maybeCreateMoon(defenderStateForMoon || results[0].state, first.toCoord, debrisTotal);
     }
     const roundsText = battle.rounds>0 ? battle.rounds+' Kampfrunde(n)' : 'kampflos (keine Verteidigung)';
     const takenRes = zeroResources();
@@ -2361,14 +2549,19 @@ function resolveAttackGroup(universe, participants){
       return;
     }
     const defBefore = extractDefense(t.buildings);
-    const battle = simulateBattle(combinedShips, t.ships, defBefore);
+    // Forschungsstufen sind PRO PLANET gespeichert - bei einer ACS-Sammelflotte (mehrere
+    // Teilnehmer) wird vereinfachend die Forschung des ERSTEN Teilnehmers (i.d.R. der
+    // Initiator der Welle) fuer die gesamte Angriffsmacht herangezogen, statt eine
+    // gewichtete Mischung mehrerer unabhaengiger Forschungsbaeume zu berechnen.
+    const attackerOrigin = participants[0].state.planets[participants[0].fleet.from];
+    const battle = simulateBattle(combinedShips, t.ships, defBefore, attackerOrigin && attackerOrigin.research, t.research);
     const survivingDefenderFleet = applyLosses(t.ships, battle.defenderLossRatio);
     const survivingDef = applyLosses(defBefore, battle.defenderLossRatio);
     const lostDefenderFleet = diffLosses(t.ships, survivingDefenderFleet);
     t.ships = survivingDefenderFleet;
     for(const k of Object.keys(defBefore)) t.buildings[k] = survivingDef[k];
     const targetLabel = t.name+' ('+first.toOwner+')';
-    const outcome = applyGroupOutcome(battle, lostDefenderFleet, targetLabel, t.resources);
+    const outcome = applyGroupOutcome(battle, lostDefenderFleet, targetLabel, t.resources, targetState);
     for(const k of RESOURCE_KEYS){ t.resources[k] = (t.resources[k]||0) - (outcome.takenRes[k]||0); }
     const attackerNames = participants.map(x=>x.username).join(', ');
     if(outcome.won){
@@ -2405,21 +2598,26 @@ function resolveAttackGroup(universe, participants){
 
 function tick(universe){
   const now = Date.now();
-  resolveAuctionIfDue(universe);
-  resolveEventIfDue(universe);
-  for(const state of Object.values(universe.players)){
-    const dt = (now-state.now)/1000; state.now = now;
-    const hours = (dt*state.timeScale)/3600;
-    state.planets.forEach(p=>{
-      const inc = hourly(state, p, universe); const cap = maxStorage(p);
-      for(const k of RESOURCE_KEYS){
-        p.resources[k] = Math.max(0, Math.min(cap[k], (p.resources[k]||0)+inc[k]*hours));
-      }
-      while(p.buildQueue[0] && p.buildQueue[0].done<=now){ const q=p.buildQueue.shift(); p.buildings[q.key]=(p.buildings[q.key]||0)+1; log(state, p.name+': '+q.name+' fertig'); }
-      while(p.researchQueue[0] && p.researchQueue[0].done<=now){ const q=p.researchQueue.shift(); p.research[q.key]=(p.research[q.key]||0)+1; log(state, p.name+': '+q.name+' fertig'); }
-      while(p.shipQueue[0] && p.shipQueue[0].done<=now){ const q=p.shipQueue.shift(); p.ships[q.key]=(p.ships[q.key]||0)+1; log(state, p.name+': '+q.name+' fertig'); }
-    });
-    state.moons.forEach(m=>{ while(m.buildQueue[0] && m.buildQueue[0].done<=now){ const q=m.buildQueue.shift(); m.buildings[q.key]=(m.buildings[q.key]||0)+1; message(state, 'Mond '+coordLinkHtml(m.coord)+': '+q.name+' fertig'); } });
+  try { resolveAuctionIfDue(universe); } catch(e){ console.error('tick(): Fehler bei resolveAuctionIfDue:', e && e.stack || e); }
+  try { resolveEventIfDue(universe); } catch(e){ console.error('tick(): Fehler bei resolveEventIfDue:', e && e.stack || e); }
+  for(const [tickUsername, state] of Object.entries(universe.players)){
+    // Ein einzelner kaputter Spielerzustand (z.B. durch einen frueheren, nicht abgefangenen
+    // Fehler entstanden) darf den tick() fuer ALLE anderen Spieler nicht abbrechen - deshalb
+    // pro Spieler isoliert, mit Log statt Absturz des gesamten Node-Prozesses.
+    try {
+      const dt = (now-state.now)/1000; state.now = now;
+      const hours = (dt*state.timeScale)/3600;
+      state.planets.forEach(p=>{
+        const inc = hourly(state, p, universe); const cap = maxStorage(p);
+        for(const k of RESOURCE_KEYS){
+          p.resources[k] = Math.max(0, Math.min(cap[k], (p.resources[k]||0)+inc[k]*hours));
+        }
+        while(p.buildQueue[0] && p.buildQueue[0].done<=now){ const q=p.buildQueue.shift(); p.buildings[q.key]=(p.buildings[q.key]||0)+1; log(state, p.name+': '+q.name+' fertig'); }
+        while(p.researchQueue[0] && p.researchQueue[0].done<=now){ const q=p.researchQueue.shift(); p.research[q.key]=(p.research[q.key]||0)+1; log(state, p.name+': '+q.name+' fertig'); }
+        while(p.shipQueue[0] && p.shipQueue[0].done<=now){ const q=p.shipQueue.shift(); p.ships[q.key]=(p.ships[q.key]||0)+1; log(state, p.name+': '+q.name+' fertig'); }
+      });
+      state.moons.forEach(m=>{ while(m.buildQueue[0] && m.buildQueue[0].done<=now){ const q=m.buildQueue.shift(); m.buildings[q.key]=(m.buildings[q.key]||0)+1; message(state, 'Mond '+coordLinkHtml(m.coord)+': '+q.name+' fertig'); } });
+    } catch(e){ console.error('tick(): Fehler bei Spieler '+tickUsername+' (Ressourcen/Bauqueue):', e && e.stack || e); }
   }
   // Angriffsflotten, die jetzt ankommen, werden zunaechst ueber ALLE Spieler hinweg gesammelt
   // und nach ACS-Welle gruppiert (bzw. einzeln bei Solo-Angriffen), damit gleichzeitig
@@ -2435,24 +2633,33 @@ function tick(universe){
     if(!attackGroups.has(key)) attackGroups.set(key, []);
     attackGroups.get(key).push(entry);
   }
-  for(const participants of attackGroups.values()) resolveAttackGroup(universe, participants);
+  for(const participants of attackGroups.values()){
+    try { resolveAttackGroup(universe, participants); }
+    catch(e){ console.error('tick(): Fehler bei resolveAttackGroup:', e && e.stack || e); }
+  }
 
   for(const [username, state] of Object.entries(universe.players)){
-    state.fleets.forEach(f=>{
-      if(f.phase==='outbound' && f.arrive<=now && f.mission!=='attack'){ resolveArrival(universe, username, f); }
-      if(f.phase==='return' && f.returnAt<=now){
-        const source = state.planets[f.from];
-        if(source){
-          for(const [k,v] of Object.entries(f.ships)) source.ships[k]=(source.ships[k]||0)+v;
-          if(f.mission!=='transport'&&f.mission!=='colonize') addRes(source,f.cargo);
-          log(state, 'Flotte nach '+source.name+' zurückgekehrt');
+    try {
+      state.fleets.forEach(f=>{
+        if(f.phase==='outbound' && f.arrive<=now && f.mission!=='attack'){ resolveArrival(universe, username, f); }
+        if(f.phase==='return' && f.returnAt<=now){
+          // Wenn der Ursprungsplanet inzwischen durch einen Todesstern zerstoert wurde,
+          // wuerde die Flotte sonst Schiffe/Fracht auf einen zerstoerten (genullten) Planeten
+          // zurueckschreiben - stattdessen zum ersten noch existierenden Planeten umleiten.
+          const origin = (f.from>=0 && f.from<state.planets.length) ? state.planets[f.from] : null;
+          const source = (origin && !origin.destroyed) ? origin : state.planets[firstAlivePlanetIndex(state)];
+          if(source){
+            for(const [k,v] of Object.entries(f.ships)) source.ships[k]=(source.ships[k]||0)+v;
+            if(f.mission!=='transport'&&f.mission!=='colonize') addRes(source,f.cargo);
+            log(state, 'Flotte nach '+source.name+' zurückgekehrt');
+          }
+          f.phase='done';
         }
-        f.phase='done';
-      }
-    });
-    state.fleets = state.fleets.filter(f=>f.phase!=='done');
-    state.expeditions.forEach(exp=>{ if(exp.done<=now && !exp.resolved){ exp.resolved=true; resolveExpedition(state, exp); } });
-    state.expeditions = state.expeditions.filter(exp=>!exp.resolved);
+      });
+      state.fleets = state.fleets.filter(f=>f.phase!=='done');
+      state.expeditions.forEach(exp=>{ if(exp.done<=now && !exp.resolved){ exp.resolved=true; resolveExpedition(state, exp); } });
+      state.expeditions = state.expeditions.filter(exp=>!exp.resolved);
+    } catch(e){ console.error('tick(): Fehler bei Spieler '+username+' (Flottenrueckkehr/Expeditionen):', e && e.stack || e); }
   }
 }
 

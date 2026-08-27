@@ -6,18 +6,38 @@ const path = require('path');
 const engine = require('./gameEngine');
 const auth = require('./auth');
 
+// Letztes Sicherheitsnetz: ohne diese Handler beendet Node den GESAMTEN Prozess bei jedem
+// nicht abgefangenen Fehler (z.B. in einem Express-Routen-Handler oder einer verworfenen
+// Promise) - das wuerde den Server fuer ALLE Spieler gleichzeitig offline nehmen. Der
+// Prozess bleibt hier stattdessen am Leben; der Fehler wird nur geloggt.
+process.on('uncaughtException', (err) => {
+  console.error('Unerwarteter Fehler (Prozess laeuft weiter):', err && err.stack || err);
+});
+process.on('unhandledRejection', (reason) => {
+  console.error('Unbehandelte Promise-Ablehnung (Prozess laeuft weiter):', reason && reason.stack || reason);
+});
+
 // Manuell synchron zu www/app.js APP_VERSION halten - dient als Diagnosehilfe: ueber
 // /api/health (kein Login noetig) laesst sich damit von jedem Browser aus sofort pruefen,
 // ob ein Server nach einem "git pull" auch wirklich neu gestartet wurde (Node laedt
 // geaenderten Code nicht automatisch nach, nur ein Prozess-Neustart tut das).
-const SERVER_VERSION = '1.40';
+const SERVER_VERSION = '1.41';
 
 const PORT = process.env.PORT || 3000;
 const DATA_DIR = path.join(__dirname, 'data');
 const DATA_FILE = path.join(DATA_DIR, 'universe.json');
 
-const ADMIN_USERNAME = 'admin';
-const ADMIN_PASSWORD = 'Scheissexbox2.';
+const ADMIN_USERNAME = process.env.ADMIN_USERNAME || 'admin';
+// Vorher stand hier ein festes Klartext-Passwort direkt im (oeffentlichen GitHub-)Quellcode -
+// bleibt in der Git-Historie fuer immer sichtbar, egal ob spaeter geaendert. Jetzt per ENV
+// ueberschreibbar; der alte Wert bleibt NUR als Fallback erhalten, damit ein bereits laufender
+// Server (dessen Admin-Konto schon mit diesem Passwort-Hash in universe.json existiert) beim
+// naechsten Neustart nicht ausgesperrt wird - ensureAdminAccount() unten legt das Konto ohnehin
+// nur beim ALLERERSTEN Start an, nicht bei jedem Neustart.
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'Scheissexbox2.';
+if(!process.env.ADMIN_PASSWORD){
+  console.warn('WARNUNG: ADMIN_PASSWORD ist nicht per Umgebungsvariable gesetzt - es wird ein fest im Quellcode hinterlegter Fallback-Wert verwendet. Fuer produktive/oeffentlich erreichbare Server bitte ADMIN_PASSWORD setzen (z.B. in der systemd-Unit oder .env) und den Server neu starten.');
+}
 
 function ensureAdminAccount(universe){
   if(!universe.accounts[ADMIN_USERNAME]){
@@ -48,16 +68,36 @@ function loadUniverse(){
 let universe = loadUniverse();
 let dirty = false;
 
+// saveUniverse() wurde bisher SYNCHRON (fs.writeFileSync) bei JEDER einzelnen /api/action
+// aufgerufen und serialisiert dabei das GESAMTE Universum-Objekt - bei vielen Spielern/
+// Planeten kann das mehrere Millisekunden blockieren, waehrend derer Node (Single-Thread!)
+// gar keine andere Anfrage/keinen tick() bearbeiten kann. Ein Skript, das /api/action im
+// engen Loop aufruft, konnte den Server so effektiv lahmlegen. Jetzt asynchron (schreibt nicht
+// mehr blockierend) UND mit einer In-Flight-Sperre: laeuft bereits ein Schreibvorgang, wird
+// nur vorgemerkt ("bitte danach nochmal speichern") statt einen zweiten parallelen Schreib-
+// vorgang auf dieselbe Datei zu starten.
+let saveInFlight = false;
+let saveAgainAfter = false;
 function saveUniverse(){
-  try {
-    fs.mkdirSync(DATA_DIR, { recursive: true });
-    const tmpFile = DATA_FILE + '.tmp';
-    fs.writeFileSync(tmpFile, JSON.stringify(universe));
-    fs.renameSync(tmpFile, DATA_FILE);
-    dirty = false;
-  } catch(e){
-    console.error('Universum konnte nicht gespeichert werden:', e.message);
-  }
+  if(saveInFlight){ saveAgainAfter = true; return; }
+  saveInFlight = true;
+  const payload = JSON.stringify(universe);
+  fs.mkdirSync(DATA_DIR, { recursive: true });
+  const tmpFile = DATA_FILE + '.tmp';
+  fs.writeFile(tmpFile, payload, (err) => {
+    if(err){
+      console.error('Universum konnte nicht gespeichert werden:', err.message);
+      saveInFlight = false;
+      if(saveAgainAfter){ saveAgainAfter = false; saveUniverse(); }
+      return;
+    }
+    fs.rename(tmpFile, DATA_FILE, (err2) => {
+      saveInFlight = false;
+      if(err2) console.error('Universum konnte nicht gespeichert werden:', err2.message);
+      else dirty = false;
+      if(saveAgainAfter){ saveAgainAfter = false; saveUniverse(); }
+    });
+  });
 }
 
 // ---- Sessions (in-memory; a restart simply requires logging in again) ----
@@ -214,6 +254,14 @@ app.get('/api/state', requireAuth, (req, res) => {
 });
 
 app.post('/api/action', requireAuth, (req, res) => {
+  // Anders als bei Login/Registrierung (IP-basiert) wird hier pro eingeloggtem Konto
+  // gezaehlt - verhindert, dass ein Skript im engen Loop /api/action aufruft und damit
+  // Server-CPU sowie die (jetzt asynchronen, aber weiterhin nicht kostenlosen) Speicher-
+  // vorgaenge belastet. Grosszuegig genug bemessen, dass normales schnelles Klicken
+  // (Bauqueue, Flottenversand) niemals ausgebremst wird.
+  if(!checkRateLimit('action:' + req.username, 40, 5000)){
+    return res.status(429).json({ ok:false, error:'Zu viele Aktionen - bitte kurz warten' });
+  }
   const { type, payload } = req.body || {};
   if(!type) return res.status(400).json({ ok:false, error:'Kein Aktionstyp angegeben' });
   if(!universe.players[req.username]) return res.status(400).json({ ok:false, error:'Dieses Konto hat kein Spielerimperium (Admin-Konten spielen nicht mit)' });
@@ -238,7 +286,7 @@ app.get('/api/backup', requireAuth, (req, res) => {
 app.post('/api/restore', requireAuth, (req, res) => {
   try {
     if(!universe.players[req.username]) return res.status(400).json({ ok:false, error:'Kein Spielerimperium' });
-    universe.players[req.username] = engine.normalizePlayerState(req.body);
+    universe.players[req.username] = engine.normalizePlayerState(req.body, universe, req.username);
     dirty = true; saveUniverse();
     res.json({ ok:true, state: Object.assign({ isAdmin: req.isAdmin, username: req.username }, universe.players[req.username]) });
   } catch(err){
@@ -278,8 +326,17 @@ app.post('/api/admin/grantResources', requireAuth, requireAdmin, (req, res) => {
 
 // tick loop: the universe keeps advancing for every player even with no client connected
 setInterval(() => {
-  engine.tick(universe);
-  dirty = true;
+  try {
+    engine.tick(universe);
+    dirty = true;
+  } catch(e){
+    // engine.tick() faengt bereits pro-Spieler-Fehler ab; dieser Block ist nur das letzte
+    // Sicherheitsnetz fuer alles darueber hinaus (z.B. in resolveAuctionIfDue/resolveEventIfDue
+    // selbst) - ohne ihn wuerde ein einziger unerwarteter Fehler den kompletten, fuer ALLE
+    // Spieler gemeinsamen Tick-Interval-Callback stumm sterben lassen (setInterval faengt
+    // geworfene Fehler NICHT automatisch ab und der Server wuerde ab dann nie wieder ticken).
+    console.error('Tick-Fehler (Server laeuft weiter):', e && e.stack || e);
+  }
 }, 1000);
 
 // periodic safety-net save (actions already save immediately; this covers pure tick progress)

@@ -1,7 +1,7 @@
 // App-Version zur Anzeige in den Einstellungen (Diagnose-Hilfe: laesst sich damit sofort
 // pruefen, ob eine installierte APK tatsaechlich die neueste ist) - manuell synchron zu
 // android/app/build.gradle versionName halten, bei jedem Versionsbump mitziehen.
-const APP_VERSION = '1.40';
+const APP_VERSION = '1.41';
 
 // Globaler Fehlerfaenger: zeigt jede unbehandelte JS-Exception als sichtbaren Toast an,
 // statt sie nur (fuer den Nutzer unsichtbar) in der Android-WebView-Konsole verschwinden zu
@@ -85,6 +85,13 @@ const RESOURCE_VALUE = {
   coal:1.2, copper:1.3, sulfur:1.4, phosphate:1.6, aluminium:1.8,
   nickel:2.0, naturalGas:2.3, crudeOil:2.6, lithium:3.0,
   silver:4.0, rareEarths:5.0, gold:7.0, uranium:9.0,
+  // Fabrikgueter - muessen 1:1 mit dem Server (gameEngine.js RESOURCE_VALUE) uebereinstimmen,
+  // sonst zeigt die Markt-Vorschau (merchantCost/viewMarket) einen falschen Preis an, bevor
+  // der Server (die eigentliche Quelle der Wahrheit) den tatsaechlichen Preis abrechnet.
+  concrete:3.0, oxygen:3.0, plastic:4.0, batteryCells:4.0, refinedFuel:4.5,
+  steel:4.5, electronics:5.0, hydrogen:5.0, alloy:5.5,
+  machineParts:7.5, compositeMaterial:8.0,
+  precisionComponents:15.0,
 };
 function mineBaseCost(planetType, magnitude){
   const pool = PLANET_TYPES[planetType] ? PLANET_TYPES[planetType].resources : [];
@@ -107,13 +114,13 @@ const defs = {
     silverMine:{name:'Silbermine', desc:'Baut Silber ab, wichtig für Präzisionselektronik.', resource:'silver', costMagnitude:70, powerUse:l=>12*l, prod:l=>16*l*Math.pow(1.1,l)},
     uraniumMine:{name:'Uranmine', desc:'Fördert radioaktives Uranerz - Brennstoff für Kernreaktoren.', resource:'uranium', costMagnitude:110, powerUse:l=>14*l, prod:l=>10*l*Math.pow(1.1,l)},
     rareEarthsMine:{name:'Seltenerdmine', desc:'Gewinnt Seltene Erden für Hochleistungsmagnete und Sensorik.', resource:'rareEarths', costMagnitude:93, powerUse:l=>13*l, prod:l=>12*l*Math.pow(1.1,l)},
-    sulfurMine:{name:'Schwefelmine', desc:'Baut vulkanischen Schwefel für chemische Prozesse ab.', resource:'sulfur', costMagnitude:52, powerUse:l=>9*l, prod:l=>18*l*Math.pow(1.1,l)},
+    sulfurMine:{name:'Schwefelmine', desc:'Baut vulkanischen Schwefel für chemische Prozesse ab.', resource:'sulfur', costMagnitude:52, powerUse:l=>9*l, prod:l=>25*l*Math.pow(1.1,l)},
     phosphateMine:{name:'Phosphatmine', desc:'Fördert Phosphat für Düngemittel und Lebenserhaltungssysteme.', resource:'phosphate', costMagnitude:56, powerUse:l=>9*l, prod:l=>18*l*Math.pow(1.1,l)},
-    crudeOilPump:{name:'Ölbohrturm', desc:'Fördert Rohöl aus tiefen geologischen Lagerstätten - der Rohstoff, aus dem eine Ölraffinerie Kraftstoff für die Flotte gewinnt.', resource:'crudeOil', costMagnitude:80, powerUse:l=>20*l, prod:l=>10*l*Math.pow(1.1,l)},
+    crudeOilPump:{name:'Ölbohrturm', desc:'Fördert Rohöl aus tiefen geologischen Lagerstätten - der Rohstoff, aus dem eine Ölraffinerie Kraftstoff für die Flotte gewinnt.', resource:'crudeOil', costMagnitude:80, powerUse:l=>20*l, prod:l=>16*l*Math.pow(1.1,l)},
     naturalGasPump:{name:'Erdgasförderanlage', desc:'Fördert Erdgas aus unterirdischen Vorkommen.', resource:'naturalGas', costMagnitude:75, powerUse:l=>18*l, prod:l=>11*l*Math.pow(1.1,l)},
     coalMine:{name:'Kohlebergwerk', desc:'Baut Kohle ab, ein vielseitiger fossiler Energieträger.', resource:'coal', costMagnitude:70, powerUse:l=>10*l, prod:l=>20*l*Math.pow(1.1,l)},
     freshwaterExtractor:{name:'Süßwassergewinnung', desc:'Gewinnt Süßwasser aus unterirdischem Eis.', resource:'freshwater', costMagnitude:50, powerUse:l=>7*l, prod:l=>20*l*Math.pow(1.1,l)},
-    saltwaterDesalinator:{name:'Meerwasserpumpe', desc:'Pumpt Salzwasser aus verbliebenen Ozeanen.', resource:'saltwater', costMagnitude:43, powerUse:l=>6*l, prod:l=>22*l*Math.pow(1.1,l)},
+    saltwaterDesalinator:{name:'Meerwasserpumpe', desc:'Pumpt Salzwasser aus verbliebenen Ozeanen.', resource:'saltwater', costMagnitude:43, powerUse:l=>6*l, prod:l=>33*l*Math.pow(1.1,l)},
     lithiumExtractor:{name:'Lithium-Solefeld', desc:'Gewinnt Lithium aus Solefeldern - essenziell für Energiespeicher.', resource:'lithium', costMagnitude:76, powerUse:l=>11*l, prod:l=>13*l*Math.pow(1.1,l)},
     atmosphericCondenser:{name:'Atmosphärischer Kondensator', desc:'Gewinnt Süßwasser aus Luftfeuchtigkeit - funktioniert auf jedem Planetentyp, aber deutlich schwächer als eine echte Süßwassergewinnung auf einer Eis-/Ozeanwelt.', base:{aluminium:300, copper:200}, powerUse:l=>10*l, factory:false,
       recipe:{output:'freshwater', prod:l=>6*l*Math.pow(1.1,l), inputsPerUnit:{}}},
@@ -193,15 +200,15 @@ const defs = {
     allianceDepot:{name:'Allianzdepot', desc:'Lagerplatz für Ressourcen, die der Allianz zur Verfügung gestellt werden.', base:{limestone:30000, gold:30000, phosphate:5000, concrete:6000}, requires:{shipyard:3}, facility:true},
     missileSilo:{name:'Raketensilo', desc:'Lagert und startet interplanetare Raketen zum Fernangriff auf gegnerische Verteidigung.', base:{iron:30000, sulfur:11000, steel:3000}, requires:{shipyard:1}, facility:true},
     spaceTelescope:{name:'Weltraum-Teleskop', desc:'Zeigt Asteroidenfelder aus mehreren benachbarten Systemen gesammelt an, ohne dass man jedes System einzeln ansteuern muss.', base:{copper:20000, silver:24000, naturalGas:10000, electronics:4000}, requires:{researchLab:6, espionageTech:4}, facility:true},
-    sensorPhalanx:{name:'Sensorphalanx', desc:'Ermöglicht die Überwachung fremder Systeme von einem Mond aus.', base:{copper:30000, silver:35000, naturalGas:15000, electronics:6000}, requires:{naniteFactory:1}, moonOnly:true, facility:true},
-    jumpGate:{name:'Sprungtor', desc:'Verbindet zwei eigene Monde für verzögerungsfreien Flottentransfer.', base:{aluminium:2000000, lithium:3500000, uranium:1300000, precisionComponents:5000}, requires:{naniteFactory:1, hyperspaceTech:7}, moonOnly:true, facility:true},
+    sensorPhalanx:{name:'Sensorphalanx', desc:'Ermöglicht die Überwachung fremder Systeme von einem Mond aus.', base:{copper:30000, silver:35000, naturalGas:15000, electronics:6000}, requires:{naniteFactory:1, lunarBase:1}, moonOnly:true, facility:true},
+    jumpGate:{name:'Sprungtor', desc:'Verbindet zwei eigene Monde für verzögerungsfreien Flottentransfer.', base:{aluminium:2000000, lithium:3500000, uranium:1300000, precisionComponents:5000}, requires:{naniteFactory:1, hyperspaceTech:7, lunarBase:1}, moonOnly:true, facility:true},
     lunarBase:{name:'Lunarbasis', desc:'Grundlegende Infrastruktur auf einem Mond, Voraussetzung für weitere Mondgebäude.', base:{limestone:40000, aluminium:40000, concrete:10000}, requires:{}, moonOnly:true, facility:true},
     missileLauncher:{name:'Raketenwerfer', desc:'Einfache, günstige Verteidigungsanlage mit solidem Grundschutz.', base:{iron:1400, sulfur:600, steel:200}, isDefense:true, attack:80, shield:20, hull:2000, requires:{shipyard:1}},
     lightLaser:{name:'Leichtes Laser-Geschütz', desc:'Leichte Laserkanone mit ausgewogenem Verhältnis aus Kosten und Feuerkraft.', base:{iron:1300, silver:700, electronics:150}, isDefense:true, attack:100, shield:25, hull:2000, requires:{shipyard:2, energyTech:1}},
     heavyLaser:{name:'Schweres Laser-Geschütz', desc:'Schwere Laserkanone mit deutlich mehr Angriffskraft.', base:{iron:5500, silver:2500, electronics:600}, isDefense:true, attack:250, shield:100, hull:8000, requires:{shipyard:4, energyTech:3}},
     gaussCannon:{name:'Gauß-Kanone', desc:'Schweres Railgun-Geschütz mit hoher Durchschlagskraft, teuer aber effektiv.', base:{iron:22000, silver:11000, naturalGas:4000, machineParts:800}, isDefense:true, attack:1100, shield:200, hull:35000, requires:{shipyard:6, weaponsTech:3, shieldingTech:1, energyTech:6}},
     ionCannon:{name:'Ionenkanone', desc:'Spezialisiert auf hohe Schildwerte - schwer zu durchdringen.', base:{aluminium:5000, lithium:3000, electronics:400}, isDefense:true, attack:150, shield:500, hull:8000, requires:{shipyard:4, ionTech:4}},
-    plasmaTurret:{name:'Plasmawerfer', desc:'Stärkste konventionelle Verteidigungsanlage mit enormer Feuerkraft.', base:{aluminium:60000, rareEarths:45000, uranium:25000, precisionComponents:200}, isDefense:true, attack:3000, shield:300, hull:100000, requires:{shipyard:8, plasmaTech:7}},
+    plasmaTurret:{name:'Plasmawerfer', desc:'Stärkste konventionelle Verteidigungsanlage mit enormer Feuerkraft.', base:{aluminium:60000, rareEarths:20000, uranium:12000, precisionComponents:200}, isDefense:true, attack:3000, shield:300, hull:100000, requires:{shipyard:8, plasmaTech:7}},
     smallShield:{name:'Kleine Schildkuppel', desc:'Errichtet einen Schutzschild um den gesamten Planeten (nur einmal baubar).', base:{aluminium:12000, silver:8000, alloy:1500}, isDefense:true, unique:true, attack:1, shield:2000, hull:20000, requires:{shieldingTech:2}},
     largeShield:{name:'Große Schildkuppel', desc:'Mächtiger Schutzschild mit deutlich höherer Kapazität als die kleine Schildkuppel (nur einmal baubar).', base:{aluminium:60000, silver:40000, alloy:6000}, isDefense:true, unique:true, attack:1, shield:10000, hull:100000, requires:{shipyard:6, shieldingTech:6}},
     interplanetaryMissile:{name:'Interplanetare Rakete', desc:'Einweg-Fernwaffe gegen gegnerische Verteidigung in Reichweite des Raketensilos.', base:{iron:10000, sulfur:5000, steel:2000}, isDefense:true, attack:12000, shield:0, hull:1, requires:{missileSilo:4}},
@@ -234,7 +241,7 @@ const defs = {
     heavyFighter:{name:'Schwerer Jäger', desc:'Robusteres Kampfschiff mit mehr Feuerkraft als der leichte Jäger.', cost:{iron:6000, aluminium:3000, copper:1000, steel:900}, cargo:100, speed:1.0, fuel:25, attack:150, shield:25, hull:10000, role:'combat', requires:{shipyard:3, armourTech:2, impulseDrive:2}},
     cruiser:{name:'Kreuzer', desc:'Vielseitiges Kampfschiff, effektiv gegen leichte Jäger.', cost:{iron:18000, aluminium:8000, crudeOil:3000, steel:2500}, cargo:800, speed:1.1, fuel:40, attack:400, shield:50, hull:27000, role:'combat', requires:{shipyard:5, weaponsTech:2}},
     battleship:{name:'Schlachtschiff', desc:'Schweres Kampfschiff mit hoher Feuerkraft und Hülle.', cost:{iron:42000, aluminium:18000, steel:5000}, cargo:1500, speed:0.8, fuel:50, attack:1000, shield:200, hull:60000, role:'combat', requires:{shipyard:7, hyperspaceDrive:4}},
-    battlecruiser:{name:'Großer Kreuzer', desc:'Spezialisiert auf die Bekämpfung von Verteidigungsanlagen.', cost:{aluminium:35000, lithium:35000, crudeOil:15000, alloy:4000}, cargo:750, speed:0.9, fuel:250, attack:700, shield:400, hull:70000, role:'combat', requires:{shipyard:8, hyperspaceTech:5, laserTech:12}},
+    battlecruiser:{name:'Großer Kreuzer', desc:'Spezialisiert auf die Bekämpfung von Verteidigungsanlagen.', cost:{aluminium:35000, lithium:35000, crudeOil:15000, alloy:4000}, cargo:750, speed:0.9, fuel:110, attack:950, shield:400, hull:70000, role:'combat', requires:{shipyard:8, hyperspaceTech:5, laserTech:12}},
     bomber:{name:'Bomber', desc:'Spezialisiert auf die Zerstörung feindlicher Verteidigungsanlagen.', cost:{iron:50000, aluminium:25000, crudeOil:15000, machineParts:2000}, cargo:500, speed:0.6, fuel:65, attack:1000, shield:500, hull:75000, role:'combat', requires:{shipyard:8, plasmaTech:5, impulseDrive:6}},
     destroyer:{name:'Zerstörer', desc:'Schweres Kampfschiff, besonders effektiv gegen Bomber.', cost:{iron:65000, aluminium:45000, crudeOil:15000, alloy:6000}, cargo:2000, speed:0.7, fuel:100, attack:2000, shield:500, hull:110000, role:'combat', requires:{shipyard:9, hyperspaceTech:5, hyperspaceDrive:6}},
     reaper:{name:'Reaper', desc:'Elite-Kampfschiff mit enormer Feuerkraft und Hülle.', cost:{iron:85000, aluminium:50000, rareEarths:25000, machineParts:4000}, cargo:10000, speed:0.6, fuel:80, attack:2800, shield:700, hull:140000, role:'combat', requires:{shipyard:10, spaceDock:1, hyperspaceTech:6, hyperspaceDrive:7}},
@@ -631,6 +638,10 @@ function showToast(msg){
 }
 
 function meetsRequirements(p, req){ if(!req) return true; for(const [k,v] of Object.entries(req)){ const have = p.buildings[k]!=null ? p.buildings[k] : (p.research[k]!=null ? p.research[k] : 0); if(have<v) return false; } return true; }
+// Client-Spiegel von meetsMoonRequirements() im Server: eine requires-Angabe auf ein anderes
+// moonOnly-Gebaeude (z.B. sensorPhalanx.requires.lunarBase) bezieht sich auf die Gebaeude des
+// MONDES, nicht des finanzierenden Planeten.
+function meetsMoonRequirements(p, m, req){ if(!req) return true; for(const [k,v] of Object.entries(req)){ const isMoonBuilding = defs.buildings[k] && defs.buildings[k].moonOnly; const have = isMoonBuilding ? (m.buildings[k]||0) : (p.buildings[k]!=null ? p.buildings[k] : (p.research[k]!=null ? p.research[k] : 0)); if(have<v) return false; } return true; }
 function requirementText(req){ if(!req) return ''; return Object.entries(req).map(([k,v])=>{ const nm = defs.buildings[k]?defs.buildings[k].name:(defs.research[k]?defs.research[k].name:k); return nm+' Stufe '+v; }).join(', '); }
 function debrisKey(coord){ return coord[0]+':'+coord[1]+':'+coord[2]; }
 function officerActive(key){ return !!(state.officerExpiry[key] && state.officerExpiry[key] > Date.now()); }
@@ -1363,10 +1374,16 @@ function uraniumUse(p){ return (p.buildings.nuclearReactor) ? defs.buildings.nuc
 function coalUse(p){ return (p.buildings.coalPlant) ? defs.buildings.coalPlant.coalUse(p.buildings.coalPlant) : 0; }
 // Alle Gebaeude mit einem `recipe`-Feld (analog zu mineByResource fuer Minen).
 const FACTORY_KEYS = Object.entries(defs.buildings).filter(([,d])=>d.recipe).map(([k])=>k);
+// Client-Spiegel von powerPlantThrottle() im Server: Kern-/Kohlekraftwerk liefern nur soviel
+// Leistung, wie ihr aktueller Brennstoffvorrat fuer eine Stunde hergibt - siehe energyStats()
+// in server/gameEngine.js fuer die vollstaendige Begruendung.
+function powerPlantThrottle(available, desiredPerHour){ return desiredPerHour>0 ? Math.min(1, Math.max(0, available||0)/desiredPerHour) : 1; }
 function energyStats(p){
   const solar=defs.buildings.solarPlant.power(p.buildings.solarPlant||0);
-  const nuclear=defs.buildings.nuclearReactor.power(p.buildings.nuclearReactor||0);
-  const coalPower=defs.buildings.coalPlant.power(p.buildings.coalPlant||0);
+  const nuclearThrottle = powerPlantThrottle(p.resources.uranium, uraniumUse(p));
+  const nuclear=defs.buildings.nuclearReactor.power(p.buildings.nuclearReactor||0)*nuclearThrottle;
+  const coalThrottle = powerPlantThrottle(p.resources.coal, coalUse(p));
+  const coalPower=defs.buildings.coalPlant.power(p.buildings.coalPlant||0)*coalThrottle;
   const satellites=(p.ships.solarSatellite||0)*defs.ships.solarSatellite.power;
   const sails = (p.buildings.solarSailI||0)*defs.buildings.solarSailI.power
               + (p.buildings.solarSailII||0)*defs.buildings.solarSailII.power
@@ -1375,7 +1392,7 @@ function energyStats(p){
   let use=0;
   for(const [k,d] of Object.entries(defs.buildings)){ if(d.resource && d.powerUse) use += d.powerUse(p.buildings[k]||0); }
   for(const k of FACTORY_KEYS){ if(defs.buildings[k].powerUse) use += defs.buildings[k].powerUse(p.buildings[k]||0); }
-  return {prod,use,ratio: use? Math.min(1,prod/use):1};
+  return {prod,use,ratio: use? Math.min(1,prod/use):1, nuclearThrottle, coalThrottle};
 }
 // Client-Spiegel von factoryThrottle() im Server: wie stark eine Fabrik gerade gedrosselt
 // laufen muss, verhaeltnismaessig zum knappsten Eingaberohstoff. Grundlage der
@@ -1396,7 +1413,7 @@ function factoryThrottle(p, recipe, lvl){
 // spiegelt nur Energie/Offiziers-Boni, nicht Item-/Lebensform-Boosts - siehe hourly() im
 // Server (server/gameEngine.js) für die vollstaendige, massgebliche Berechnung.
 function hourly(p){
-  const e=energyStats(p).ratio; const bonus=officerBonus();
+  const stats=energyStats(p); const e=stats.ratio; const bonus=officerBonus();
   const inc = zeroResources();
   const planetRes = (PLANET_TYPES[p.planetType]||PLANET_TYPES.rocky).resources;
   for(const res of planetRes){
@@ -1405,8 +1422,8 @@ function hourly(p){
     if(!lvl) continue;
     inc[res] = defs.buildings[mineKey].prod(lvl)*e*bonus;
   }
-  inc.uranium -= uraniumUse(p);
-  inc.coal -= coalUse(p);
+  inc.uranium -= uraniumUse(p)*stats.nuclearThrottle;
+  inc.coal -= coalUse(p)*stats.coalThrottle;
   // Client-Spiegel von applyFactories() im Server - siehe dort fuer die vollstaendige
   // Begruendung (proportionale Drosselung statt hart an/aus, ein Tick Verzoegerung bei
   // mehrstufigen Rezepten, da Tier-2 nur aus vorhandenem Lagerbestand schoepft).
@@ -1843,6 +1860,7 @@ function viewExpeditions(){ const p=active(); const shipOptions=(key)=>Array.fro
   <div class="card"><h3>Mögliche Ergebnisse</h3><div class="list">${outcomeRows}</div></div>`; }
 
 function moonFacilitySection(){
+  const p = active();
   const moonKeys = ['lunarBase','sensorPhalanx','jumpGate'];
   if(state.moons.length===0){
     const catalog = moonKeys.map(k=>{ const def=defs.buildings[k]; return `<div class="row"><div><strong>${def.name}</strong><div class="sub">${def.desc||''}</div><div class="sub">Kosten Stufe 1 (vom gewählten Planeten): ${resCostText(def.base)}</div>${def.requires && Object.keys(def.requires).length ? `<div class="sub warn-text">Benötigt: ${requirementText(def.requires)}</div>` : ''}</div><div>${infoIconHtml('building',k)}</div></div>`; }).join('');
@@ -1852,7 +1870,7 @@ function moonFacilitySection(){
   const m = activeMoon();
   let detail = '<div class="small">Wähle oben einen Mond aus.</div>';
   if(m){
-    const buildRows = moonKeys.map(k=>{ const def=defs.buildings[k]; const lvl=(m.buildings[k]||0)+1; const c=scaledCost(def.base, lvl); const queued=m.buildQueue.some(q=>q.key===k); return `<div class="row"><div><strong>${def.name}</strong><div class="sub">Stufe ${m.buildings[k]||0}</div><div class="sub">Kosten (vom gewählten Planeten): ${resCostText(c)}</div>${queued?`<div class="sub warn-text">Wird bereits gebaut (Stufe ${lvl})</div>`:''}</div><button class="btn alt" data-moon-build="${k}" ${queued?'disabled':''}>Ausbauen</button></div>`; }).join('');
+    const buildRows = moonKeys.map(k=>{ const def=defs.buildings[k]; const lvl=(m.buildings[k]||0)+1; const c=scaledCost(def.base, lvl); const queued=m.buildQueue.some(q=>q.key===k); const ok=meetsMoonRequirements(p,m,def.requires); return `<div class="row"><div><strong>${def.name}</strong><div class="sub">Stufe ${m.buildings[k]||0}</div><div class="sub">Kosten (vom gewählten Planeten): ${resCostText(c)}</div>${queued?`<div class="sub warn-text">Wird bereits gebaut (Stufe ${lvl})</div>`:''}${!ok?`<div class="sub warn-text">Benötigt: ${requirementText(def.requires)}</div>`:''}</div><button class="btn alt" data-moon-build="${k}" ${ok&&!queued?'':'disabled'}>Ausbauen</button></div>`; }).join('');
     const queueRows = m.buildQueue.map(q=>`<div class="queue-item">${q.name}${q.level?` (Stufe ${q.level})`:''}<br><span class="small">${secsLeft(q.done)} s</span></div>`).join('') || '<div class="small">Keine aktiven Mondbauten.</div>';
     const otherMoons = state.moons.filter((mm,i)=>i!==state.activeMoonIndex);
     const jumpForm = otherMoons.length ? `<form id="jumpGateForm" class="fleet-form">
