@@ -1,7 +1,7 @@
 // App-Version zur Anzeige in den Einstellungen (Diagnose-Hilfe: laesst sich damit sofort
 // pruefen, ob eine installierte APK tatsaechlich die neueste ist) - manuell synchron zu
 // android/app/build.gradle versionName halten, bei jedem Versionsbump mitziehen.
-const APP_VERSION = '1.37';
+const APP_VERSION = '1.38';
 
 // Globaler Fehlerfaenger: zeigt jede unbehandelte JS-Exception als sichtbaren Toast an,
 // statt sie nur (fuer den Nutzer unsichtbar) in der Android-WebView-Konsole verschwinden zu
@@ -643,11 +643,12 @@ function commanderDiscount(){ return officerActive('commander') ? 0.95 : 1.0; }
 function technocratSpeed(){ return officerActive('technocrat') ? 0.85 : 1.0; }
 function pathfinderBonus(shipMap){ return (shipMap && shipMap.pathfinder>0) ? 1.1 : 1.0; }
 function networkSpeed(p){ const lvl=(p.research.intergalacticNetwork)||0; return Math.max(0.5, 1-0.02*lvl); }
-// Spiegel von MINE_BONUS_START/MINE_BONUS_DECAY im Server (enqueueBuild): EIN durchgehend
-// abklingender Bonus-Faktor ab Stufe 1 statt einer separaten Tabelle plus Uebergangsformel -
-// mathematisch garantiert kein Sprung, weil es nur diese eine Kurve gibt.
-const MINE_BONUS_START = 4.2;
-const MINE_BONUS_DECAY = 0.85;
+// Spiegel von MINE_TIME_ALPHA/MINE_TIME_SCALE im Server (enqueueBuild): die normale Formel
+// wird mit einem Exponenten <1 gestaucht (secs = SCALE*normalSecs^ALPHA), statt nur einen
+// zeitlich begrenzten Bonus draufzulegen - daempft das exponentielle Wachstum durchgehend
+// ueber viele Stufen, mathematisch garantiert kein Sprung (eine einzige stetige Potenzfunktion).
+const MINE_TIME_ALPHA = 0.9;
+const MINE_TIME_SCALE = 0.2664;
 // Client-Spiegel der 4 Bauzeit-Formeln aus enqueueBuild/enqueueResearch/enqueueShip/
 // enqueueDefense im Server (server/gameEngine.js) - fuer die Bauzeit-Vorschau im Info-Modal.
 function buildSeconds(kind, cost, p, lvl, noAccel, isMine){
@@ -658,10 +659,10 @@ function buildSeconds(kind, cost, p, lvl, noAccel, isMine){
   // enqueueShip/enqueueDefense/enqueueMultiBuild/enqueueMoonBuild.
   if(kind==='building'){
     const accel = noAccel ? 1 : Math.max(4 - lvl/2, 1);
-    let secs = Math.max(1, Math.round(total*1.44/accel/(1+p.buildings.robotFactory)/Math.pow(2,nanite)));
+    const normalSecs = Math.max(1, Math.round(total*1.44/accel/(1+p.buildings.robotFactory)/Math.pow(2,nanite)));
+    let secs = normalSecs;
     if(isMine){
-      const bonus = 1 + MINE_BONUS_START*Math.pow(MINE_BONUS_DECAY, lvl-1);
-      secs = Math.max(1, Math.round(secs/bonus));
+      secs = Math.max(1, Math.round(MINE_TIME_SCALE*Math.pow(normalSecs, MINE_TIME_ALPHA)));
     }
     return secs;
   }

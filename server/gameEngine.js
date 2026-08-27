@@ -1244,16 +1244,19 @@ function requirePlanet(state, planetIndex){
   return p;
 }
 
-// Minen sollen Neulingen das Leben leicht machen, OHNE eine von der Formel losgeloeste
-// Extra-Tabelle zu brauchen (die fruehere Version mit einer festen Stufe-1-10-Tabelle plus
-// separat ausklingender Uebergangsformel ab Stufe 11 erzeugte trotz Glaettung noch spuerbare
-// Stufensprue: die Tabelle war flach/konstant-schnell, und danach ging es sofort bergauf).
-// Stattdessen wirkt ab Stufe 1 EIN einziger, durchgehend abklingender Bonus-Faktor auf die
-// normale (woertliche OGame-)Formel - mathematisch garantiert kein Sprung, da es nur diese
-// eine Kurve gibt: bei Stufe 1 verkuerzt er die Zeit um Faktor ~5, klingt danach exponentiell
-// ab und naehert sich ab etwa Stufe 20-25 wieder der normalen, unrabattierten Formel an.
-const MINE_BONUS_START = 4.2;
-const MINE_BONUS_DECAY = 0.85;
+// Minen sollen Neulingen UND dem Mittelspiel das Leben leicht machen, ohne eine von der
+// Formel losgeloeste Tabelle zu brauchen. Ein reiner Multiplikations-Bonus (fruehere Version)
+// klingt zwangslaeufig schnell ab, weil die normale Formel selbst exponentiell waechst (~1,6x
+// pro Stufe) - ab Stufe ~15 dominiert dann wieder das exponentielle Rohstoff-Wachstum und die
+// Bauzeit "explodiert" trotz Bonus. Stattdessen wird die normale (woertliche OGame-)Formel mit
+// einem Exponenten <1 gestaucht (secs = SCALE * normalSecs^ALPHA): das daempft das exponentielle
+// Wachstum selbst durchgehend ueber viele Stufen (kein Sprung moeglich, da eine einzige stetige
+// Potenzfunktion), statt nur einen zeitlich begrenzten Rabatt draufzulegen. Kalibriert auf
+// Stufe 1 ≈ 5s, Stufe 10 ≈ 12-14 Min, Stufe 20 ≈ 12-14 Std - danach wird Roboterfabrik/
+// Nanitenfabrik zunehmend wichtig, weil die Stauchung ALLEIN die Rohstoff-Explosion nicht mehr
+// ausgleicht.
+const MINE_TIME_ALPHA = 0.9;
+const MINE_TIME_SCALE = 0.2664;
 function enqueueBuild(state, planetIndex, key){
   const p = requirePlanet(state, planetIndex);
   const def = defs.buildings[key];
@@ -1280,10 +1283,10 @@ function enqueueBuild(state, planetIndex, key){
   // Rohstoffe dieses Spiels liegen in aehnlicher Groessenordnung wie OGames Metall+Kristall
   // (z.B. Eisenmine Stufe 1 = 75 Gesamtkosten, exakt wie OGames Metallmine), daher passt die
   // woertliche Konstante hier tatsaechlich, statt eine neue erfinden zu muessen.
-  let secs = Math.max(1, Math.round(resTotal(cost)*1.44/accel/(1+p.buildings.robotFactory)/Math.pow(2,nanite)));
+  const normalSecs = Math.max(1, Math.round(resTotal(cost)*1.44/accel/(1+p.buildings.robotFactory)/Math.pow(2,nanite)));
+  let secs = normalSecs;
   if(def.resource){
-    const bonus = 1 + MINE_BONUS_START*Math.pow(MINE_BONUS_DECAY, lvl-1);
-    secs = Math.max(1, Math.round(secs/bonus));
+    secs = Math.max(1, Math.round(MINE_TIME_SCALE*Math.pow(normalSecs, MINE_TIME_ALPHA)));
   }
   p.buildQueue.push({type:'building', key, name:def.name, level:lvl, done:Date.now()+secs*1000});
   return ok(state, def.name+' Stufe '+lvl+' gestartet');
