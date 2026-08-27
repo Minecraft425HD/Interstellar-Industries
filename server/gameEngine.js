@@ -1244,6 +1244,10 @@ function requirePlanet(state, planetIndex){
   return p;
 }
 
+// Neue Spieler sollen bei ihren ersten Minenstufen sofort ins Spiel finden statt vor der
+// ersten Bauqueue zu warten - feste, handverlesene Kurzzeiten fuer Minen-Stufe 1-10 (Index 0
+// ungenutzt), ab Stufe 11 gilt wieder die normale, Roboterfabrik/Nanitenfabrik-abhaengige Formel.
+const MINE_EARLY_SECONDS = [null, 5, 8, 10, 13, 25, 40, 55, 120, 150, 200];
 function enqueueBuild(state, planetIndex, key){
   const p = requirePlanet(state, planetIndex);
   const def = defs.buildings[key];
@@ -1262,15 +1266,20 @@ function enqueueBuild(state, planetIndex, key){
   // Fruehe Stufen bauen bis zu 4x schneller (Faktor faellt linear bis Stufe 6 auf 1),
   // Nanitenfabrik halbiert zusaetzlich pro Stufe - Ausnahme-Gebaeude (aktuell nur die
   // Nanitenfabrik selbst, noBuildAccel) bekommen den Fruehstufen-Bonus nicht.
-  const accel = def.noBuildAccel ? 1 : Math.max(4 - lvl/2, 1);
-  const nanite = p.buildings.naniteFactory||0;
-  // Woertliche OGame-Wiki-Konstante (Zeit(s) = Kosten*1,44/Beschleunigung/(1+Robo)/2^Nanite) -
-  // vorher ein grob geschaetzter Nenner (250), der bei entwickeltem Roboterfabrik-Level Bauten
-  // teils unter eine Sekunde druecken konnte (sichtbar als irrefuehrendes "0Min"). Die 27+
-  // Rohstoffe dieses Spiels liegen in aehnlicher Groessenordnung wie OGames Metall+Kristall
-  // (z.B. Eisenmine Stufe 1 = 75 Gesamtkosten, exakt wie OGames Metallmine), daher passt die
-  // woertliche Konstante hier tatsaechlich, statt eine neue erfinden zu muessen.
-  const secs = Math.max(1, Math.round(resTotal(cost)*1.44/accel/(1+p.buildings.robotFactory)/Math.pow(2,nanite)));
+  let secs;
+  if(def.resource && lvl<=10){
+    secs = MINE_EARLY_SECONDS[lvl];
+  } else {
+    const accel = def.noBuildAccel ? 1 : Math.max(4 - lvl/2, 1);
+    const nanite = p.buildings.naniteFactory||0;
+    // Woertliche OGame-Wiki-Konstante (Zeit(s) = Kosten*1,44/Beschleunigung/(1+Robo)/2^Nanite) -
+    // vorher ein grob geschaetzter Nenner (250), der bei entwickeltem Roboterfabrik-Level Bauten
+    // teils unter eine Sekunde druecken konnte (sichtbar als irrefuehrendes "0Min"). Die 27+
+    // Rohstoffe dieses Spiels liegen in aehnlicher Groessenordnung wie OGames Metall+Kristall
+    // (z.B. Eisenmine Stufe 1 = 75 Gesamtkosten, exakt wie OGames Metallmine), daher passt die
+    // woertliche Konstante hier tatsaechlich, statt eine neue erfinden zu muessen.
+    secs = Math.max(1, Math.round(resTotal(cost)*1.44/accel/(1+p.buildings.robotFactory)/Math.pow(2,nanite)));
+  }
   p.buildQueue.push({type:'building', key, name:def.name, level:lvl, done:Date.now()+secs*1000});
   return ok(state, def.name+' Stufe '+lvl+' gestartet');
 }
