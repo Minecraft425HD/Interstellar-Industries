@@ -226,11 +226,19 @@ const defs = {
     // Rohstoffe) - deshalb bewusst wie eine Mine selbstversorgend aus den Rohstoffen
     // DES EIGENEN Planeten finanziert, damit jeder neue Spieler ueberhaupt Energie
     // fuer seine ersten Minen bekommt, ohne von Anfang an auf Handel angewiesen zu sein.
-    solarPlant:{name:'Solarkraftwerk', costMagnitude:105, power:l=>40*l*Math.pow(1.05,l)},
-    nuclearReactor:{name:'Kernreaktor', base:{iron:700, aluminium:300, uranium:120}, power:l=>30*l*Math.pow(1.05,l), uraniumUse:l=>Math.floor(10*l*Math.pow(1.1,l)), requires:{uraniumMine:5, energyTech:3}},
+    // energyBuilding:true -> nutzt dieselbe Bauzeit-Daempfung wie Minen (siehe enqueueBuild),
+    // sonst wuerde die Bauzeit mit steigender Stufe exakt wie bei Minen vor der Daempfung
+    // explodieren (Stufe 10 ohne Daempfung: mehrere Stunden bis Tage).
+    // Kraftwerk-Rangfolge (Leistung/Stufe): Solar < Kohle < Kern - je haerter die
+    // Voraussetzung und je laufender der Treibstoffverbrauch, desto mehr Leistung pro Stufe,
+    // sonst gaebe es keinen Grund, Kohle-/Kernkraftwerk je zu bauen (frueher waren die
+    // Koeffizienten 22/30 sogar NIEDRIGER als Solars 40 - Kern/Kohle waren strikt schlechter
+    // als das kostenlose, treibstofffreie Solarkraftwerk trotz Voraussetzungen+Verbrauch).
+    solarPlant:{name:'Solarkraftwerk', costMagnitude:105, power:l=>40*l*Math.pow(1.05,l), energyBuilding:true},
+    nuclearReactor:{name:'Kernreaktor', base:{iron:700, aluminium:300, uranium:120}, power:l=>75*l*Math.pow(1.05,l), uraniumUse:l=>Math.floor(10*l*Math.pow(1.1,l)), requires:{uraniumMine:5, energyTech:3}, energyBuilding:true},
     // Strukturelle Kopie des Kernreaktors, nur mit Kohle statt Uran - selbes Muster
     // (power(l) + flacher, ungedrosselter coalUse(l)-Verbrauch in hourly()).
-    coalPlant:{name:'Kohlekraftwerk', base:{iron:500, aluminium:300, copper:200}, power:l=>22*l*Math.pow(1.05,l), coalUse:l=>Math.floor(16*l*Math.pow(1.1,l)), requires:{coalMine:5, energyTech:1}},
+    coalPlant:{name:'Kohlekraftwerk', base:{iron:500, aluminium:300, copper:200}, power:l=>55*l*Math.pow(1.05,l), coalUse:l=>Math.floor(16*l*Math.pow(1.1,l)), requires:{coalMine:5, energyTech:1}, energyBuilding:true},
     solarSailI:{name:'Solarsegel I', base:{silver:1200, aluminium:800, crudeOil:400}, power:15, multiBuild:true, requires:{solarPlant:5}},
     solarSailII:{name:'Solarsegel II', base:{silver:3000, aluminium:2200, electronics:600, crudeOil:900}, power:35, multiBuild:true, requires:{solarPlant:10, solarSailI:1}},
     solarSailIII:{name:'Solarsegel III', base:{silver:7000, aluminium:5000, electronics:1800, crudeOil:2000, alloy:500}, power:70, multiBuild:true, requires:{solarPlant:15, solarSailII:1}},
@@ -1244,19 +1252,23 @@ function requirePlanet(state, planetIndex){
   return p;
 }
 
-// Minen sollen Neulingen UND dem Mittelspiel das Leben leicht machen, ohne eine von der
-// Formel losgeloeste Tabelle zu brauchen. Ein reiner Multiplikations-Bonus (fruehere Version)
-// klingt zwangslaeufig schnell ab, weil die normale Formel selbst exponentiell waechst (~1,6x
-// pro Stufe) - ab Stufe ~15 dominiert dann wieder das exponentielle Rohstoff-Wachstum und die
-// Bauzeit "explodiert" trotz Bonus. Stattdessen wird die normale (woertliche OGame-)Formel mit
-// einem Exponenten <1 gestaucht (secs = SCALE * normalSecs^ALPHA): das daempft das exponentielle
-// Wachstum selbst durchgehend ueber viele Stufen (kein Sprung moeglich, da eine einzige stetige
+// Minen UND Energiegebaeude (Solar-/Kohle-/Kernkraftwerk) sollen Neulingen UND dem
+// Mittelspiel das Leben leicht machen, ohne eine von der Formel losgeloeste Tabelle zu
+// brauchen - beides sind Gebaeude, die durchgehend viele Stufen lang hochgezogen werden
+// muessen, damit Produktion/Energie mit dem Rest der Wirtschaft mithaelt (im Gegensatz zu
+// z.B. Roboterfabrik/Werft, die eher auf ein moderates Niveau ausgebaut werden). Ein reiner
+// Multiplikations-Bonus (fruehere Version) klingt zwangslaeufig schnell ab, weil die normale
+// Formel selbst exponentiell waechst (~1,6x pro Stufe) - ab Stufe ~15 dominiert dann wieder
+// das exponentielle Rohstoff-Wachstum und die Bauzeit "explodiert" trotz Bonus. Stattdessen
+// wird die normale (woertliche OGame-)Formel mit einem Exponenten <1 gestaucht
+// (secs = SCALE * normalSecs^ALPHA): das daempft das exponentielle Wachstum selbst
+// durchgehend ueber viele Stufen (kein Sprung moeglich, da eine einzige stetige
 // Potenzfunktion), statt nur einen zeitlich begrenzten Rabatt draufzulegen. Kalibriert auf
 // Stufe 1 ≈ 5s, Stufe 10 ≈ 12-14 Min, Stufe 20 ≈ 12-14 Std - danach wird Roboterfabrik/
 // Nanitenfabrik zunehmend wichtig, weil die Stauchung ALLEIN die Rohstoff-Explosion nicht mehr
 // ausgleicht.
-const MINE_TIME_ALPHA = 0.9;
-const MINE_TIME_SCALE = 0.2664;
+const DAMPENED_TIME_ALPHA = 0.9;
+const DAMPENED_TIME_SCALE = 0.2664;
 function enqueueBuild(state, planetIndex, key){
   const p = requirePlanet(state, planetIndex);
   const def = defs.buildings[key];
@@ -1285,8 +1297,8 @@ function enqueueBuild(state, planetIndex, key){
   // woertliche Konstante hier tatsaechlich, statt eine neue erfinden zu muessen.
   const normalSecs = Math.max(1, Math.round(resTotal(cost)*1.44/accel/(1+p.buildings.robotFactory)/Math.pow(2,nanite)));
   let secs = normalSecs;
-  if(def.resource){
-    secs = Math.max(1, Math.round(MINE_TIME_SCALE*Math.pow(normalSecs, MINE_TIME_ALPHA)));
+  if(def.resource || def.energyBuilding){
+    secs = Math.max(1, Math.round(DAMPENED_TIME_SCALE*Math.pow(normalSecs, DAMPENED_TIME_ALPHA)));
   }
   p.buildQueue.push({type:'building', key, name:def.name, level:lvl, done:Date.now()+secs*1000});
   return ok(state, def.name+' Stufe '+lvl+' gestartet');

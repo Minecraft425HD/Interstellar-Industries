@@ -1,7 +1,7 @@
 // App-Version zur Anzeige in den Einstellungen (Diagnose-Hilfe: laesst sich damit sofort
 // pruefen, ob eine installierte APK tatsaechlich die neueste ist) - manuell synchron zu
 // android/app/build.gradle versionName halten, bei jedem Versionsbump mitziehen.
-const APP_VERSION = '1.38';
+const APP_VERSION = '1.39';
 
 // Globaler Fehlerfaenger: zeigt jede unbehandelte JS-Exception als sichtbaren Toast an,
 // statt sie nur (fuer den Nutzer unsichtbar) in der Android-WebView-Konsole verschwinden zu
@@ -140,9 +140,9 @@ const defs = {
     regolithLithiumExtractor:{name:'Regolith-Lithiumgewinnung', desc:'Gewinnt Lithiumspuren aus dem Regolith - funktioniert auf jedem Planetentyp, aber deutlich schwächer als ein echtes Lithium-Solefeld auf Eis- oder Gasmondwelten.', base:{nickel:300, limestone:200}, powerUse:l=>10*l, factory:false,
       recipe:{output:'lithium', prod:l=>4*l*Math.pow(1.1,l), inputsPerUnit:{}}},
     sawmill:{name:'Forstplantage', desc:'Erntet Holz aus der künstlich angelegten Biosphäre nach der Terraformierung.', resource:'wood', base:{iron:100, freshwater:60}, powerUse:l=>10*l, prod:l=>15*l*Math.pow(1.1,l), requires:{terraformer:1}},
-    solarPlant:{name:'Solarkraftwerk', desc:'Erzeugt Energie durch Sonnenlicht, die von den Minen zum Betrieb benötigt wird. Überall nutzbar - selbstversorgend aus lokalen Rohstoffen finanziert.', costMagnitude:105, power:l=>40*l*Math.pow(1.05,l)},
-    nuclearReactor:{name:'Kernreaktor', desc:'Erzeugt zusätzliche Energie durch Kernspaltung - unabhängig vom Sonnenlicht, verbraucht aber laufend Uran.', base:{iron:700, aluminium:300, uranium:120}, power:l=>30*l*Math.pow(1.05,l), uraniumUse:l=>Math.floor(10*l*Math.pow(1.1,l)), requires:{uraniumMine:5, energyTech:3}},
-    coalPlant:{name:'Kohlekraftwerk', desc:'Erzeugt zusätzliche Energie durch Kohleverbrennung - unabhängig vom Sonnenlicht, verbraucht aber laufend Kohle.', base:{iron:500, aluminium:300, copper:200}, power:l=>22*l*Math.pow(1.05,l), coalUse:l=>Math.floor(16*l*Math.pow(1.1,l)), requires:{coalMine:5, energyTech:1}},
+    solarPlant:{name:'Solarkraftwerk', desc:'Erzeugt Energie durch Sonnenlicht, die von den Minen zum Betrieb benötigt wird. Überall nutzbar - selbstversorgend aus lokalen Rohstoffen finanziert.', costMagnitude:105, power:l=>40*l*Math.pow(1.05,l), energyBuilding:true},
+    nuclearReactor:{name:'Kernreaktor', desc:'Erzeugt zusätzliche Energie durch Kernspaltung - unabhängig vom Sonnenlicht, verbraucht aber laufend Uran.', base:{iron:700, aluminium:300, uranium:120}, power:l=>75*l*Math.pow(1.05,l), uraniumUse:l=>Math.floor(10*l*Math.pow(1.1,l)), requires:{uraniumMine:5, energyTech:3}, energyBuilding:true},
+    coalPlant:{name:'Kohlekraftwerk', desc:'Erzeugt zusätzliche Energie durch Kohleverbrennung - unabhängig vom Sonnenlicht, verbraucht aber laufend Kohle.', base:{iron:500, aluminium:300, copper:200}, power:l=>55*l*Math.pow(1.05,l), coalUse:l=>Math.floor(16*l*Math.pow(1.1,l)), requires:{coalMine:5, energyTech:1}, energyBuilding:true},
     solarSailI:{name:'Solarsegel I', desc:'Ein Segel an einem Satelliten, das Energie per Laser zum Planeten sendet. Mehrfach baubar, Kapazität steigt mit dem Solarkraftwerk.', base:{silver:1200, aluminium:800, crudeOil:400}, power:15, multiBuild:true, requires:{solarPlant:5}},
     solarSailII:{name:'Solarsegel II', desc:'Ausbaustufe des Solarsegels mit höherer Energieausbeute je Stück.', base:{silver:3000, aluminium:2200, electronics:600, crudeOil:900}, power:35, multiBuild:true, requires:{solarPlant:10, solarSailI:1}},
     solarSailIII:{name:'Solarsegel III', desc:'Höchste Ausbaustufe des Solarsegels mit maximaler Energieausbeute je Stück.', base:{silver:7000, aluminium:5000, electronics:1800, crudeOil:2000, alloy:500}, power:70, multiBuild:true, requires:{solarPlant:15, solarSailII:1}},
@@ -462,7 +462,7 @@ function openInfoModal(type, key, level){
       const cost = (type==='research' || d.moonOnly) ? scaledCost(base, lvl) : buildingCost(base, lvl);
       const effect = levelEffectText(d, key, lvl);
       const timeKind = type==='research' ? 'research' : (d.moonOnly ? 'moonbuild' : 'building');
-      const timeCell = showTime ? `<td>${formatDuration(buildSeconds(timeKind, cost, p, lvl, d.noBuildAccel, !!d.resource)*1000)}</td>` : '';
+      const timeCell = showTime ? `<td>${formatDuration(buildSeconds(timeKind, cost, p, lvl, d.noBuildAccel, !!d.resource || !!d.energyBuilding)*1000)}</td>` : '';
       rows.push(`<tr><td>${lvl}</td><td class="info-modal-cost">${resCostText(cost)}</td>${timeCell}${hasEffect?`<td class="info-modal-effect">${effect||''}</td>`:''}</tr>`);
     }
     levelTableHtml = `<div class="info-modal-subhead">Aktuelle Stufe: ${curLevel} · Kosten &amp; Effekt nächste 10 Stufen</div>
@@ -643,15 +643,17 @@ function commanderDiscount(){ return officerActive('commander') ? 0.95 : 1.0; }
 function technocratSpeed(){ return officerActive('technocrat') ? 0.85 : 1.0; }
 function pathfinderBonus(shipMap){ return (shipMap && shipMap.pathfinder>0) ? 1.1 : 1.0; }
 function networkSpeed(p){ const lvl=(p.research.intergalacticNetwork)||0; return Math.max(0.5, 1-0.02*lvl); }
-// Spiegel von MINE_TIME_ALPHA/MINE_TIME_SCALE im Server (enqueueBuild): die normale Formel
-// wird mit einem Exponenten <1 gestaucht (secs = SCALE*normalSecs^ALPHA), statt nur einen
-// zeitlich begrenzten Bonus draufzulegen - daempft das exponentielle Wachstum durchgehend
+// Spiegel von DAMPENED_TIME_ALPHA/DAMPENED_TIME_SCALE im Server (enqueueBuild): die normale
+// Formel wird mit einem Exponenten <1 gestaucht (secs = SCALE*normalSecs^ALPHA), statt nur
+// einen zeitlich begrenzten Bonus draufzulegen - daempft das exponentielle Wachstum durchgehend
 // ueber viele Stufen, mathematisch garantiert kein Sprung (eine einzige stetige Potenzfunktion).
-const MINE_TIME_ALPHA = 0.9;
-const MINE_TIME_SCALE = 0.2664;
+// Gilt fuer Minen UND Energiegebaeude (Solar-/Kohle-/Kernkraftwerk) - beides Gebaeude, die
+// durchgehend viele Stufen lang hochgezogen werden muessen.
+const DAMPENED_TIME_ALPHA = 0.9;
+const DAMPENED_TIME_SCALE = 0.2664;
 // Client-Spiegel der 4 Bauzeit-Formeln aus enqueueBuild/enqueueResearch/enqueueShip/
 // enqueueDefense im Server (server/gameEngine.js) - fuer die Bauzeit-Vorschau im Info-Modal.
-function buildSeconds(kind, cost, p, lvl, noAccel, isMine){
+function buildSeconds(kind, cost, p, lvl, noAccel, dampen){
   const total = resTotal(cost);
   const nanite = p.buildings.naniteFactory||0;
   // Woertliche OGame-Wiki-Konstanten (Gebaeude/Schiffe/Verteidigung/Mondbau: *1.44,
@@ -661,8 +663,8 @@ function buildSeconds(kind, cost, p, lvl, noAccel, isMine){
     const accel = noAccel ? 1 : Math.max(4 - lvl/2, 1);
     const normalSecs = Math.max(1, Math.round(total*1.44/accel/(1+p.buildings.robotFactory)/Math.pow(2,nanite)));
     let secs = normalSecs;
-    if(isMine){
-      secs = Math.max(1, Math.round(MINE_TIME_SCALE*Math.pow(normalSecs, MINE_TIME_ALPHA)));
+    if(dampen){
+      secs = Math.max(1, Math.round(DAMPENED_TIME_SCALE*Math.pow(normalSecs, DAMPENED_TIME_ALPHA)));
     }
     return secs;
   }
