@@ -1,7 +1,7 @@
 // App-Version zur Anzeige in den Einstellungen (Diagnose-Hilfe: laesst sich damit sofort
 // pruefen, ob eine installierte APK tatsaechlich die neueste ist) - manuell synchron zu
 // android/app/build.gradle versionName halten, bei jedem Versionsbump mitziehen.
-const APP_VERSION = '1.39';
+const APP_VERSION = '1.40';
 
 // Globaler Fehlerfaenger: zeigt jede unbehandelte JS-Exception als sichtbaren Toast an,
 // statt sie nur (fuer den Nutzer unsichtbar) in der Android-WebView-Konsole verschwinden zu
@@ -139,7 +139,10 @@ const defs = {
       recipe:{output:'coal', prod:l=>6*l*Math.pow(1.1,l), inputsPerUnit:{}}},
     regolithLithiumExtractor:{name:'Regolith-Lithiumgewinnung', desc:'Gewinnt Lithiumspuren aus dem Regolith - funktioniert auf jedem Planetentyp, aber deutlich schwächer als ein echtes Lithium-Solefeld auf Eis- oder Gasmondwelten.', base:{nickel:300, limestone:200}, powerUse:l=>10*l, factory:false,
       recipe:{output:'lithium', prod:l=>4*l*Math.pow(1.1,l), inputsPerUnit:{}}},
-    sawmill:{name:'Forstplantage', desc:'Erntet Holz aus der künstlich angelegten Biosphäre nach der Terraformierung.', resource:'wood', base:{iron:100, freshwater:60}, powerUse:l=>10*l, prod:l=>15*l*Math.pow(1.1,l), requires:{terraformer:1}},
+    sawmill:{name:'Forstplantage', desc:'Erntet Holz aus der künstlich angelegten Biosphäre nach der Terraformierung. Verbraucht dabei laufend Süßwasser und setzt per Photosynthese Sauerstoff frei.', base:{iron:100, freshwater:60}, powerUse:l=>10*l, factory:false, dampenedBuildTime:true, requires:{terraformer:1},
+      recipe:{output:'wood', prod:l=>15*l*Math.pow(1.1,l), inputsPerUnit:{freshwater:2}, byproduct:{output:'oxygen', ratio:0.5}, mineLike:true}},
+    charcoalKiln:{name:'Köhlerei', desc:'Verkohlt Holz zu Kohle - ein zusätzlicher, holzverbrauchender Weg an Kohle zu kommen.', base:{iron:2500, copper:800, limestone:1200}, requires:{robotFactory:2}, powerUse:l=>8*l, factory:true,
+      recipe:{output:'coal', prod:l=>18*l*Math.pow(1.1,l), inputsPerUnit:{wood:1.6}}},
     solarPlant:{name:'Solarkraftwerk', desc:'Erzeugt Energie durch Sonnenlicht, die von den Minen zum Betrieb benötigt wird. Überall nutzbar - selbstversorgend aus lokalen Rohstoffen finanziert.', costMagnitude:105, power:l=>40*l*Math.pow(1.05,l), energyBuilding:true},
     nuclearReactor:{name:'Kernreaktor', desc:'Erzeugt zusätzliche Energie durch Kernspaltung - unabhängig vom Sonnenlicht, verbraucht aber laufend Uran.', base:{iron:700, aluminium:300, uranium:120}, power:l=>75*l*Math.pow(1.05,l), uraniumUse:l=>Math.floor(10*l*Math.pow(1.1,l)), requires:{uraniumMine:5, energyTech:3}, energyBuilding:true},
     coalPlant:{name:'Kohlekraftwerk', desc:'Erzeugt zusätzliche Energie durch Kohleverbrennung - unabhängig vom Sonnenlicht, verbraucht aber laufend Kohle.', base:{iron:500, aluminium:300, copper:200}, power:l=>55*l*Math.pow(1.05,l), coalUse:l=>Math.floor(16*l*Math.pow(1.1,l)), requires:{coalMine:5, energyTech:1}, energyBuilding:true},
@@ -462,7 +465,7 @@ function openInfoModal(type, key, level){
       const cost = (type==='research' || d.moonOnly) ? scaledCost(base, lvl) : buildingCost(base, lvl);
       const effect = levelEffectText(d, key, lvl);
       const timeKind = type==='research' ? 'research' : (d.moonOnly ? 'moonbuild' : 'building');
-      const timeCell = showTime ? `<td>${formatDuration(buildSeconds(timeKind, cost, p, lvl, d.noBuildAccel, !!d.resource || !!d.energyBuilding)*1000)}</td>` : '';
+      const timeCell = showTime ? `<td>${formatDuration(buildSeconds(timeKind, cost, p, lvl, d.noBuildAccel, !!d.resource || !!d.energyBuilding || !!d.dampenedBuildTime)*1000)}</td>` : '';
       rows.push(`<tr><td>${lvl}</td><td class="info-modal-cost">${resCostText(cost)}</td>${timeCell}${hasEffect?`<td class="info-modal-effect">${effect||''}</td>`:''}</tr>`);
     }
     levelTableHtml = `<div class="info-modal-subhead">Aktuelle Stufe: ${curLevel} · Kosten &amp; Effekt nächste 10 Stufen</div>
@@ -1395,7 +1398,7 @@ function factoryThrottle(p, recipe, lvl){
 function hourly(p){
   const e=energyStats(p).ratio; const bonus=officerBonus();
   const inc = zeroResources();
-  const planetRes = (PLANET_TYPES[p.planetType]||PLANET_TYPES.rocky).resources.concat(p.buildings.sawmill?['wood']:[]);
+  const planetRes = (PLANET_TYPES[p.planetType]||PLANET_TYPES.rocky).resources;
   for(const res of planetRes){
     const mineKey = mineByResource(res);
     const lvl = mineKey ? (p.buildings[mineKey]||0) : 0;
@@ -1412,7 +1415,9 @@ function hourly(p){
     if(!lvl) continue;
     const recipe = defs.buildings[key].recipe;
     const {throttle} = factoryThrottle(p, recipe, lvl);
-    const actualOut = recipe.prod(lvl) * e * throttle;
+    // mineLike (aktuell nur Forstplantage/Holz) bekommt denselben Offiziers-Bonus wie eine
+    // echte Mine - siehe applyFactories() im Server fuer die vollstaendige Begruendung.
+    const actualOut = recipe.prod(lvl) * e * throttle * (recipe.mineLike ? bonus : 1);
     inc[recipe.output] = (inc[recipe.output]||0) + actualOut;
     if(recipe.byproduct) inc[recipe.byproduct.output] = (inc[recipe.byproduct.output]||0) + actualOut*recipe.byproduct.ratio;
     for(const [inputKey, perUnit] of Object.entries(recipe.inputsPerUnit)){

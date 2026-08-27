@@ -219,7 +219,15 @@ const defs = {
       recipe:{output:'lithium', prod:l=>4*l*Math.pow(1.1,l), inputsPerUnit:{}}},
     // Holz ist die einzige Ausnahme vom Planetentyp-System: keine natuerliche Quelle,
     // erfordert einen Terraformer (kuenstliche Biosphaere), dafuer auf JEDEM Typ danach baubar.
-    sawmill:{name:'Forstplantage', resource:'wood', base:{iron:100, freshwater:60}, powerUse:l=>10*l, prod:l=>15*l*Math.pow(1.1,l), requires:{terraformer:1}},
+    // Ueber `recipe` (wie die Suesswasser-/Sauerstoff-Gebaeude oben) statt `resource`, damit
+    // die laufende Suesswasser-Aufnahme (inputsPerUnit) und der Sauerstoff-Ausstoss
+    // (Photosynthese, byproduct) generisch durch applyFactories() abgebildet werden koennen -
+    // beides war als reine `resource`-Mine strukturell nicht moeglich (Minen kennen weder
+    // Input-Verbrauch noch Nebenprodukte). dampenedBuildTime:true haelt die Bauzeit-Daempfung
+    // (sonst nur fuer def.resource/def.energyBuilding), die die Forstplantage als "Minen-
+    // aehnliches" Gebaeude vorher automatisch ueber ihr `resource`-Feld bekam.
+    sawmill:{name:'Forstplantage', base:{iron:100, freshwater:60}, powerUse:l=>10*l, factory:false, dampenedBuildTime:true, requires:{terraformer:1},
+      recipe:{output:'wood', prod:l=>15*l*Math.pow(1.1,l), inputsPerUnit:{freshwater:2}, byproduct:{output:'oxygen', ratio:0.5}, mineLike:true}},
 
     // ---- Energie ----
     // Solarenergie ist ueberall nutzbar (Sonnenlicht statt planetentyp-spezifischer
@@ -274,6 +282,12 @@ const defs = {
       recipe:{output:'electronics', prod:l=>10*l*Math.pow(1.1,l), inputsPerUnit:{copper:3, gold:1}}},
     plasticsPlant:{name:'Kunststoffwerk', base:{aluminium:600, crudeOil:250}, requires:{robotFactory:2}, powerUse:l=>12*l, factory:true,
       recipe:{output:'plastic', prod:l=>12*l*Math.pow(1.1,l), inputsPerUnit:{crudeOil:2, coal:1}}},
+    // Verkohlt Holz zu Kohle (klassische Koehlerei) - ein zusaetzlicher, Holz verbrauchender
+    // Weg an Kohle zu kommen, unabhaengig von einer Kohlemine oder dem "Backup"-carbonSynthesizer
+    // (der ohne Input auskommt, siehe oben) - fuer Spieler mit Terraformer+Forstplantage, aber
+    // ohne guten Wuestenplaneten fuer eine echte Kohlemine.
+    charcoalKiln:{name:'Köhlerei', base:{iron:2500, copper:800, limestone:1200}, requires:{robotFactory:2}, powerUse:l=>8*l, factory:true,
+      recipe:{output:'coal', prod:l=>18*l*Math.pow(1.1,l), inputsPerUnit:{wood:1.6}}},
     oilRefinery:{name:'Ölraffinerie', base:{iron:8000, aluminium:5000, steel:1500}, requires:{robotFactory:3}, powerUse:l=>12*l, factory:true,
       recipe:{output:'refinedFuel', prod:l=>25*l*Math.pow(1.1,l), inputsPerUnit:{crudeOil:1.4}}},
     // recipe.byproduct ist ein neues, optionales Feld (siehe applyFactories) - ein
@@ -1033,7 +1047,14 @@ function applyFactories(state, p, universe, inc){
     if(!lvl) continue;
     const recipe = defs.buildings[key].recipe;
     const {throttle} = factoryThrottle(p, recipe, lvl);
-    const actualOut = recipe.prod(lvl) * e * throttle;
+    // mineLike-Rezepte (aktuell nur die Forstplantage) bekommen dieselben Boni wie eine
+    // echte Mine (Geologe-Offizier, Item-/Event-Boost auf die Ressourcengruppe) - vor der
+    // Umstellung von Holz auf `recipe` (fuer Suesswasser-Verbrauch + Sauerstoff-Nebenprodukt,
+    // beides als reine `resource`-Mine nicht abbildbar) lief Holz durch die Minen-Schleife
+    // und hatte diese Boni bereits. Normale Fabriken bekommen sie bewusst NICHT (thematisch
+    // Fabrikproduktion, keine Rohstoff-Foerderung).
+    const mineBonus = recipe.mineLike ? officerBonus(state)*itemGroupBoost(state,recipe.output)*eventResourceMultiplier(universe,recipe.output) : 1;
+    const actualOut = recipe.prod(lvl) * e * throttle * mineBonus;
     inc[recipe.output] = (inc[recipe.output]||0) + actualOut;
     if(recipe.byproduct) inc[recipe.byproduct.output] = (inc[recipe.byproduct.output]||0) + actualOut*recipe.byproduct.ratio;
     for(const [inputKey, perUnit] of Object.entries(recipe.inputsPerUnit)){
@@ -1049,11 +1070,14 @@ function itemGroupBoost(state, resource){
   return 1;
 }
 // Produktion pro Stunde fuer ALLE 18 Rohstoffe: nur Minen, die tatsaechlich auf dem
-// Planetentyp existieren (also je gebaut werden konnten), liefern einen Ertrag > 0.
+// Planetentyp existieren (also je gebaut werden konnten), liefern einen Ertrag > 0. Holz
+// laeuft NICHT mehr durch diese Schleife, sondern (wie applyFactories() weiter oben erklaert)
+// ueber sein `recipe`-Feld durch applyFactories() - dort haengen Suesswasser-Verbrauch und
+// Sauerstoff-Nebenprodukt der Forstplantage.
 function hourly(state, p, universe){
   const e=energyStats(state, p).ratio; const bonus=officerBonus(state);
   const inc = zeroResources();
-  for(const res of PLANET_TYPES[p.planetType].resources.concat(p.buildings.sawmill ? ['wood'] : [])){
+  for(const res of PLANET_TYPES[p.planetType].resources){
     const mineKey = MINE_BY_RESOURCE[res];
     const lvl = p.buildings[mineKey]||0;
     if(!lvl) continue;
@@ -1269,6 +1293,12 @@ function requirePlanet(state, planetIndex){
 // ausgleicht.
 const DAMPENED_TIME_ALPHA = 0.9;
 const DAMPENED_TIME_SCALE = 0.2664;
+// def.resource (Minen) und def.energyBuilding (Solar-/Kohle-/Kernkraftwerk) sind bereits
+// aussagekraeftige, eigenstaendige Flags - def.dampenedBuildTime ist die generische Ausnahme
+// fuer Gebaeude, die zwar Minen-artig durchgehend hochgezogen werden (aktuell die Forstplantage,
+// die seit dem Suesswasser-/Sauerstoff-Umbau kein `resource`-Feld mehr tragen kann), aber
+// keinem der beiden anderen Flags entsprechen.
+function needsDampenedBuildTime(def){ return !!(def.resource || def.energyBuilding || def.dampenedBuildTime); }
 function enqueueBuild(state, planetIndex, key){
   const p = requirePlanet(state, planetIndex);
   const def = defs.buildings[key];
@@ -1297,7 +1327,7 @@ function enqueueBuild(state, planetIndex, key){
   // woertliche Konstante hier tatsaechlich, statt eine neue erfinden zu muessen.
   const normalSecs = Math.max(1, Math.round(resTotal(cost)*1.44/accel/(1+p.buildings.robotFactory)/Math.pow(2,nanite)));
   let secs = normalSecs;
-  if(def.resource || def.energyBuilding){
+  if(needsDampenedBuildTime(def)){
     secs = Math.max(1, Math.round(DAMPENED_TIME_SCALE*Math.pow(normalSecs, DAMPENED_TIME_ALPHA)));
   }
   p.buildQueue.push({type:'building', key, name:def.name, level:lvl, done:Date.now()+secs*1000});
