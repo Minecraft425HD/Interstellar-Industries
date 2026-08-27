@@ -1248,6 +1248,15 @@ function requirePlanet(state, planetIndex){
 // ersten Bauqueue zu warten - feste, handverlesene Kurzzeiten fuer Minen-Stufe 1-10 (Index 0
 // ungenutzt), ab Stufe 11 gilt wieder die normale, Roboterfabrik/Nanitenfabrik-abhaengige Formel.
 const MINE_EARLY_SECONDS = [null, 5, 8, 10, 13, 25, 40, 55, 120, 150, 200];
+// Ab Stufe 11 darf die enorme Fruehstufen-Rabattierung nicht schlagartig verschwinden (das
+// erzeugte einen Sprung von wenigen Minuten auf mehrere Stunden zwischen Stufe 10 und 11) -
+// stattdessen klingt der bei Stufe 10 wirksame Rabatt-Faktor pro weiterer Stufe um 25% ab,
+// bis er sich rechnerisch ab ca. Stufe 25-30 der normalen Formel (Faktor 1) annaehert.
+function mineTransitionSeconds(normalSecs, normalSecsAt10, lvl){
+  const discount10 = Math.max(1, normalSecsAt10/MINE_EARLY_SECONDS[10]);
+  const bonus = 1+(discount10-1)*Math.pow(0.75, lvl-10);
+  return Math.max(1, Math.round(normalSecs/bonus));
+}
 function enqueueBuild(state, planetIndex, key){
   const p = requirePlanet(state, planetIndex);
   const def = defs.buildings[key];
@@ -1279,6 +1288,11 @@ function enqueueBuild(state, planetIndex, key){
     // (z.B. Eisenmine Stufe 1 = 75 Gesamtkosten, exakt wie OGames Metallmine), daher passt die
     // woertliche Konstante hier tatsaechlich, statt eine neue erfinden zu muessen.
     secs = Math.max(1, Math.round(resTotal(cost)*1.44/accel/(1+p.buildings.robotFactory)/Math.pow(2,nanite)));
+    if(def.resource && lvl>10){
+      const cost10 = buildingCost(state, costBaseFor(def,p), 10);
+      const normalSecs10 = Math.max(1, Math.round(resTotal(cost10)*1.44/(1+p.buildings.robotFactory)/Math.pow(2,nanite)));
+      secs = mineTransitionSeconds(secs, normalSecs10, lvl);
+    }
   }
   p.buildQueue.push({type:'building', key, name:def.name, level:lvl, done:Date.now()+secs*1000});
   return ok(state, def.name+' Stufe '+lvl+' gestartet');

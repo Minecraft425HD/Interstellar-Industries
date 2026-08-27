@@ -1,7 +1,7 @@
 // App-Version zur Anzeige in den Einstellungen (Diagnose-Hilfe: laesst sich damit sofort
 // pruefen, ob eine installierte APK tatsaechlich die neueste ist) - manuell synchron zu
 // android/app/build.gradle versionName halten, bei jedem Versionsbump mitziehen.
-const APP_VERSION = '1.35';
+const APP_VERSION = '1.36';
 
 // Globaler Fehlerfaenger: zeigt jede unbehandelte JS-Exception als sichtbaren Toast an,
 // statt sie nur (fuer den Nutzer unsichtbar) in der Android-WebView-Konsole verschwinden zu
@@ -462,7 +462,7 @@ function openInfoModal(type, key, level){
       const cost = (type==='research' || d.moonOnly) ? scaledCost(base, lvl) : buildingCost(base, lvl);
       const effect = levelEffectText(d, key, lvl);
       const timeKind = type==='research' ? 'research' : (d.moonOnly ? 'moonbuild' : 'building');
-      const timeCell = showTime ? `<td>${formatDuration(buildSeconds(timeKind, cost, p, lvl, d.noBuildAccel, !!d.resource)*1000)}</td>` : '';
+      const timeCell = showTime ? `<td>${formatDuration(buildSeconds(timeKind, cost, p, lvl, d.noBuildAccel, !!d.resource, base)*1000)}</td>` : '';
       rows.push(`<tr><td>${lvl}</td><td class="info-modal-cost">${resCostText(cost)}</td>${timeCell}${hasEffect?`<td class="info-modal-effect">${effect||''}</td>`:''}</tr>`);
     }
     levelTableHtml = `<div class="info-modal-subhead">Aktuelle Stufe: ${curLevel} · Kosten &amp; Effekt nächste 10 Stufen</div>
@@ -647,9 +647,16 @@ function networkSpeed(p){ const lvl=(p.research.intergalacticNetwork)||0; return
 // 1-10, damit die Bauzeit-Vorschau im Info-Modal exakt dem tatsaechlichen Server-Ergebnis
 // entspricht statt der normalen Formel.
 const MINE_EARLY_SECONDS = [null, 5, 8, 10, 13, 25, 40, 55, 120, 150, 200];
+// Spiegel von mineTransitionSeconds() im Server: der bei Stufe 10 wirksame Rabatt-Faktor
+// klingt pro weiterer Stufe um 25% ab, statt schlagartig auf die normale Formel zu springen.
+function mineTransitionSeconds(normalSecs, normalSecsAt10, lvl){
+  const discount10 = Math.max(1, normalSecsAt10/MINE_EARLY_SECONDS[10]);
+  const bonus = 1+(discount10-1)*Math.pow(0.75, lvl-10);
+  return Math.max(1, Math.round(normalSecs/bonus));
+}
 // Client-Spiegel der 4 Bauzeit-Formeln aus enqueueBuild/enqueueResearch/enqueueShip/
 // enqueueDefense im Server (server/gameEngine.js) - fuer die Bauzeit-Vorschau im Info-Modal.
-function buildSeconds(kind, cost, p, lvl, noAccel, isMine){
+function buildSeconds(kind, cost, p, lvl, noAccel, isMine, mineBase){
   const total = resTotal(cost);
   const nanite = p.buildings.naniteFactory||0;
   // Woertliche OGame-Wiki-Konstanten (Gebaeude/Schiffe/Verteidigung/Mondbau: *1.44,
@@ -657,7 +664,14 @@ function buildSeconds(kind, cost, p, lvl, noAccel, isMine){
   // enqueueShip/enqueueDefense/enqueueMultiBuild/enqueueMoonBuild.
   if(kind==='building'){
     if(isMine && lvl<=10) return MINE_EARLY_SECONDS[lvl];
-    const accel = noAccel ? 1 : Math.max(4 - lvl/2, 1); return Math.max(1, Math.round(total*1.44/accel/(1+p.buildings.robotFactory)/Math.pow(2,nanite)));
+    const accel = noAccel ? 1 : Math.max(4 - lvl/2, 1);
+    let secs = Math.max(1, Math.round(total*1.44/accel/(1+p.buildings.robotFactory)/Math.pow(2,nanite)));
+    if(isMine && lvl>10){
+      const cost10 = buildingCost(mineBase, 10);
+      const normalSecs10 = Math.max(1, Math.round(resTotal(cost10)*1.44/(1+p.buildings.robotFactory)/Math.pow(2,nanite)));
+      secs = mineTransitionSeconds(secs, normalSecs10, lvl);
+    }
+    return secs;
   }
   if(kind==='research') return Math.max(1, Math.round(total*3.6/(1+p.buildings.researchLab)*technocratSpeed()*networkSpeed(p)));
   if(kind==='ship' || kind==='defense' || kind==='multibuild') return Math.max(1, Math.round(total*1.44/(1+p.buildings.shipyard)/Math.pow(2,nanite)));
