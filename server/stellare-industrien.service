@@ -1,0 +1,15 @@
+[Unit]
+Description=Stellare Industrien Spiel-Server
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/pi/Interstellar-Industries/server
+ExecStart=/usr/bin/node server.js
+Restart=always
+RestartSec=3
+Environment=PORT=3000
+User=pi
+
+[Install]
+WantedBy=multi-user.target

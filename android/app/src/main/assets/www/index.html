@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>Stellare Industrien</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="connBanner" class="conn-banner" style="display:none"></div>
+  <div id="onboardingBanner" class="onboarding-banner" style="display:none"></div>
+  <header id="topbar">
+    <div class="planet-id">
+      <div id="planetName">-</div>
+      <div id="planetCoords" class="small">-</div>
+    </div>
+    <div class="stellaris-balance" id="stellarisBalance" title="Stellaris-Token">
+      <span class="stellaris-balance-icon">✦</span>
+      <span id="stellarisBalanceValue">0</span>
+      <span class="stellaris-balance-unit">ST</span>
+    </div>
+  </header>
+
+  <nav id="nav"></nav>
+
+  <div id="layout">
+    <aside id="sidebar">
+      <div class="side-block">
+        <h4>Planeten</h4>
+        <div id="planetTabs" class="planet-tabs"></div>
+      </div>
+      <div class="side-block">
+        <h4>Aufträge</h4>
+        <div id="queues" class="queue"></div>
+      </div>
+      <div class="side-block">
+        <h4>Flottenbewegungen</h4>
+        <div id="fleetMovements" class="queue"></div>
+      </div>
+      <div class="side-block">
+        <h4>Ereignisse</h4>
+        <div id="logs" class="logs"></div>
+      </div>
+    </aside>
+
+    <main id="view"></main>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

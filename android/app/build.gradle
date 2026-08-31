@@ -1,0 +1,39 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'com.interstellar.industries'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId "com.interstellar.industries"
+        minSdk 24
+        targetSdk 34
+        // WICHTIG: bei jedem neuen APK-Build muss versionCode erhoeht werden, sonst
+        // erkennt Android (vor allem beim manuellen Installieren per Datei-Tap statt
+        // "adb install -r") die APK nicht zuverlaessig als Update und behaelt die alte
+        // Version - genau das Symptom, das hier aufgetreten ist (versionCode stand die
+        // ganze Session ueber unveraendert auf 1).
+        versionCode 42
+        versionName "1.41"
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
+
+dependencies {
+    // Fuer den periodischen Hintergrund-Abgleich (NotificationPollWorker) - laeuft auch
+    // weiter, wenn die App-Activity nicht sichtbar/geschlossen ist.
+    implementation 'androidx.work:work-runtime:2.9.1'
+}
