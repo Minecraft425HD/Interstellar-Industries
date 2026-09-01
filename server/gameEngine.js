@@ -845,17 +845,22 @@ function adminListPlayers(universe){
     homeCoords: state.planets[0] ? state.planets[0].coords : null,
   })).sort((a,b)=>b.points-a.points);
 }
+// Verlaesst (falls Mitglied) die aktuelle Allianz vollstaendig UND entfernt offene
+// Bewerbungen bei ANDEREN Allianzen - gemeinsam genutzt von adminDeletePlayer() und
+// normalizePlayerState(). removePlayerFromAlliance() alleine kuemmert sich nur um eine
+// TATSAECHLICHE Mitgliedschaft; ohne den zusaetzlichen applications-Schritt blieben
+// offene Bewerbungen als Karteileiche im applications-Array anderer Allianzen stehen.
+function leaveAllianceCompletely(universe, username){
+  removePlayerFromAlliance(universe, username);
+  for(const alliance of Object.values(universe.alliances)){
+    if(alliance.applications) alliance.applications = alliance.applications.filter(m=>m!==username);
+  }
+}
 function adminDeletePlayer(universe, username){
   username = String(username||'').trim();
   if(universe.accounts[username] && universe.accounts[username].isAdmin) return { ok:false, error:'Admin-Konto kann nicht gelöscht werden' };
   if(!universe.players[username]) return { ok:false, error:'Spieler nicht gefunden' };
-  removePlayerFromAlliance(universe, username);
-  // removePlayerFromAlliance kuemmert sich nur um eine tatsaechliche Mitgliedschaft -
-  // offene Bewerbungen bei ANDEREN Allianzen (noch nicht angenommen) haengen sonst als
-  // Karteileiche im applications-Array und tauchen dort fuer den Gruender weiter auf.
-  for(const alliance of Object.values(universe.alliances)){
-    if(alliance.applications) alliance.applications = alliance.applications.filter(m=>m!==username);
-  }
+  leaveAllianceCompletely(universe, username);
   // Ein laufendes Hoechstgebot im Auktionshaus zuruecksetzen, statt die Runde auf einen
   // nicht mehr existierenden "Gewinner" einfrieren zu lassen.
   if(universe.auction && universe.auction.currentBidder===username){
@@ -1371,6 +1376,14 @@ function sanitizeRestoredFleet(raw, planetCount){
   });
 }
 function normalizePlayerState(data, universe, username){
+  // Ein Restore ersetzt GLEICH den kompletten Spielerzustand - eine evtl. bestehende
+  // Allianz-Mitgliedschaft muss VORHER sauber verlassen werden (Registry-Eintrag in
+  // universe.alliances bereinigen, ggf. Gruender-Nachfolge ausloesen). Passiert das nicht,
+  // bleibt die Allianz auf den jetzt allianzlosen Namen als Mitglied/Gruender zeigen - eine
+  // dauerhaft "eingefrorene" Allianz, die z.B. nie wieder Bewerbungen annehmen kann, wenn
+  // ausgerechnet der Gruender restored wurde. state.allianceTag wird unten ohnehin auf null
+  // gesetzt; ohne diesen Aufruf wuerde nur das lokale Feld genullt, nicht die Registry.
+  if(universe && universe.alliances) leaveAllianceCompletely(universe, username);
   data = (data && typeof data==='object') ? data : {};
   const fresh = createStarterEmpire([1,1,1], 'Heimatwelt');
   const rawPlanets = Array.isArray(data.planets) ? data.planets : [];
@@ -1593,6 +1606,20 @@ function sendFleet(universe, username, planetIndex, params){
       if(targetSlot.type==='npc') npcSlot = targetSlot; else if(targetSlot.type==='empty') emptySlot = targetSlot;
     }
   }
+  // Ein Nichtangriffspakt (NAP) zwischen zwei Allianzen war bisher rein kosmetisch - er wurde
+  // nur gespeichert/angezeigt, aber nirgends tatsaechlich durchgesetzt. Spieler konnten sich
+  // faelschlich auf den im Diplomatie-UI suggerierten Schutz verlassen. Ein aktives Abkommen
+  // blockiert jetzt tatsaechlich Angriffe zwischen den beiden Allianzen (Kriegszustand bleibt
+  // bewusst wirkungslos - "Krieg" ist per Default-Zustand ohnehin schon der Normalfall, in dem
+  // Angriffe erlaubt sind, es gibt also nichts zusaetzlich freizuschalten).
+  if(mission==='attack' && toOwner && state.allianceTag){
+    const defenderState = universe.players[toOwner];
+    const defenderAlliance = defenderState ? defenderState.allianceTag : null;
+    const myAlliance = universe.alliances[state.allianceTag];
+    if(defenderAlliance && myAlliance && myAlliance.napWith && myAlliance.napWith.includes(defenderAlliance)){
+      return fail(state, 'Angriff nicht möglich: deine Allianz hat ein Nichtangriffspakt mit ['+defenderAlliance+']');
+    }
+  }
   const ships = {};
   Object.keys(defs.ships).forEach(k=>{ if(defs.ships[k].role!=='power' && defs.ships[k].role!=='sentinel') ships[k]=Math.max(0, Math.floor(Number((params.ships||{})[k])||0)); });
   const totalShips = Object.values(ships).reduce((a,b)=>a+b,0);
@@ -1726,7 +1753,11 @@ function sendExpedition(state, planetIndex, shipsMap, durationSlot){
   const maxExp = maxExpeditions(p);
   if(state.expeditions.length>=maxExp) return fail(state, 'Keine Expeditions-Plätze frei (max '+maxExp+', Astrophysik ausbauen)');
   const ships = {};
-  Object.keys(shipsMap||{}).forEach(k=>{ if(defs.ships[k]) ships[k]=Math.max(0, Math.floor(Number(shipsMap[k])||0)); });
+  // Wie sendFleet(): Solarsatellit (role:'power') und Fruehwarn-Satellit (role:'sentinel')
+  // sind ortsfeste Anlagen, keine Flotteneinheiten - vorher liess sendExpedition() sie
+  // (anders als sendFleet()) zu, wodurch sie bei einem "Flotte verschollen"-Ergebnis (10%
+  // Chance) unwiederbringlich verloren gehen konnten.
+  Object.keys(shipsMap||{}).forEach(k=>{ if(defs.ships[k] && defs.ships[k].role!=='power' && defs.ships[k].role!=='sentinel') ships[k]=Math.max(0, Math.floor(Number(shipsMap[k])||0)); });
   for(const [k,v] of Object.entries(ships)){ if(v>(p.ships[k]||0)) return fail(state, 'Zu wenige '+defs.ships[k].name); }
   const total = Object.values(ships).reduce((a,b)=>a+b,0);
   if(total<1) return fail(state, 'Keine Schiffe für Expedition gewählt');
@@ -1738,7 +1769,14 @@ function sendExpedition(state, planetIndex, shipsMap, durationSlot){
 }
 
 function resolveExpedition(state, exp){
-  const p = state.planets[exp.from]; const roll = Math.random();
+  // Wurde der Ursprungsplanet waehrend die Expedition unterwegs war durch einen Todesstern
+  // zerstoert (destroyPlanet() nullt ihn, entfernt ihn aber nicht aus dem Array), landeten
+  // Funde/zurueckkehrende Schiffe bisher unsichtbar auf dem genullten Planeten - trotz
+  // weiterhin ausgegebener "Expedition erfolgreich"-Meldung. Genau wie bei der regulaeren
+  // Flottenrueckkehr (tick()) wird jetzt zum ersten noch existierenden Planeten umgeleitet.
+  const origin = state.planets[exp.from];
+  const p = (origin && !origin.destroyed) ? origin : state.planets[firstAlivePlanetIndex(state)];
+  const roll = Math.random();
   if(!p){ return; }
   if(roll<0.30){
     const gain = zeroResources();
@@ -2160,8 +2198,16 @@ function cancelTradeOffer(universe, username, payload){
   if(offer.from!==username) return fail(state, 'Das ist nicht dein Handelsangebot');
   universe.tradeOffers.splice(idx,1);
   const refundIdx = (state.planets[offer.fromPlanetIndex] && !state.planets[offer.fromPlanetIndex].destroyed) ? offer.fromPlanetIndex : firstAlivePlanetIndex(state);
-  if(refundIdx>=0) state.planets[refundIdx].resources[offer.give] = (state.planets[refundIdx].resources[offer.give]||0) + offer.giveAmount;
-  return ok(state, 'Handelsangebot storniert, '+offer.giveAmount+' '+RESOURCE_INFO[offer.give].name+' zurückerstattet');
+  if(refundIdx>=0){
+    state.planets[refundIdx].resources[offer.give] = (state.planets[refundIdx].resources[offer.give]||0) + offer.giveAmount;
+    return ok(state, 'Handelsangebot storniert, '+offer.giveAmount+' '+RESOURCE_INFO[offer.give].name+' zurückerstattet');
+  }
+  // Kein lebender Planet mehr vorhanden (z.B. alle Kolonien durch Todesstern zerstoert) - die
+  // eingezahlte Ware kann nirgends gutgeschrieben werden. Das Angebot wird trotzdem entfernt
+  // (sonst bliebe es ewig als "annehmbar" fuer andere Spieler stehen), der Verlust wird
+  // zumindest im Log sichtbar statt komplett stillschweigend zu verschwinden.
+  log(state, 'Handelsangebot storniert, aber '+offer.giveAmount+' '+RESOURCE_INFO[offer.give].name+' konnten nicht zurückerstattet werden (kein Planet mehr vorhanden)');
+  return ok(state, 'Handelsangebot storniert (keine Rückerstattung möglich - kein Planet mehr vorhanden)');
 }
 function acceptTradeOffer(universe, username, payload){
   const state = universe.players[username];
@@ -2172,11 +2218,20 @@ function acceptTradeOffer(universe, username, payload){
   if((p.resources[offer.want]||0) < offer.wantAmount) return fail(state, 'Nicht genug '+RESOURCE_INFO[offer.want].name);
   const sellerState = universe.players[offer.from];
   if(!sellerState) return fail(state, 'Anbieter existiert nicht mehr');
+  // Hat der Ersteller keinen lebenden Planeten mehr (z.B. alle Kolonien durch Todesstern
+  // zerstoert), gibt es nirgends eine Stelle, die Bezahlung gutzuschreiben - das Angebot wird
+  // als tot entfernt statt es "anzunehmen" und die Zahlung des Kaeufers stillschweigend im
+  // Nichts verschwinden zu lassen (vorher: sellerCreditIdx<0 -> if(sellerCreditIdx>=0) griff
+  // nie, die Ware des Kaeufers war trotzdem schon abgebucht).
+  const sellerCreditIdx = (sellerState.planets[offer.fromPlanetIndex] && !sellerState.planets[offer.fromPlanetIndex].destroyed) ? offer.fromPlanetIndex : firstAlivePlanetIndex(sellerState);
+  if(sellerCreditIdx<0){
+    universe.tradeOffers.splice(universe.tradeOffers.indexOf(offer), 1);
+    return fail(state, 'Dieses Handelsangebot kann nicht mehr angenommen werden - der Ersteller hat keinen Planeten mehr');
+  }
   universe.tradeOffers.splice(universe.tradeOffers.indexOf(offer), 1);
   p.resources[offer.want] -= offer.wantAmount;
   p.resources[offer.give] = (p.resources[offer.give]||0) + offer.giveAmount;
-  const sellerCreditIdx = (sellerState.planets[offer.fromPlanetIndex] && !sellerState.planets[offer.fromPlanetIndex].destroyed) ? offer.fromPlanetIndex : firstAlivePlanetIndex(sellerState);
-  if(sellerCreditIdx>=0) sellerState.planets[sellerCreditIdx].resources[offer.want] = (sellerState.planets[sellerCreditIdx].resources[offer.want]||0) + offer.wantAmount;
+  sellerState.planets[sellerCreditIdx].resources[offer.want] = (sellerState.planets[sellerCreditIdx].resources[offer.want]||0) + offer.wantAmount;
   message(sellerState, username+' hat dein Handelsangebot angenommen: '+offer.giveAmount+' '+RESOURCE_INFO[offer.give].name+' gegen '+offer.wantAmount+' '+RESOURCE_INFO[offer.want].name+'.');
   return ok(state, 'Handel abgeschlossen: '+offer.wantAmount+' '+RESOURCE_INFO[offer.want].name+' bezahlt, '+offer.giveAmount+' '+RESOURCE_INFO[offer.give].name+' erhalten');
 }
@@ -2411,15 +2466,27 @@ function resolveArrival(universe, username, f){
           log(targetState, 'Spionage durch '+username+' entdeckt');
         }
       }
+    } else if(f.toOwner){
+      // f.toOwner war beim Flottenstart gesetzt (echtes Fremdziel), aber targetState ist jetzt
+      // leer - das Konto wurde waehrend des Fluges geloescht (z.B. per Admin-Aktion). OHNE
+      // diesen Zweig fiel die Ausfuehrung in den naechsten (Selbst-Spionage-)Zweig und las
+      // f.toPlanetIndex faelschlich als Index in den EIGENEN Planeten - das warf entweder eine
+      // TypeError (t.research auf undefined) oder spionierte still den falschen eigenen
+      // Planeten aus. Da f.phase danach nie auf 'return' gesetzt wurde, kollabierte dieselbe
+      // Flotte bei JEDEM folgenden tick() erneut und blockierte fuer diesen Spieler dauerhaft
+      // die gesamte Flotten-/Expeditionsverarbeitung (siehe tick()s try/catch-Isolation).
+      log(state, 'Spionage bei '+f.toOwner+' nicht möglich: Ziel existiert nicht mehr');
     } else if(f.toPlanetIndex!=null){
       const t = state.planets[f.toPlanetIndex];
-      const tiers = espionageReportTiers(atkEsp, t.research.espionageTech || 0);
-      state.reports.unshift(buildEspionageReport({
-        target:t.name, coords:coordStr(t.coords), coordArr:t.coords,
-        resources:{...t.resources}, fleetShips:t.ships, defenseShips:extractDefense(t.buildings), buildings:t.buildings, research:t.research, tiers,
-        moon: findMoonAt(state, t.coords),
-      }));
-      log(state, 'Spionagebericht über '+t.name+' erhalten (Stufe '+espionageTierCount(tiers)+'/5)');
+      if(t && !t.destroyed){
+        const tiers = espionageReportTiers(atkEsp, t.research.espionageTech || 0);
+        state.reports.unshift(buildEspionageReport({
+          target:t.name, coords:coordStr(t.coords), coordArr:t.coords,
+          resources:{...t.resources}, fleetShips:t.ships, defenseShips:extractDefense(t.buildings), buildings:t.buildings, research:t.research, tiers,
+          moon: findMoonAt(state, t.coords),
+        }));
+        log(state, 'Spionagebericht über '+t.name+' erhalten (Stufe '+espionageTierCount(tiers)+'/5)');
+      }
     }
     f.phase='return';
   } else if(f.mission==='harvest'){

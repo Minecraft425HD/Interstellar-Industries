@@ -1,7 +1,7 @@
 // App-Version zur Anzeige in den Einstellungen (Diagnose-Hilfe: laesst sich damit sofort
 // pruefen, ob eine installierte APK tatsaechlich die neueste ist) - manuell synchron zu
 // android/app/build.gradle versionName halten, bei jedem Versionsbump mitziehen.
-const APP_VERSION = '1.41';
+const APP_VERSION = '1.42';
 
 // Globaler Fehlerfaenger: zeigt jede unbehandelte JS-Exception als sichtbaren Toast an,
 // statt sie nur (fuer den Nutzer unsichtbar) in der Android-WebView-Konsole verschwinden zu
@@ -381,7 +381,7 @@ const ONBOARDING_STEPS = [
   {title:'Offiziere', view:'officers',
    body:'Im Tab <strong>Offiziere</strong> aktivierst du für je 500 Stellaris-Token und 7 Tage Spezialisten: Kommandant (günstigere Bauten), Admiral (schnellere Flotten), Ingenieur (mehr Energie), Geologe (mehr Rohstoffproduktion) und Technokrat (schnellere Forschung). Stellaris-Token verdienst du u.a. kostenlos über Expeditionen.'},
   {title:'Rangliste, Nachrichten & Berichte', view:'messages',
-   body:'Im Tab <strong>Rangliste</strong> siehst du deine Platzierung in 5 Kategorien. Im Tab <strong>Nachrichten</strong> schreibst du anderen Spielern direkt (mit Namens-Autovervollständigung). Im Tab <strong>Berichte</strong> landen Spionageberichte (gestaffelt nach Technikvorsprung), Sensorphalanx-Scans und ein Kampfsimulator für Berichte mit bekannter Verteidigermacht.'},
+   body:'Hier im Tab <strong>Nachrichten</strong> schreibst du anderen Spielern direkt (mit Namens-Autovervollständigung). Schau dir danach auch die beiden Nachbar-Tabs an: <strong>Rangliste</strong> zeigt deine Platzierung in 5 Kategorien, <strong>Berichte</strong> sammelt Spionageberichte (gestaffelt nach Technikvorsprung), Sensorphalanx-Scans und einen Kampfsimulator für Berichte mit bekannter Verteidigermacht.'},
   {title:'Der Rest: Todesstern, Spionageabwehr & Hilfe', view:'overview',
    body:'Ein paar Dinge noch: Ein Todesstern kann bei einem vollständigen Sieg den gegnerischen Planeten zerstören. Spionageversuche können abgewehrt werden - du wirst benachrichtigt. Und falls du unterwegs eine Erinnerung brauchst: unter <strong>Einstellungen → Spielhilfe</strong> findest du jederzeit alle Themen dieser Einführung noch einmal ausführlich zum Nachlesen. Viel Erfolg - dein Imperium wartet!'},
 ];
@@ -488,6 +488,15 @@ function openInfoModal(type, key, level){
       statsRows.push(['Planetentyp', val]);
     }
     if(d.requires && Object.keys(d.requires).length) statsRows.push(['Voraussetzung', requirementText(d.requires)]);
+    // Kern-/Kohlekraftwerk liefern nur soviel Leistung, wie ihr aktueller Brennstoffvorrat
+    // fuer eine Stunde hergibt (powerPlantThrottle) - das war fuer den Spieler bisher nirgends
+    // sichtbar, weder im Energie-Tab noch hier, obwohl die Drosselung real Energie kostet.
+    if((key==='nuclearReactor' || key==='coalPlant') && p && curLevel>0){
+      const fuelKey = key==='nuclearReactor' ? 'uranium' : 'coal';
+      const desiredPerHour = key==='nuclearReactor' ? uraniumUse(p) : coalUse(p);
+      const throttle = powerPlantThrottle(p.resources[fuelKey], desiredPerHour);
+      statsRows.push(['Aktuelle Drosselung', throttle>=1 ? 'keine (Brennstoff ausreichend)' : Math.round(throttle*100)+'% der Nennleistung (zu wenig '+RESOURCE_INFO[fuelKey].name+' im Lager)']);
+    }
   } else {
     const rawCost = d.cost || d.base;
     const isDefenseItem = type==='building' && (d.isDefense || d.multiBuild);
